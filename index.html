@@ -683,18 +683,26 @@ const COLS = { pts: 1, fgm: 2, fga: 3, tpm: 5, tpa: 6, ftm: 8, fta: 9, reb: 11, 
 const KEYS = Object.keys(COLS);
 
 // Week 시트 한 장(2차원 배열) → 경기 3개
+// 경기 블록을 'AB MATCH' 같은 제목 줄로 찾아요.
+// (구글 시트를 실시간으로 읽으면 빈 줄이 빠져서 줄 번호가 밀리기 때문에, 고정된 줄 번호에 기대지 않아요)
+const NOT_PLAYER = /^(PLAYER|TEAM|TOTAL|합계)$/i;
+function weekBlocks(g) {
+  const starts = [];
+  g.forEach((row, r) => { if (/MATCH\s*$/i.test(str((row || [])[0]))) starts.push(r); });
+  return starts.map((s, k) => ({ start: s, end: k + 1 < starts.length ? starts[k + 1] : g.length }));
+}
 function parseWeek(g, weekNo, seasonId) {
   const cell = (r, c) => (g[r] || [])[c];
-  const date = normDate(cell(0, 20));
+  const date = normDate(cell(0, 20)) || normDate((g.find(r => normDate((r || [])[20])) || [])[20]);
   const games = [];
-  [0, 22, 44].forEach((base, bi) => {
-    const teamA = str(cell(base + 2, 0)), teamB = str(cell(base + 2, 20));
+  weekBlocks(g).forEach(({ start, end }, bi) => {
+    const teamA = str(cell(start + 2, 0)), teamB = str(cell(start + 2, 20));
     if (!teamA || !teamB) return;
     const side = off => {
       const rows = [];
-      for (let r = base + 4; r <= base + 18; r++) {
+      for (let r = start + 3; r < end; r++) {
         const name = str(cell(r, off));
-        if (!name || name === 'PLAYER') continue;
+        if (!name || NOT_PLAYER.test(name) || /MATCH|:/.test(name)) continue;
         const p = { name };
         KEYS.forEach(k => p[k] = num(cell(r, off + COLS[k])));
         rows.push(p);
@@ -703,10 +711,10 @@ function parseWeek(g, weekNo, seasonId) {
     };
     const a = side(0), b = side(20);
     if (!a.length && !b.length) return;
-    const m = str(cell(base + 1, 0)).match(/(\d+)\s*:\s*(\d+)/);
+    const m = str(cell(start + 1, 0)).match(/(\d+)\s*:\s*(\d+)/);
     const sa = m ? +m[1] : a.reduce((s, p) => s + p.pts, 0);
     const sb = m ? +m[2] : b.reduce((s, p) => s + p.pts, 0);
-    games.push({ id: `${seasonId}-w${weekNo}-${bi}`, seasonId, week: weekNo, date, label: str(cell(base, 0)).replace(/\s*MATCH/i, ''), teamA, teamB, scoreA: sa, scoreB: sb, a, b });
+    games.push({ id: `${seasonId}-w${weekNo}-${bi}`, seasonId, week: weekNo, date, label: str(cell(start, 0)).replace(/\s*MATCH/i, ''), teamA, teamB, scoreA: sa, scoreB: sb, a, b });
   });
   return games;
 }
@@ -749,7 +757,7 @@ async function fetchSheet(id, sheet, range) {
 function planOf(g) {
   const cell = (r, c) => (g[r] || [])[c];
   const date = normDate(cell(0, 20));
-  const matchups = [0, 22, 44].map(b => [str(cell(b + 2, 0)), str(cell(b + 2, 20))]).filter(m => m[0] && m[1]);
+  const matchups = weekBlocks(g).map(({ start }) => [str(cell(start + 2, 0)), str(cell(start + 2, 20))]).filter(m => m[0] && m[1]);
   return { date, matchups };
 }
 function buildSeason(s, lists, weekGrids) {
