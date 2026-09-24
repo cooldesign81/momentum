@@ -1306,7 +1306,7 @@ async function importMembers(silent) {
 }
 const EVENT_FIELDS = [
   { key: 'date', label: '날짜', type: 'date', required: true },
-  { key: 'time', label: '시간', type: 'time' },
+  { key: 'time', label: '시간', type: 'time', default: '18:00' },
   { key: 'title', label: '일정 이름', required: true, placeholder: '예: 시즌 4 개막전, 정기 연습' },
   { key: 'place', label: '장소', placeholder: '목록에서 고르거나 직접 입력', presets: true },
   { key: 'memo', label: '메모', type: 'textarea', placeholder: '준비물, 참가비 등' },
@@ -1337,7 +1337,7 @@ const editEvent = id => withAuth('schedule', () => { const e = state.events.find
 const UNIFORMS = [{ k: 'black', label: '블랙' }, { k: 'red', label: '레드' }, { k: 'white', label: '화이트' }];
 const uniLabel = k => (UNIFORMS.find(u => u.k === k) || {}).label || '';
 const LEAGUE_NOTE_FIELDS = [
-  { key: 'time', label: '시간', type: 'time' },
+  { key: 'time', label: '시간', type: 'time', default: '18:00' },
   { key: 'place', label: '장소', placeholder: '목록에서 고르거나 직접 입력', presets: true },
   { key: 'uniforms', label: '팀별 유니폼 색', type: 'uniforms', teams: [] },
   { key: 'memo', label: '메모', type: 'textarea', placeholder: '준비물, 참가비 등' },
