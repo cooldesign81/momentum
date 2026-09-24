@@ -467,6 +467,75 @@ html,body{overflow-x:clip}
   .card-photo span{font-size:1.2rem}
   .tb-head h3{font-size:1.3rem}
 }
+.vrow{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(210px,24%,260px);gap:14px;overflow-x:auto;padding:4px 2px 12px;margin-top:12px;scroll-snap-type:x mandatory;scrollbar-width:thin}
+.vrow .vthumb{scroll-snap-align:start}
+@media(max-width:600px){.vrow{grid-auto-columns:62%}}
+.vthumb{min-width:0}
+.vt-link{display:block;text-decoration:none;color:inherit}
+.vt-img{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000}
+.vt-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
+.vt-play{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;font-size:.8rem;transition:background .2s}
+.vt-link:hover .vt-img img{transform:scale(1.04)}
+.vt-link:hover .vt-play{background:var(--accent)}
+.vt-link:focus-visible .vt-img{outline:3px solid var(--accent);outline-offset:2px}
+.vt-b{padding:8px 2px 0}
+.vt-b h4{margin:2px 0 0;font-size:.95rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vt-b p{margin:2px 0 0;font-size:.8rem;color:var(--muted)}
+.vthumb .mini-actions{padding:0 2px}
+.vgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px 16px}
+@media(max-width:600px){.vgrid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px}.vt-b h4{font-size:.85rem}.vbadge{font-size:.62rem}}
+/* 카테고리 탭 강조 */
+.vtabs{display:flex;gap:6px;overflow-x:auto;margin-top:12px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:16px;scrollbar-width:none}
+.vtabs::-webkit-scrollbar{display:none}
+.vtab{flex:1 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;background:transparent;border-radius:12px;padding:12px 18px;font-weight:800;font-size:.92rem;letter-spacing:.02em;color:var(--muted);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.vtab span{font-size:.72rem;font-weight:700;background:var(--bg);color:var(--muted);border-radius:999px;padding:1px 8px}
+.vtab:hover{color:var(--ink);background:var(--bg)}
+.vtab[aria-selected="true"]{background:var(--brand);color:#fff;box-shadow:inset 0 -3px 0 var(--accent),0 6px 16px rgba(85,62,150,.3)}
+.vtab[aria-selected="true"] span{background:rgba(255,255,255,.2);color:#fff}
+.vcat-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 14px}
+.vcat-title{display:flex;align-items:baseline;gap:8px}
+.vcat-title b{font-size:1.6rem;line-height:1}
+.vcat-tools{display:flex;gap:8px;align-items:center}
+/* 영상 크게 보기 */
+.wv-top{margin:16px 0 10px}
+.back-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font-weight:700;cursor:pointer}
+.back-btn:hover{border-color:var(--brand);color:var(--brand)}
+.wv-stage{background:#000}
+.wv-frame{width:min(100%,calc((100vh - 150px) * 16 / 9));margin:0 auto;aspect-ratio:16/9}
+.wv-top{margin:12px 0 10px}
+.wv-frame iframe{width:100%;height:100%;border:0;display:block}
+.wv-info{margin-top:16px}
+.wv-info h2{margin:6px 0 2px;font-size:1.4rem}
+.wv-info .map-link{margin-top:8px}
+.form [hidden]{display:none !important}
+.king-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cheers{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 12px}
+.cheers.mvp{border-top:3px solid var(--gold)}
+.cheers.mip{border-top:3px solid var(--accent)}
+.ch-head{display:flex;justify-content:flex-start;align-items:center;gap:6px;font-size:.92rem;flex-wrap:nowrap;min-width:0}
+.ch-head>b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ch-count{font-size:.8rem;font-weight:500;margin-left:4px}
+.ch-list{list-style:none;margin:8px 0 2px;padding:0;display:grid;gap:6px}
+/* 3개까지 보이고 나머지는 스크롤 */
+.ch-list.scroll{max-height:118px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;-webkit-mask-image:linear-gradient(#000 85%,transparent);mask-image:linear-gradient(#000 85%,transparent)}
+.ch-list.scroll:hover,.ch-list.scroll:focus-within{-webkit-mask-image:none;mask-image:none}
+.ch-list li{display:flex;align-items:baseline;gap:8px;min-width:0}
+.ch-bubble{background:var(--brand-soft);border-radius:4px 12px 12px 12px;padding:5px 11px;font-size:.9rem;max-width:75%;word-break:break-word}
+.cheers.mvp .ch-bubble{background:#FFF4D6;color:#3A2A00}
+.cheers.mip .ch-bubble{background:var(--accent-soft)}
+.ch-meta{font-size:.72rem;color:var(--muted);white-space:nowrap;flex:0 0 auto}
+.ch-empty{margin:10px 0 4px;color:var(--muted);font-size:.9rem}
+.ch-form{margin-top:8px}
+.ch-head+.ch-form{margin-top:8px}
+.ch-emojis{display:flex;gap:0;flex:0 0 auto}
+.ch-emo{border:0;background:transparent;border-radius:8px;padding:2px 4px;cursor:pointer;font-size:.95rem;line-height:1.3}
+.ch-emo:hover{background:var(--bg)}
+.ch-emo:hover{border-color:var(--brand)}
+.ch-row{display:grid;grid-template-columns:84px 1fr auto;gap:6px}
+.ch-row input{min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:.9rem}
+.ch-row input:focus{outline:none;border-color:var(--brand);background:var(--surface)}
+@media(max-width:480px){.ch-row{grid-template-columns:64px 1fr auto}.ch-emo{padding:2px 2px;font-size:.85rem}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cheers.mvp .ch-bubble{background:#3A3016;color:#FCEBB8}}
 /* banner */
 .hero.has-banner{background:#07070B;position:relative;overflow:hidden}
 /* 넓은 화면: 배너는 본문 폭(1000px)까지만, 양옆은 배너 색을 흐리게 채움 */
@@ -821,7 +890,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, videoCat: 'all', feed: [], members: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {} };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -868,10 +937,12 @@ function raceHTML(list, k = 'mvp', n = 5) {
     <span class="v en num">${k === 'fgp' ? pct(p.avg[k]) : f1(p.avg[k])}</span></div>`).join('')}</div>`;
 }
 function ytId(url) { const m = String(url).match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/); return m ? m[1] : ''; }
-function videoCard(v, big) {
-  const id = ytId(v.url), c = catOf(v);
-  return `<article class="card video ${big ? 'big' : ''}"><div class="frame">${id ? `<img src="https://i.ytimg.com/vi/${id}/${big ? 'maxresdefault' : 'hqdefault'}.jpg" onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${id}/hqdefault.jpg'" alt="" loading="lazy"><button data-yt="${id}" aria-label="${esc(v.title)} 재생"><span>▶</span></button>` : ''}</div>
-    <div class="b"><span class="vbadge vb-${c.k}">${c.label}</span><h4>${esc(v.title)}</h4><p>${esc(fmtDate(v.date))}</p>${can('admin') && v.id ? `<div class="mini-actions"><button class="link-btn" data-edit-video="${esc(v.id)}">수정</button><button class="link-btn danger" data-del="videos:${esc(v.id)}">삭제</button></div>` : ''}</div></article>`;
+function videoCard(v) {
+  const id = ytId(v.url), c = catOf(v), sn = v.season && (state.seasons.find(s => s.id === v.season) || {}).name;
+  return `<article class="vthumb"><a class="vt-link" href="#/watch/v/${id}">
+      <div class="vt-img"><img src="https://i.ytimg.com/vi/${id}/mqdefault.jpg" alt="" loading="lazy"><span class="vt-play" aria-hidden="true">▶</span></div>
+      <div class="vt-b"><span class="vbadge vb-${c.k}">${c.label}${sn ? ' · ' + esc(sn) : ''}</span><h4>${esc(v.title)}</h4><p>${esc(fmtDate(v.date))}</p></div></a>
+    ${can('admin') && v.id ? `<div class="mini-actions"><button class="link-btn" data-edit-video="${esc(v.id)}">수정</button><button class="link-btn danger" data-del="videos:${esc(v.id)}">삭제</button></div>` : ''}</article>`;
 }
 const sortedVideos = () => state.videos.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
@@ -1005,14 +1076,15 @@ document.addEventListener('keydown', e => {
 });
 
 /* ===================== 저장소와 비밀번호 (Firebase) ===================== */
-const FB = !!FIREBASE.apiKey && typeof firebase !== 'undefined';
-const DYN = ['events', 'videos', 'news', 'members'];
+const FB_EXPECTED = !!FIREBASE.apiKey;
+const FB = FB_EXPECTED && typeof firebase !== 'undefined';
+const DYN = ['events', 'videos', 'news', 'members', 'cheers'];
 let fdb, fauth;
 const DEMO_KEY = 'momentum-league-demo-v1';
 let demo = null;
 function demoLoad() {
   try { const s = localStorage.getItem(DEMO_KEY); if (s) return JSON.parse(s); } catch (e) {}
-  return { events: [], videos: [], members: [], news: [{ id: 'n0', title: '(예시) 모멘텀 웹사이트가 열렸어요', body: '공지는 관리자 비밀번호로 올릴 수 있어요. 이 글은 데모용 예시예요.', pinned: true, date: ymd(new Date()) }] };
+  return { events: [], videos: [], members: [], cheers: [], news: [{ id: 'n0', title: '(예시) 모멘텀 웹사이트가 열렸어요', body: '공지는 관리자 비밀번호로 올릴 수 있어요. 이 글은 데모용 예시예요.', pinned: true, date: ymd(new Date()) }] };
 }
 function demoSave() { try { localStorage.setItem(DEMO_KEY, JSON.stringify(demo)); } catch (e) {} }
 function demoSync() { DYN.forEach(c => state[c] = (demo[c] || []).map(d => ({ ...d }))); render(); }
@@ -1025,6 +1097,7 @@ const store = {
 const roleOf = u => !u ? null : u.email === CONFIG.auth.adminEmail ? 'admin' : u.email === CONFIG.auth.scheduleEmail ? 'schedule' : null;
 const can = kind => kind === 'schedule' ? (state.role === 'schedule' || state.role === 'admin') : state.role === 'admin';
 async function login(kind, pw) {
+  if (!FB && FB_EXPECTED) throw { message: '저장 기능(Firebase)을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해주세요.' };
   if (!FB) {
     if (pw === 'admin') state.role = 'admin';
     else if (kind === 'schedule' && pw === '1234') state.role = 'schedule';
@@ -1074,7 +1147,12 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
     const input = f.type === 'select' ? `<select name="${f.key}">${f.options.map(([ov, ol]) => `<option value="${esc(ov)}" ${String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
       : f.type === 'textarea' ? `<textarea name="${f.key}" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`
       : `<input type="${f.type || 'text'}" name="${f.key}" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" ${f.type === 'password' ? 'autocomplete="current-password"' : ''} ${f.inputmode ? `inputmode="${f.inputmode}"` : ''}>`;
-    return `<label class="field"><span>${esc(f.label)}${f.required ? ' *' : ''}</span>${input}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>`;
+    const when = f.when ? ` data-when="${f.when[0]}" data-in="${f.when[1].join(',')}"` : '';
+    if (f.type === 'datetext') {
+      const shown = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.replace(/-/g, '') : v;
+      return `<label class="field"${when}><span>${esc(f.label)}${f.required ? ' *' : ''}</span><input type="text" name="${f.key}" value="${esc(shown)}" inputmode="numeric" autocomplete="off" placeholder="예: 20260824" data-datetext><small class="date-prev" data-prev>${dateHint(shown)}</small></label>`;
+    }
+    return `<label class="field"${when}><span>${esc(f.label)}${f.required ? ' *' : ''}</span>${input}${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>`;
   };
   $('#sheet').innerHTML = `<form id="mf" class="form" novalidate><h3>${esc(title)}</h3>${note ? `<p class="muted" style="margin:-6px 0 14px;font-size:.9rem">${esc(note)}</p>` : ''}
     ${fields.map(fieldHTML).join('')}<p class="err" id="merr" role="alert"></p>
@@ -1083,6 +1161,9 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
   $('#modal').hidden = false; $('#modal').dataset.form = '1'; document.body.style.overflow = 'hidden';
   setTimeout(() => $('#mf input, #mf textarea')?.focus(), 30);
   const form = $('#mf');
+  const applyWhen = () => form.querySelectorAll('[data-when]').forEach(el => { el.hidden = !el.dataset.in.split(',').includes(form.elements[el.dataset.when]?.value); });
+  applyWhen(); form.addEventListener('change', applyWhen);
+  form.querySelectorAll('[data-datetext]').forEach(inp => inp.addEventListener('input', () => { inp.closest('.field').querySelector('[data-prev]').innerHTML = dateHint(inp.value); }));
   let photo = data.photo || '';
   const pf = $('#pf');
   const usePhoto = async file => {
@@ -1122,7 +1203,9 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
         out[f.key] = u; continue;
       }
       const el = form.elements[f.key];
+      if (el && el.closest('[data-when]')?.hidden) { out[f.key] = ''; continue; }
       let v = f.type === 'checkbox' ? el.checked : el.value.trim();
+      if (f.type === 'datetext' && v !== '') { const iso = parseDateText(v); if (!iso) { $('#merr').textContent = '날짜를 20260824처럼 여덟 자리 숫자로 적어주세요.'; el.focus(); return; } v = iso; }
       if (f.required && v === '') { $('#merr').textContent = `${f.label}을(를) 입력해주세요.`; el.focus(); return; }
       if (f.validate) { const m = f.validate(v); if (m) { $('#merr').textContent = m; el.focus(); return; } }
       if (f.type === 'number' && v !== '') v = Number(v);
@@ -1132,6 +1215,26 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
     try { await onSave(out); closeModal(); after && after(); }
     catch (e) { $('#merr').textContent = errMsg(e); $('#msave').disabled = false; }
   };
+}
+// 20260824, 260824, 2026.8.24, 26-8-24 → '2026-08-24'
+function parseDateText(s) {
+  s = String(s || '').trim(); let y, m, d, mm;
+  const dg = s.replace(/\D/g, '');
+  if ((mm = s.match(/^(\d{2,4})\D+(\d{1,2})\D+(\d{1,2})$/))) [y, m, d] = [mm[1], mm[2], mm[3]];
+  else if (dg.length === 8 && dg === s) [y, m, d] = [dg.slice(0, 4), dg.slice(4, 6), dg.slice(6)];
+  else if (dg.length === 6 && dg === s) [y, m, d] = [dg.slice(0, 2), dg.slice(2, 4), dg.slice(4)];
+  else return '';
+  y = +y < 100 ? 2000 + +y : +y; m = +m; d = +d;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return '';
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+function dateHint(s) {
+  if (!String(s || '').trim()) return '숫자 여덟 자리로 한 번에 적으면 돼요. 예: 20260824';
+  const iso = parseDateText(s);
+  if (!iso) return '<span style="color:#C62828">날짜 형식이 아니에요. 예: 20260824</span>';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `<b style="color:var(--accent-ink)">→ ${String(y).slice(2)}년 ${m}월 ${d}일 (${WD[new Date(y, m - 1, d).getDay()]})</b>`;
 }
 async function resizeImage(file) {
   const url = URL.createObjectURL(file), img = new Image();
@@ -1191,10 +1294,12 @@ const VIDEO_CATS = [
 const catOf = v => v.category === 'feed' ? { k: 'feed', label: 'New' } : (VIDEO_CATS.find(c => c.k === v.category) || VIDEO_CATS[VIDEO_CATS.length - 1]);
 const VIDEO_FIELDS = [
   { key: 'category', label: '카테고리', type: 'select', required: true, options: VIDEO_CATS.map(c => [c.k, `${c.label} (${c.ko})`]), default: 'season' },
+  { key: 'season', label: '시즌', type: 'select', options: [], when: ['category', ['season', 'highlight']] },
   { key: 'url', label: '유튜브 링크', required: true, placeholder: 'https://youtu.be/...', validate: v => ytId(v) ? '' : '유튜브 영상 링크가 아닌 것 같아요. 영상 주소를 복사해 넣어주세요.' },
   { key: 'title', label: '제목', required: true, placeholder: '예: 9월 21일 리그전 A vs B' },
-  { key: 'date', label: '업로드 날짜', type: 'date', required: true },
+  { key: 'date', label: '업로드 날짜', type: 'datetext', required: true },
 ];
+const videoFields = () => VIDEO_FIELDS.map(f => f.key === 'season' ? { ...f, options: [['', '시즌 선택 안 함'], ...state.seasons.map(s => [s.id, s.name])] } : f);
 const NEWS_FIELDS = [
   { key: 'title', label: '제목', required: true },
   { key: 'body', label: '내용', type: 'textarea', required: true },
@@ -1219,8 +1324,8 @@ const editLeague = (date, title, seasonId) => withAuth('schedule', () => {
     onSave: v => note ? store.set('events', note.id, v) : store.add('events', { ...v, leagueDate: date, date }),
     onDelete: note ? () => store.remove('events', note.id) : undefined });
 });
-const addVideo = cat => withAuth('admin', () => openForm({ title: '영상 등록', fields: VIDEO_FIELDS, data: { date: ymd(new Date()), category: cat || 'season' }, onSave: v => store.add('videos', v) }));
-const editVideo = id => withAuth('admin', () => { const x = { category: 'etc', ...state.videos.find(v => v.id === id) }; openForm({ title: '영상 수정', fields: VIDEO_FIELDS, data: x, onSave: v => store.set('videos', id, v), onDelete: () => store.remove('videos', id) }); });
+const addVideo = cat => withAuth('admin', () => openForm({ title: '영상 등록', fields: videoFields(), data: { date: ymd(new Date()), category: cat || 'season', season: state.videoSeason && state.videoSeason !== 'all' ? state.videoSeason : (state.seasons[0] || {}).id }, onSave: v => store.add('videos', v) }));
+const editVideo = id => withAuth('admin', () => { const x = { category: 'etc', ...state.videos.find(v => v.id === id) }; openForm({ title: '영상 수정', fields: videoFields(), data: x, onSave: v => store.set('videos', id, v), onDelete: () => store.remove('videos', id) }); });
 const addNews = () => withAuth('admin', () => openForm({ title: '공지 쓰기', fields: NEWS_FIELDS, onSave: v => store.add('news', { ...v, date: ymd(new Date()) }) }));
 const editNews = id => withAuth('admin', () => { const n = state.news.find(x => x.id === id); openForm({ title: '공지 수정', fields: NEWS_FIELDS, data: n, onSave: v => store.set('news', id, v), onDelete: () => store.remove('news', id) }); });
 
@@ -1367,6 +1472,30 @@ function upcomingBoard(m, pl, i) {
 }
 // MIP: 지난 시즌 대비 MVP 지수가 가장 많이 (비율로) 오른 선수
 const MIP_MIN_PREV = 5; // 지난 시즌 MVP 지수가 이보다 낮으면 비율이 과하게 커져서 제외
+// 축하 한마디 (누구나 쓸 수 있음)
+const CHEER_EMOJI = ['👏', '🔥', '👑', '🏀', '💜'];
+function timeAgo(iso) {
+  const t = new Date(iso).getTime(); if (!t) return '';
+  const m = Math.floor((Date.now() - t) / 60000);
+  if (m < 1) return '방금'; if (m < 60) return m + '분 전';
+  const h = Math.floor(m / 60); if (h < 24) return h + '시간 전';
+  const d = Math.floor(h / 24); return d < 7 ? d + '일 전' : fmtDate(String(iso).slice(0, 10), false);
+}
+function cheersHTML(target, s, player) {
+  const key = `${target}:${s.id}:${player}`;
+  const all = state.cheers.filter(c => c.target === target && c.season === s.id && c.player === player).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const who = target === 'mvp' ? 'MVP' : 'MIP';
+  return `<div class="cheers ${target}">
+    <div class="ch-head"><b title="${esc(player)} 선수에게 축하 한마디">🎉 ${esc(player)} 축하 한마디${all.length ? ` <span class="muted ch-count">${all.length}</span>` : ''}</b>
+      <div class="ch-emojis">${CHEER_EMOJI.map(e => `<button type="button" class="ch-emo" data-emo="${e}" aria-label="${e} 넣기">${e}</button>`).join('')}</div></div>
+    ${all.length ? `<ul class="ch-list ${all.length > 3 ? 'scroll' : ''}">${all.map(c => `<li><span class="ch-bubble">${esc(c.text)}</span><span class="ch-meta">${esc(c.name || '익명')} · ${timeAgo(c.createdAt)}${can('admin') ? ` <button class="link-btn danger" data-del="cheers:${esc(c.id)}">삭제</button>` : ''}</span></li>`).join('')}</ul>` : ''}
+    <form class="ch-form" data-cheer-form="${target}" data-season="${esc(s.id)}" data-player="${esc(player)}" novalidate>
+      <div class="ch-row"><input name="cname" maxlength="20" placeholder="이름" autocomplete="nickname" value="${esc((() => { try { return localStorage.getItem('cheer-name') || ''; } catch (e) { return ''; } })())}" data-keep="${target}-name">
+        <input name="ctext" maxlength="100" placeholder="축하 메시지" required data-keep="${target}-text">
+        <button class="btn primary sm" type="submit">등록</button></div>
+    </form>
+  </div>`;
+}
 function mipList(s) {
   const idx = state.seasons.indexOf(s), prev = state.seasons[idx + 1];
   if (!prev || !s.games.length) return { prev, list: [] };
@@ -1388,11 +1517,11 @@ function mipHTML(s) {
   const [top, ...rest] = list, pr = prof(top.name), max = top.rate;
   return `<section class="sec">${head}
     <div class="mvp-wrap">
-      <a class="king mip" href="#/player/${encodeURIComponent(top.name)}">
+      <div class="king-col"><a class="king mip" href="#/player/${encodeURIComponent(top.name)}">
         <div class="king-ph">${pr.photo ? `<img src="${esc(pr.photo)}" alt="">` : `<span class="ko">${esc(top.name.slice(-2))}</span>`}</div>
         <div class="king-b"><span class="crown">📈 MIP 1위</span><div class="king-name ko">${esc(top.name)}</div><div class="king-team">${esc(top.team)}</div>
           <div class="king-score en num">${pctUp(top.rate)}</div>
-          <div class="mip-cmp num"><span>${esc(prev.name)} <b>${f1(top.prev)}</b></span><span class="arrow">→</span><span>${esc(s.name)} <b>${f1(top.now)}</b></span></div></div></a>
+          <div class="mip-cmp num"><span>${esc(prev.name)} <b>${f1(top.prev)}</b></span><span class="arrow">→</span><span>${esc(s.name)} <b>${f1(top.now)}</b></span></div></div></a>${cheersHTML('mip', s, top.name)}</div>
       ${rest.length ? `<div class="card race">${rest.slice(0, 9).map((p, i) => `<div class="race-row"><span class="r">${i + 2}</span>
         <div>${playerLink(p.name)} <span class="muted num" style="font-size:.8rem">${f1(p.prev)} → ${f1(p.now)}</span><div class="bar"><i style="width:${Math.max(4, p.rate / max * 100)}%"></i></div></div>
         <span class="v en num mip-v">${pctUp(p.rate)}</span></div>`).join('')}</div>` : ''}
@@ -1463,11 +1592,11 @@ function pageLeague() {
 
   <section class="sec"><div class="sec-head"><h3 class="en big-h">MVP RACE</h3><a class="more" href="#/stats">전체 기록</a></div>
     ${king ? `<div class="mvp-wrap">
-      <a class="king" href="#/player/${encodeURIComponent(king.name)}">
+      <div class="king-col"><a class="king" href="#/player/${encodeURIComponent(king.name)}">
         <div class="king-ph">${kingPr.photo ? `<img src="${esc(kingPr.photo)}" alt="">` : `<span class="ko">${esc(king.name.slice(-2))}</span>`}</div>
         <div class="king-b"><span class="crown">👑 MVP 1위</span><div class="king-name ko">${esc(king.name)}</div><div class="king-team">${esc(king.team)}</div>
           <div class="king-score en num">${f1(king.avg.mvp)}</div>
-          <div class="king-stats num"><span><b>${f1(king.avg.pts)}</b>득점</span><span><b>${f1(king.avg.reb)}</b>리바</span><span><b>${f1(king.avg.ast)}</b>어시</span><span><b>${king.gp}</b>경기</span></div></div></a>
+          <div class="king-stats num"><span><b>${f1(king.avg.pts)}</b>득점</span><span><b>${f1(king.avg.reb)}</b>리바</span><span><b>${f1(king.avg.ast)}</b>어시</span><span><b>${king.gp}</b>경기</span></div></div></a>${cheersHTML('mvp', s, king.name)}</div>
       <div class="card race">${mvps.slice(1).map((p, i) => `<div class="race-row"><span class="r">${i + 2}</span><div>${playerLink(p.name)} <span class="muted" style="font-size:.82rem">${esc(p.team)}</span><div class="bar"><i style="width:${p.avg.mvp / king.avg.mvp * 100}%"></i></div></div><span class="v en num">${f1(p.avg.mvp)}</span></div>`).join('')}</div>
     </div>
     <p class="muted" style="font-size:.84rem;margin:8px 2px 0">MVP 지수 = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버 (경기당 평균). 6경기 이상 출전 선수 대상.</p>` : '<p class="empty">아직 기록이 없어요.</p>'}
@@ -1503,34 +1632,45 @@ function rosterBlocks(s) {
 }
 
 /* ===================== 영상 ===================== */
+const latestVideos = () => (state.feed.length ? state.feed : sortedVideos()).slice(0, 10);
 function pageWatch() {
   const vids = sortedVideos();
-  const ch = CONFIG.youtubeChannelId;
-  const uploads = ch && ch.startsWith('UC') ? 'UU' + ch.slice(2) : '';
   const cat = state.videoCat || 'all';
   const cur = VIDEO_CATS.find(c => c.k === cat);
-  const list = cat === 'all' ? vids : vids.filter(v => catOf(v).k === cat);
+  const seasonal = cat === 'season' || cat === 'highlight';
+  const sf = seasonal ? (state.videoSeason || 'all') : 'all';
+  let list = cat === 'all' ? vids : vids.filter(v => catOf(v).k === cat);
+  if (seasonal && sf !== 'all') list = list.filter(v => v.season === sf);
   const count = k => vids.filter(v => catOf(v).k === k).length;
-  const [feat, ...rest] = vids;
+  const latest = latestVideos();
   return `<div class="page-head"><h2 class="en">WATCH</h2><button class="btn primary" data-add-video="">+ 영상 등록</button></div>
-
-  <section class="sec" style="margin-top:8px"><div class="sec-head"><h3 class="en big-h">LATEST</h3>${CONFIG.youtubeChannelUrl ? `<a class="more" href="${esc(CONFIG.youtubeChannelUrl)}" target="_blank" rel="noopener">유튜브 채널 ›</a>` : ''}</div>
-    ${uploads ? `<div class="latest">
-      <div class="card channel"><div class="frame"><iframe src="https://www.youtube.com/embed/videoseries?list=${esc(uploads)}" title="모멘텀 채널 최신 영상" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-        <div class="b"><p class="muted" style="margin:0">채널에 새 영상을 올리면 여기에 자동으로 들어와요. 가장 최신 영상부터 재생되고, 플레이어 오른쪽 위 목록 버튼으로 다른 영상도 고를 수 있어요.</p></div></div>
-      ${state.feed && state.feed.length ? `<div class="latest-side">${state.feed.slice(0, 4).map(v => videoCard(v)).join('')}</div>` : ''}
-    </div>` : (feat ? `<div class="latest"><div class="latest-main">${videoCard(feat, true)}</div>${rest.length ? `<div class="latest-side">${rest.slice(0, 3).map(v => videoCard(v)).join('')}</div>` : ''}</div>`
-      : '<p class="empty" style="margin-top:12px">아직 등록된 영상이 없어요.</p>')}
+  <section class="sec" style="margin-top:4px"><div class="sec-head"><h3 class="en big-h">LATEST</h3>${CONFIG.youtubeChannelUrl ? `<a class="more" href="${esc(CONFIG.youtubeChannelUrl)}" target="_blank" rel="noopener">유튜브 채널 ›</a>` : ''}</div>
+    ${latest.length ? `<div class="vrow">${latest.map(videoCard).join('')}</div>` : '<p class="empty" style="margin-top:12px">영상을 불러오는 중이거나 아직 영상이 없어요.</p>'}
   </section>
-
   <section class="sec"><h3 class="en big-h">VIDEOS</h3>
-    <div class="chips vcats" role="group" aria-label="영상 카테고리">
-      <button class="chip" data-vcat="all" aria-pressed="${cat === 'all'}">All <span class="cnt">${vids.length}</span></button>
-      ${VIDEO_CATS.map(c => `<button class="chip" data-vcat="${c.k}" aria-pressed="${cat === c.k}">${c.label} <span class="cnt">${count(c.k)}</span></button>`).join('')}
+    <div class="vtabs" role="tablist" aria-label="영상 카테고리">
+      <button class="vtab" role="tab" data-vcat="all" aria-selected="${cat === 'all'}">ALL<span>${vids.length}</span></button>
+      ${VIDEO_CATS.map(c => `<button class="vtab" role="tab" data-vcat="${c.k}" aria-selected="${cat === c.k}">${c.label.toUpperCase()}<span>${count(c.k)}</span></button>`).join('')}
     </div>
-    <div class="vcat-head">${cur ? `<div><b class="en" style="font-size:1.4rem">${cur.label}</b> <span class="muted">${cur.ko} 영상 ${list.length}개</span></div><button class="btn sm" data-add-video="${cur.k}">+ ${cur.label} 영상 등록</button>` : `<span class="muted">전체 영상 ${list.length}개</span>`}</div>
-    ${list.length ? `<div class="vgrid">${list.map(v => videoCard(v)).join('')}</div>` : `<p class="empty">${cur ? cur.label + ' 카테고리에 ' : ''}아직 영상이 없어요.</p>`}
+    <div class="vcat-head">
+      ${cur ? `<div class="vcat-title"><b class="en">${cur.label}</b><span class="muted">${cur.ko}</span></div>` : '<div class="vcat-title"><b class="en">All</b><span class="muted">전체 영상</span></div>'}
+      <div class="vcat-tools">${seasonal ? `<select class="season" data-vseason aria-label="시즌 선택"><option value="all" ${sf === 'all' ? 'selected' : ''}>전체 시즌</option>${state.seasons.map(s => `<option value="${s.id}" ${sf === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : ''}
+      ${cur ? `<button class="btn sm" data-add-video="${cur.k}">+ 등록</button>` : ''}</div>
+    </div>
+    ${list.length ? `<div class="vgrid2">${list.map(videoCard).join('')}</div>` : `<p class="empty">${cur ? cur.label + (seasonal && sf !== 'all' ? ' · ' + esc((state.seasons.find(s => s.id === sf) || {}).name || '') : '') + '에 ' : ''}아직 영상이 없어요.</p>`}
   </section>`;
+}
+function pageWatchVideo(id) {
+  const meta = state.videos.find(v => ytId(v.url) === id) || state.feed.find(v => ytId(v.url) === id) || { title: '', date: '' };
+  const c = meta.category ? catOf(meta) : null, sn = meta.season && (state.seasons.find(s => s.id === meta.season) || {}).name;
+  const more = latestVideos().filter(v => ytId(v.url) !== id);
+  return `<div class="wv-top"><button class="back-btn" data-back>‹ 영상 목록</button></div>
+  <section class="bleed wv-stage"><div class="wv-frame" id="wv-frame" data-id="${esc(id)}">
+    <iframe data-id="${esc(id)}" src="https://www.youtube.com/embed/${esc(id)}?autoplay=1&rel=0&playsinline=1" title="${esc(meta.title || '경기 영상')}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div></section>
+  <div class="wv-info">${c ? `<span class="vbadge vb-${c.k}">${c.label}${sn ? ' · ' + esc(sn) : ''}</span>` : ''}<h2>${esc(meta.title || '영상')}</h2>${meta.date ? `<p class="muted">${esc(fmtDate(meta.date))}</p>` : ''}
+    <a class="map-link" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">유튜브에서 보기${EXT}</a></div>
+  ${more.length ? `<section class="sec"><h3 class="en big-h">MORE</h3><div class="vrow">${more.map(videoCard).join('')}</div></section>` : ''}`;
 }
 
 /* ===================== 라우팅과 이벤트 ===================== */
@@ -1552,18 +1692,56 @@ function renderHero() {
 }
 function render() {
   if (!state.seasons.length) return;
-  const [, page = 'home', arg] = location.hash.split('/');
+  const parts = location.hash.split('/'), page = parts[1] || 'home', arg = parts[2];
   const pages = { home: pageHome, schedule: pageSchedule, league: pageLeague, players: pagePlayers, stats: pageStats, watch: pageWatch };
-  const html = page === 'player' && arg ? pagePlayer(decodeURIComponent(arg)) : (pages[page] || pageHome)();
+  const vid = page === 'watch' && arg === 'v' && parts[3] ? parts[3] : '';
+  const html = vid ? pageWatchVideo(vid) : page === 'player' && arg ? pagePlayer(decodeURIComponent(arg)) : (pages[page] || pageHome)();
+  // 영상 재생 중에 데이터가 새로 들어와도 플레이어를 다시 만들지 않아요 (재생이 끊기지 않게)
+  const keep = vid && document.querySelector(`#wv-frame iframe[data-id="${vid}"]`);
   const src = state.seasons.map(s => `${s.name}: ${s.source === 'live' ? '구글 시트에서 실시간' : s.source === 'archive' ? '보관된 기록' : `저장된 데이터 (${SNAP_DATE} 기준)`}`).join(' / ');
   const who = state.role ? `${state.role === 'admin' ? '관리자' : '일정 관리'}로 로그인됨 <button class="link-btn" data-logout>로그아웃</button>` : '';
-  $('#view').innerHTML = html + `<p class="status">${esc(src)}${FB ? '' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
+  const kept = {}; document.querySelectorAll('#view [data-keep]').forEach(el => kept[el.dataset.keep] = el.value);
+  const focusKey = document.activeElement?.dataset?.keep, caret = document.activeElement?.selectionStart;
+  $('#view').innerHTML = html + `<p class="status">${esc(src)}${FB ? '' : FB_EXPECTED ? ' / ⚠️ 저장 기능을 불러오지 못했어요. 새로고침해주세요' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
+  if (keep) { const f = document.getElementById('wv-frame'); f.innerHTML = ''; f.appendChild(keep); }
+  document.querySelectorAll('#view [data-keep]').forEach(el => { if (kept[el.dataset.keep] !== undefined) el.value = kept[el.dataset.keep]; if (el.dataset.keep === focusKey) { el.focus(); try { el.setSelectionRange(caret, caret); } catch (e) {} } });
   requestAnimationFrame(fitHomeSchedule);
   const navKey = page === 'player' ? 'players' : (pages[page] ? page : 'home');
   document.querySelectorAll('.nav a').forEach(a => a.getAttribute('href') === '#/' + navKey ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
 }
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+const scrollMemo = {};
+window.addEventListener('hashchange', e => {
+  const oldHash = (e.oldURL.split('#')[1] || '');
+  state.cameFromSite = true;
+  scrollMemo['#' + oldHash] = lastScroll;
+  render();
+  // 영상 화면에서 뒤로 오면 보던 위치로, 그 외에는 맨 위로
+  const back = oldHash.includes('/watch/v/') && scrollMemo[location.hash] !== undefined;
+  if (location.hash.includes('/watch/v/')) {
+    // 영상 화면: 배너를 건너뛰고 플레이어가 화면에 꽉 차게 보이도록 스크롤
+    const top = document.querySelector('.wv-top'), nav = document.querySelector('.navbar');
+    window.scrollTo(0, top ? top.getBoundingClientRect().top + window.scrollY - (nav ? nav.offsetHeight : 0) : 0);
+  } else window.scrollTo(0, back ? scrollMemo[location.hash] : 0);
+});
+let lastScroll = 0; window.addEventListener('scroll', () => { lastScroll = window.scrollY; }, { passive: true });
+let lastCheer = 0;
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('[data-cheer-form]'); if (!f) return;
+  e.preventDefault();
+  const text = f.ctext.value.trim(), name = f.cname.value.trim().slice(0, 20);
+  if (!text) { f.ctext.focus(); return; }
+  if (Date.now() - lastCheer < 10000) { alert('조금만 있다가 다시 남겨주세요.'); return; }
+  const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+  try {
+    await store.add('cheers', { target: f.dataset.cheerForm, season: f.dataset.season, player: f.dataset.player, name, text: text.slice(0, 100), createdAt: new Date().toISOString() });
+    lastCheer = Date.now();
+    f.ctext.value = ''; const k = document.querySelector(`[data-keep="${f.dataset.cheerForm}-text"]`); if (k) k.value = '';
+    try { localStorage.setItem('cheer-name', name); } catch (err) {}
+  } catch (err) { alert(errMsg(err)); }
+  btn.disabled = false;
+});
 document.addEventListener('change', e => {
+  if (e.target.matches('[data-vseason]')) { state.videoSeason = e.target.value; return render(); }
   if (e.target.matches('[data-season]')) {
     const v = e.target.value;
     if (v === 'career') state.statScope = 'career'; else { state.statScope = null; state.seasonId = v; }
@@ -1599,12 +1777,15 @@ document.addEventListener('click', e => {
   if (d.editLeague) { e.preventDefault(); return editLeague(d.editLeague, d.title, d.season); }
   if (d.editEvent) { e.preventDefault(); return editEvent(d.editEvent); }
   if ('addVideo' in d) return addVideo(d.addVideo);
-  if (d.vcat) { state.videoCat = d.vcat; return render(); }
+  if (d.vcat) { state.videoCat = d.vcat; state.videoSeason = 'all'; return render(); }
+  if ('back' in d) { if (history.length > 1 && document.referrer !== undefined && state.cameFromSite) history.back(); else location.hash = '#/watch'; return; }
   if (d.editVideo) return editVideo(d.editVideo);
   if ('addNews' in d) return addNews();
   if (d.editNews) return editNews(d.editNews);
   if (d.del) { const [c, id] = d.del.split(':'); if (confirm('정말 삭제할까요?')) store.remove(c, id).catch(err => alert(errMsg(err))); return; }
   if ('logout' in d) return logout();
+  if (d.cheerMore) { state.cheerAll[d.cheerMore] = !state.cheerAll[d.cheerMore]; return render(); }
+  if (d.emo) { const inp = t.closest('.cheers').querySelector('[name=ctext]'); inp.value = (inp.value + ' ' + d.emo).trim().slice(0, 100); inp.focus(); return; }
   if (d.goweek) {
     const [sid, w] = d.goweek.split(':');
     state.seasonId = sid; state.leagueWeek[sid] = +w;
