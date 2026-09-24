@@ -546,6 +546,23 @@ html,body{overflow-x:clip}
 .preset{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:700;cursor:pointer;color:var(--ink)}
 .preset:hover{border-color:var(--accent)}
 .preset.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.espn-logo{display:flex;align-items:center;gap:8px}
+.espn-logo span{background:#D62828;color:#fff;font-style:italic;padding:2px 10px 0;border-radius:4px;font-size:1.5rem;letter-spacing:.02em}
+.espn-list{list-style:none;margin:12px 0 0;padding:4px 0;background:var(--surface);border:1px solid var(--line);border-radius:16px;border-left:4px solid #D62828}
+/* 5개까지 보이고 나머지는 오른쪽 스크롤 */
+.espn-list.scroll{max-height:calc(5 * 52px + 8px);overflow-y:auto;scrollbar-width:thin}
+.espn-list li{display:flex;align-items:center;gap:8px;padding-right:14px;border-bottom:1px solid var(--line)}
+.espn-list li:last-child{border-bottom:0}
+.espn-item{all:unset;box-sizing:border-box;flex:1;min-width:0;display:flex;align-items:center;gap:14px;height:52px;padding:0 16px;cursor:pointer}
+.espn-item:hover .espn-title{color:var(--brand);text-decoration:underline}
+.espn-item:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;border-radius:12px}
+.espn-date{flex:0 0 44px;font-weight:800;color:#D62828;font-size:.95rem}
+.espn-title{flex:1;min-width:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.espn-new{flex:0 0 auto;font-size:.65rem;font-weight:800;color:#fff;background:#D62828;border-radius:999px;padding:1px 7px}
+.espn-go{flex:0 0 auto;color:var(--muted);font-size:.9rem}
+.pdf-drop{display:flex;align-items:center;justify-content:center;min-height:84px;border:2px dashed var(--line);border-radius:12px;padding:12px;text-align:center;color:var(--muted);font-size:.9rem;cursor:pointer;background:var(--bg)}
+.pdf-drop:hover,.pdf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.pdf-drop.picked{border-style:solid;border-color:var(--accent);color:var(--ink);font-weight:700}
 /* banner */
 .hero.has-banner{background:#07070B;position:relative;overflow:hidden}
 /* 넓은 화면: 배너는 본문 폭(1000px)까지만, 양옆은 배너 색을 흐리게 채움 */
@@ -913,7 +930,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {} };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [] };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -1044,10 +1061,6 @@ function pageStats() {
     </tbody></table></div>
     <p class="muted" style="font-size:.85rem;margin:8px 2px 0">${minNote}${cat.k === 'fgp' ? ' 야투율은 슛 10개 이상 시도한 선수만.' : ''}${cat.k === 'mvp' ? ' MVP 지수 = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버 (경기당 평균).' : ''}
     <button class="btn" data-showall style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state.showAll ? 'TOP 10만 보기' : '전체 순위 보기'}</button></p></section>
-  ${career ? '' : `<div class="two"><section class="sec"><h3>팀 평균 득점과 실점</h3><div class="tbl-wrap"><table><thead><tr><th class="l">팀</th><th>평균 득점</th><th>평균 실점</th></tr></thead><tbody>
-    ${s.standings.map(t => `<tr><td class="l"><b>${esc(t.team)}</b></td><td class="num">${f1(t.gp ? t.pf / t.gp : null)}</td><td class="num">${f1(t.gp ? t.pa / t.gp : null)}</td></tr>`).join('')}</tbody></table></div></section>
-    <section class="sec"><h3>주차별 MVP</h3><div class="tbl-wrap"><table><thead><tr><th class="l">주차</th><th class="l">선수</th><th>지수</th></tr></thead><tbody>
-    ${wm.map(w => `<tr><td class="l">${w.week}주차 <span class="muted">${esc(fmtDate(w.date, false))}</span></td><td class="l">${playerLink(w.name)}</td><td class="num"><b>${w.score}</b></td></tr>`).join('')}</tbody></table></div></section></div>`}
   <section class="sec"><h3>전체 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">항목 이름을 누르면 그 기준으로 정렬돼요. 모두 경기당 평균이에요.</p>
     <div class="tbl-wrap"><table><thead><tr><th class="l sticky-col">선수</th>${cols.map(([k, l]) => `<th class="sortable ${state.sortKey === k ? 'sorted' : ''}" data-sort="${k}">${l}</th>`).join('')}</tr></thead><tbody>
     ${all.map(p => `<tr><td class="l sticky-col">${playerLink(p.name)}</td>${cols.map(([k]) => `<td class="num">${k === 'gp' ? p.gp : /p$/.test(k) && k !== 'mvp' ? pct(p.avg[k]) : f1(p.avg[k])}</td>`).join('')}</tr>`).join('')}
@@ -1101,13 +1114,13 @@ document.addEventListener('keydown', e => {
 /* ===================== 저장소와 비밀번호 (Firebase) ===================== */
 const FB_EXPECTED = !!FIREBASE.apiKey;
 const FB = FB_EXPECTED && typeof firebase !== 'undefined';
-const DYN = ['events', 'videos', 'news', 'members', 'cheers'];
+const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles'];
 let fdb, fauth;
 const DEMO_KEY = 'momentum-league-demo-v1';
 let demo = null;
 function demoLoad() {
   try { const s = localStorage.getItem(DEMO_KEY); if (s) return JSON.parse(s); } catch (e) {}
-  return { events: [], videos: [], members: [], cheers: [], news: [{ id: 'n0', title: '(예시) 모멘텀 웹사이트가 열렸어요', body: '공지는 관리자 비밀번호로 올릴 수 있어요. 이 글은 데모용 예시예요.', pinned: true, date: ymd(new Date()) }] };
+  return { events: [], videos: [], members: [], cheers: [], articles: [], news: [{ id: 'n0', title: '(예시) 모멘텀 웹사이트가 열렸어요', body: '공지는 관리자 비밀번호로 올릴 수 있어요. 이 글은 데모용 예시예요.', pinned: true, date: ymd(new Date()) }] };
 }
 function demoSave() { try { localStorage.setItem(DEMO_KEY, JSON.stringify(demo)); } catch (e) {} }
 function demoSync() { DYN.forEach(c => state[c] = (demo[c] || []).map(d => ({ ...d }))); render(); }
@@ -1163,6 +1176,9 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
         ${[['', '미정'], ...UNIFORMS.map(u => [u.k, u.label])].map(([k, l]) => `<label class="uni-opt ${k ? 'u-' + k : ''}"><input type="radio" name="u_${i}" value="${k}" ${((v || {})[t] || '') === k ? 'checked' : ''}><span>${k ? '<i></i>' : ''}${l}</span></label>`).join('')}
       </div></div>`).join('') : '<p class="muted" style="margin:0">이 시즌의 팀 정보를 찾지 못했어요.</p>'}
       <small>세 팀이 매주 서로 붙으니 팀마다 다른 색을 골라주세요.</small></div>`;
+    if (f.type === 'pdf') return `<div class="field"><span>${esc(f.label)}${f.required && !v ? ' *' : ''}</span>
+      <label class="pdf-drop" id="pdz"><input type="file" accept="application/pdf,.pdf" id="pdf-in" hidden><span id="pdf-name">${v ? '📄 지금 올라가 있는 PDF가 있어요. 바꾸려면 새 파일을 고르세요.' : '📄 여기를 눌러 PDF를 고르거나 끌어다 놓으세요'}</span></label>
+      <small>그래프나 사진이 들어간 PDF도 돼요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
     if (f.type === 'photo') return `<div class="field"><span>${esc(f.label)}</span>
       <div class="photo-row"><img class="photo-prev" id="pp" ${v ? `src="${esc(v)}"` : 'hidden'} alt="">
         <div class="paste-zone" id="pz" contenteditable="true" role="textbox" aria-label="사진 붙여넣기 영역" data-ph="📋 여기를 누르고 붙여넣기 (Ctrl+V)&#10;또는 사진을 끌어다 놓기"></div></div>
@@ -1200,6 +1216,22 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
   }));
   form.querySelectorAll('[data-datetext]').forEach(inp => inp.addEventListener('input', () => { inp.closest('.field').querySelector('[data-prev]').innerHTML = dateHint(inp.value); }));
   let photo = data.photo || '';
+  let pdfFile = null;
+  const pdfIn = $('#pdf-in');
+  if (pdfIn) {
+    const pickPdf = file => {
+      if (!file) return;
+      if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { $('#merr').textContent = 'PDF 파일만 올릴 수 있어요.'; return; }
+      if (file.size > PDF_MAX_MB * 1024 * 1024) { $('#merr').textContent = `파일이 너무 커요 (${(file.size / 1048576).toFixed(1)}MB). ${PDF_MAX_MB}MB 이하로 줄여주세요.`; return; }
+      pdfFile = file; $('#merr').textContent = '';
+      $('#pdf-name').textContent = `📄 ${file.name} (${(file.size / 1048576).toFixed(1)}MB)`; $('#pdz').classList.add('picked');
+    };
+    pdfIn.onchange = () => pickPdf(pdfIn.files[0]);
+    const pdz = $('#pdz');
+    pdz.addEventListener('dragover', e => { e.preventDefault(); pdz.classList.add('over'); });
+    pdz.addEventListener('dragleave', () => pdz.classList.remove('over'));
+    pdz.addEventListener('drop', e => { e.preventDefault(); pdz.classList.remove('over'); pickPdf(e.dataTransfer.files[0]); });
+  }
   const pf = $('#pf');
   const usePhoto = async file => {
     if (!file || !/^image\//.test(file.type)) { $('#merr').textContent = '사진 파일이 아니에요. 사진을 복사해서 다시 붙여넣어 주세요.'; return; }
@@ -1231,6 +1263,7 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
     const out = {};
     for (const f of fields) {
       if (f.type === 'photo') { out[f.key] = photo; continue; }
+      if (f.type === 'pdf') { if (f.required && !pdfFile && !data[f.key]) { $('#merr').textContent = 'PDF 파일을 골라주세요.'; return; } out[f.key] = pdfFile; continue; }
       if (f.type === 'uniforms') {
         const u = {}; f.teams.forEach((t, i) => { const c = form.querySelector(`input[name="u_${i}"]:checked`); u[t] = c ? c.value : ''; });
         const picked = Object.values(u).filter(Boolean);
@@ -1359,6 +1392,84 @@ const editLeague = (date, title, seasonId) => withAuth('schedule', () => {
     onSave: v => note ? store.set('events', note.id, v) : store.add('events', { ...v, leagueDate: date, date }),
     onDelete: note ? () => store.remove('events', note.id) : undefined });
 });
+/* ---------- MOMENTUM ESPN (기사 PDF) ---------- */
+const PDF_MAX_MB = 15, CHUNK = 700000; // Firestore 문서 하나에 약 0.7MB씩 나눠 저장
+const pdfCache = {};
+const fileToB64 = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+async function savePdf(articleId, file, progress) {
+  const b64 = await fileToB64(file), parts = Math.ceil(b64.length / CHUNK);
+  for (let i = 0; i < parts; i++) {
+    progress && progress(i + 1, parts);
+    const doc = { article: articleId, i, data: b64.slice(i * CHUNK, (i + 1) * CHUNK) };
+    if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).set(doc);
+    else (demo.articleFiles = demo.articleFiles || {})[`${articleId}_${i}`] = doc; // 데모: 이 창에서만 유지
+  }
+  pdfCache[articleId] = null;
+  return parts;
+}
+async function deletePdf(articleId, parts) {
+  for (let i = 0; i < (parts || 0); i++) {
+    if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).delete().catch(() => {});
+    else if (demo.articleFiles) delete demo.articleFiles[`${articleId}_${i}`];
+  }
+}
+async function loadPdf(a) {
+  if (pdfCache[a.id]) return pdfCache[a.id];
+  let b64 = '';
+  for (let i = 0; i < (a.parts || 0); i++) {
+    const d = FB ? (await fdb.collection('articleFiles').doc(`${a.id}_${i}`).get()).data() : (demo.articleFiles || {})[`${a.id}_${i}`];
+    if (!d) throw new Error('기사 파일 일부를 찾지 못했어요.');
+    b64 += d.data;
+  }
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return (pdfCache[a.id] = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
+}
+async function openArticle(id) {
+  const a = state.articles.find(x => x.id === id); if (!a) return;
+  if (a.link) { window.open(a.link, '_blank', 'noopener'); return; }
+  // 팝업 차단을 피하려고 클릭하자마자 새 창을 먼저 열고, PDF를 받은 뒤 그 창에 띄워요
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(`<title>${esc(a.title)}</title><body style="font-family:sans-serif;background:#170F33;color:#fff;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p id="m">📰 기사를 불러오는 중이에요…</p></body>`); w.document.close(); }
+  try {
+    const url = await loadPdf(a);
+    if (!w) { location.href = url; return; }
+    w.location.href = url;
+    // 브라우저가 새 창에서 바로 못 열면 누를 수 있는 버튼을 보여줘요
+    setTimeout(() => { try { if (w.location.href === 'about:blank') { const m = w.document.getElementById('m'); if (m) m.innerHTML = `<a href="${url}" style="color:#6FD0FF;font-size:1.2rem;font-weight:700">📰 ${esc(a.title)}<br><br>여기를 눌러 기사 열기</a>`; } } catch (e) {} }, 1500);
+  } catch (e) { if (w) w.close(); alert('기사를 열지 못했어요: ' + (e.message || e)); }
+}
+const ARTICLE_FIELDS = [
+  { key: 'title', label: '기사 제목', required: true, placeholder: '예: 딸피, 개막 3연승… 양성원 원맨쇼는 계속된다' },
+  { key: 'date', label: '날짜', type: 'datetext', required: true },
+  { key: 'pdf', label: '기사 PDF', type: 'pdf', required: true },
+];
+const addArticle = () => withAuth('admin', () => openForm({ title: 'MOMENTUM ESPN 기사 등록', saveLabel: '올리기', fields: ARTICLE_FIELDS, data: { date: ymd(new Date()) },
+  onSave: async v => {
+    const id = newId();
+    const parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; });
+    const doc = { title: v.title, date: v.date, parts, size: v.pdf.size, createdAt: new Date().toISOString() };
+    if (FB) await fdb.collection('articles').doc(id).set(doc); else { demo.articles.push({ id, ...doc }); demoSave(); demoSync(); }
+  } }));
+const editArticle = id => withAuth('admin', () => { const a = state.articles.find(x => x.id === id); if (!a) return;
+  openForm({ title: '기사 수정', fields: ARTICLE_FIELDS, data: { ...a, pdf: a.parts ? 'yes' : '' },
+    onSave: async v => {
+      const patch = { title: v.title, date: v.date };
+      if (v.pdf) { await deletePdf(id, a.parts); patch.parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; }); patch.size = v.pdf.size; }
+      return store.set('articles', id, patch);
+    },
+    onDelete: async () => { await deletePdf(id, a.parts); return store.remove('articles', id); } }); });
+function espnHTML() {
+  const list = state.articles.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const today = ymd(new Date()), weekAgo = ymd(new Date(Date.now() - 7 * 864e5));
+  return `<section class="sec espn"><div class="sec-head"><h3 class="en big-h espn-logo">MOMENTUM <span>ESPN</span></h3><button class="btn sm" data-add-article>+ 기사 등록</button></div>
+    ${list.length ? `<ul class="espn-list ${list.length > 5 ? 'scroll' : ''}">${list.map(a => {
+      const [, m, d] = String(a.date).split('-').map(Number);
+      return `<li><button class="espn-item" data-article="${esc(a.id)}"><span class="espn-date num">${m}.${d}</span><span class="espn-title">${esc(a.title)}</span>${a.date >= weekAgo && a.date <= today ? '<span class="espn-new">NEW</span>' : ''}<span class="espn-go" aria-hidden="true">↗</span></button>
+        ${can('admin') ? `<button class="link-btn" data-edit-article="${esc(a.id)}">수정</button>` : ''}</li>`; }).join('')}</ul>`
+      : `<p class="empty" style="margin-top:12px">아직 기사가 없어요.${can('admin') ? '' : ' 곧 첫 리포트가 올라올 거예요.'}</p>`}
+  </section>`;
+}
 const addVideo = cat => withAuth('admin', () => openForm({ title: '영상 등록', fields: videoFields(), data: { date: ymd(new Date()), category: cat || 'season', season: state.videoSeason && state.videoSeason !== 'all' ? state.videoSeason : (state.seasons[0] || {}).id }, onSave: v => store.add('videos', v) }));
 const editVideo = id => withAuth('admin', () => { const x = { category: 'etc', ...state.videos.find(v => v.id === id) }; openForm({ title: '영상 수정', fields: videoFields(), data: x, onSave: v => store.set('videos', id, v), onDelete: () => store.remove('videos', id) }); });
 const addNews = () => withAuth('admin', () => openForm({ title: '공지 쓰기', fields: NEWS_FIELDS, onSave: v => store.add('news', { ...v, date: ymd(new Date()) }) }));
@@ -1625,6 +1736,8 @@ function pageLeague() {
     <div class="podium ${s.games.length ? '' : 'pre'}">${podium}</div>
   </div></section>
 
+  ${espnHTML()}
+
   <section class="sec"><div class="sec-head"><h3 class="en big-h">MVP RACE</h3><a class="more" href="#/stats">전체 기록</a></div>
     ${king ? `<div class="mvp-wrap">
       <div class="king-col"><a class="king" href="#/player/${encodeURIComponent(king.name)}">
@@ -1839,6 +1952,9 @@ document.addEventListener('click', e => {
   if (d.editNews) return editNews(d.editNews);
   if (d.del) { const [c, id] = d.del.split(':'); if (confirm('정말 삭제할까요?')) store.remove(c, id).catch(err => alert(errMsg(err))); return; }
   if ('logout' in d) return logout();
+  if (d.article) return openArticle(d.article);
+  if ('addArticle' in d) return addArticle();
+  if (d.editArticle) return editArticle(d.editArticle);
   if (d.cheerMore) { state.cheerAll[d.cheerMore] = !state.cheerAll[d.cheerMore]; return render(); }
   if (d.emo) { const inp = t.closest('.cheers').querySelector('[name=ctext]'); inp.value = (inp.value + ' ' + d.emo).trim().slice(0, 100); inp.focus(); return; }
   if (d.goweek) {
