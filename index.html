@@ -499,6 +499,7 @@ html,body{overflow-x:clip}
 /* 영상 크게 보기 */
 .wv-top{margin:16px 0 10px}
 .back-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font-weight:700;cursor:pointer}
+.back-btn{text-decoration:none;color:var(--ink);display:inline-block}
 .back-btn:hover{border-color:var(--brand);color:var(--brand)}
 .wv-stage{background:#000}
 .wv-frame{width:min(100%,calc((100vh - 150px) * 16 / 9));margin:0 auto;aspect-ratio:16/9}
@@ -563,6 +564,13 @@ html,body{overflow-x:clip}
 .pdf-drop{display:flex;align-items:center;justify-content:center;min-height:84px;border:2px dashed var(--line);border-radius:12px;padding:12px;text-align:center;color:var(--muted);font-size:.9rem;cursor:pointer;background:var(--bg)}
 .pdf-drop:hover,.pdf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .pdf-drop.picked{border-style:solid;border-color:var(--accent);color:var(--ink);font-weight:700}
+.espn-pdf{flex:0 0 auto;font-size:.62rem;font-weight:800;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.art-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 12px}
+.art-holder{background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--line);min-height:200px}
+.art-frame{display:block;width:100%;border:0;min-height:400px;background:#fff}
+.art-pdf{padding:24px;text-align:center}
+.box-video{display:inline-block;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;border-radius:999px;padding:8px 18px;margin-bottom:4px;box-shadow:inset 0 -3px 0 var(--accent)}
+.box-video:hover{filter:brightness(1.1)}
 /* banner */
 .hero.has-banner{background:#07070B;position:relative;overflow:hidden}
 /* 넓은 화면: 배너는 본문 폭(1000px)까지만, 양옆은 배너 색을 흐리게 채움 */
@@ -774,7 +782,7 @@ async function fetchSheet(id, sheet, range) {
 function planOf(g) {
   const cell = (r, c) => (g[r] || [])[c];
   const date = normDate(cell(0, 20));
-  const matchups = weekBlocks(g).map(({ start }) => [str(cell(start + 2, 0)), str(cell(start + 2, 20))]).filter(m => m[0] && m[1]);
+  const matchups = weekBlocks(g).map(({ start }) => [str(cell(start + 2, 0)), str(cell(start + 2, 20)), str(cell(start, 0)).replace(/\s*MATCH/i, '')]).filter(m => m[0] && m[1]);
   return { date, matchups };
 }
 function buildSeason(s, lists, weekGrids) {
@@ -1068,6 +1076,24 @@ function pageStats() {
 }
 
 /* ===================== 박스스코어 ===================== */
+// 박스스코어 영상: ① 등록 때 고른 경기 ② 제목에 두 팀 이름 + 경기 후 7일 이내 (가장 가까운 날짜)
+const normTeam = t => String(t || '').replace(/[\s;]/g, '').toLowerCase();
+function videoForGame(g) {
+  const key = gameKey(g);
+  const direct = state.videos.find(v => v.game === key);
+  if (direct) return { v: direct, auto: false };
+  const A = normTeam(g.teamA), B = normTeam(g.teamB), gd = new Date(g.date + 'T00:00');
+  let best = null;
+  for (const v of [...state.videos, ...state.feed]) {
+    if (v.game || !v.date || !ytId(v.url)) continue;
+    const t = normTeam(v.title);
+    if (!A || !B || !t.includes(A) || !t.includes(B)) continue;
+    const days = (new Date(v.date + 'T00:00') - gd) / 864e5;
+    if (days < 0 || days > 7) continue;
+    if (!best || days < best.days) best = { v, days, auto: true };
+  }
+  return best;
+}
 function openBox(id) {
   const g = state.seasons.flatMap(s => s.games).find(x => x.id === id);
   if (!g) return;
@@ -1079,11 +1105,11 @@ function openBox(id) {
       <tr><td class="l sticky-col"><b>합계</b></td>${r(tot)}</tr></tbody></table></div>`;
   };
   const s = state.seasons.find(x => x.id === g.seasonId);
-  const vid = state.videos.find(v => v.date === g.date && (!v.teams || (v.teams.includes(g.teamA) && v.teams.includes(g.teamB))));
+  const vm = videoForGame(g), vid = vm && vm.v;
   $('#sheet').innerHTML = `<button class="btn x" data-close>닫기</button>
     <p class="muted" style="margin:6px 0 0">${esc(s.name)} ${g.week}주차${g.date ? `, ${fmtDate(g.date)}` : ''}</p>
     <div class="score-line"><span class="tm">${esc(g.teamA)}</span><span class="sc en num ${g.scoreA < g.scoreB ? 'lose' : ''}">${g.scoreA}</span><span class="muted">:</span><span class="sc en num ${g.scoreB < g.scoreA ? 'lose' : ''}">${g.scoreB}</span><span class="tm">${esc(g.teamB)}</span></div>
-    ${vid ? `<p style="text-align:center;margin-top:-8px"><a class="more" href="${esc(vid.url)}" target="_blank" rel="noopener">경기 영상 보기</a></p>` : ''}
+    ${vid ? `<p style="text-align:center;margin-top:-8px"><a class="box-video" href="#/watch/v/${ytId(vid.url)}" data-close>▶ 경기 영상 보기</a>${vm.auto ? '<br><small class="muted">제목과 날짜로 자동 연결된 영상이에요</small>' : ''}</p>` : ''}
     ${tbl(g.teamA, g.a)}${tbl(g.teamB, g.b)}`;
   $('#modal').hidden = false; document.body.style.overflow = 'hidden';
   $('#sheet').querySelector('button')?.focus();
@@ -1177,13 +1203,14 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
       </div></div>`).join('') : '<p class="muted" style="margin:0">이 시즌의 팀 정보를 찾지 못했어요.</p>'}
       <small>세 팀이 매주 서로 붙으니 팀마다 다른 색을 골라주세요.</small></div>`;
     if (f.type === 'pdf') return `<div class="field"><span>${esc(f.label)}${f.required && !v ? ' *' : ''}</span>
-      <label class="pdf-drop" id="pdz"><input type="file" accept="application/pdf,.pdf" id="pdf-in" hidden><span id="pdf-name">${v ? '📄 지금 올라가 있는 PDF가 있어요. 바꾸려면 새 파일을 고르세요.' : '📄 여기를 눌러 PDF를 고르거나 끌어다 놓으세요'}</span></label>
-      <small>그래프나 사진이 들어간 PDF도 돼요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
+      <label class="pdf-drop" id="pdz"><input type="file" accept=".html,.htm,text/html,application/pdf,.pdf" id="pdf-in" hidden><span id="pdf-name">${v ? '📰 지금 올라가 있는 기사 파일이 있어요. 바꾸려면 새 파일을 고르세요.' : '📰 여기를 눌러 기사 파일(HTML 또는 PDF)을 고르거나 끌어다 놓으세요'}</span></label>
+      <small>HTML 기사는 제목과 날짜가 자동으로 채워져요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
     if (f.type === 'photo') return `<div class="field"><span>${esc(f.label)}</span>
       <div class="photo-row"><img class="photo-prev" id="pp" ${v ? `src="${esc(v)}"` : 'hidden'} alt="">
         <div class="paste-zone" id="pz" contenteditable="true" role="textbox" aria-label="사진 붙여넣기 영역" data-ph="📋 여기를 누르고 붙여넣기 (Ctrl+V)&#10;또는 사진을 끌어다 놓기"></div></div>
       <input type="file" accept="image/*" id="pf"><small>사진을 복사해서 붙여넣거나, 파일을 고르거나, 끌어다 놓으면 돼요. 세로 4:5 비율로 잘려서 저장돼요.${v ? ' <button type="button" class="link-btn danger" id="prm">사진 지우기</button>' : ''}</small></div>`;
-    const input = f.type === 'select' ? `<select name="${f.key}">${f.options.map(([ov, ol]) => `<option value="${esc(ov)}" ${String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
+    const opt = ([ov, ol]) => `<option value="${esc(ov)}" ${String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`;
+    const input = f.type === 'select' ? `<select name="${f.key}">${f.options.map(o => o.group ? `<optgroup label="${esc(o.group)}">${o.items.map(opt).join('')}</optgroup>` : opt(o)).join('')}</select>`
       : f.type === 'textarea' ? `<textarea name="${f.key}" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`
       : `<input type="${f.type || 'text'}" name="${f.key}" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" ${f.type === 'password' ? 'autocomplete="current-password"' : ''} ${f.inputmode ? `inputmode="${f.inputmode}"` : ''}>`;
     const when = f.when ? ` data-when="${f.when[0]}" data-in="${f.when[1].join(',')}"` : '';
@@ -1221,10 +1248,19 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
   if (pdfIn) {
     const pickPdf = file => {
       if (!file) return;
-      if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { $('#merr').textContent = 'PDF 파일만 올릴 수 있어요.'; return; }
+      const isHtml = /html$/i.test(file.type) || /\.html?$/i.test(file.name), isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+      if (!isHtml && !isPdf) { $('#merr').textContent = 'HTML이나 PDF 파일만 올릴 수 있어요.'; return; }
       if (file.size > PDF_MAX_MB * 1024 * 1024) { $('#merr').textContent = `파일이 너무 커요 (${(file.size / 1048576).toFixed(1)}MB). ${PDF_MAX_MB}MB 이하로 줄여주세요.`; return; }
       pdfFile = file; $('#merr').textContent = '';
-      $('#pdf-name').textContent = `📄 ${file.name} (${(file.size / 1048576).toFixed(1)}MB)`; $('#pdz').classList.add('picked');
+      $('#pdf-name').textContent = `${isHtml ? '📰' : '📄'} ${file.name} (${(file.size / 1048576).toFixed(1)}MB)`; $('#pdz').classList.add('picked');
+      if (isHtml) file.text().then(t => {
+        const doc = new DOMParser().parseFromString(t, 'text/html');
+        const title = (doc.querySelector('meta[property="og:title"]')?.content || doc.title || doc.querySelector('h1')?.textContent || '').trim();
+        const dm = doc.querySelector('meta[name="date"],meta[property="article:published_time"]')?.content || '';
+        if (title && form.elements.title && !form.elements.title.value) form.elements.title.value = title.slice(0, 120);
+        const iso = parseDateText(dm.slice(0, 10));
+        if (iso && form.elements.date) { form.elements.date.value = iso.replace(/-/g, ''); form.elements.date.dispatchEvent(new Event('input')); }
+      });
     };
     pdfIn.onchange = () => pickPdf(pdfIn.files[0]);
     const pdz = $('#pdz');
@@ -1263,7 +1299,7 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
     const out = {};
     for (const f of fields) {
       if (f.type === 'photo') { out[f.key] = photo; continue; }
-      if (f.type === 'pdf') { if (f.required && !pdfFile && !data[f.key]) { $('#merr').textContent = 'PDF 파일을 골라주세요.'; return; } out[f.key] = pdfFile; continue; }
+      if (f.type === 'pdf') { if (f.required && !pdfFile && !data[f.key]) { $('#merr').textContent = '기사 파일을 골라주세요.'; return; } out[f.key] = pdfFile; continue; }
       if (f.type === 'uniforms') {
         const u = {}; f.teams.forEach((t, i) => { const c = form.querySelector(`input[name="u_${i}"]:checked`); u[t] = c ? c.value : ''; });
         const picked = Object.values(u).filter(Boolean);
@@ -1363,11 +1399,38 @@ const catOf = v => v.category === 'feed' ? { k: 'feed', label: 'New' } : (VIDEO_
 const VIDEO_FIELDS = [
   { key: 'category', label: '카테고리', type: 'select', required: true, options: VIDEO_CATS.map(c => [c.k, `${c.label} (${c.ko})`]), default: 'season' },
   { key: 'season', label: '시즌', type: 'select', options: [], when: ['category', ['season', 'highlight']] },
+  { key: 'game', label: '연결할 경기', type: 'select', options: [], when: ['category', ['season']], hint: '고른 경기의 박스스코어에 "경기 영상 보기"가 붙어요.' },
   { key: 'url', label: '유튜브 링크', required: true, placeholder: 'https://youtu.be/...', validate: v => ytId(v) ? '' : '유튜브 영상 링크가 아닌 것 같아요. 영상 주소를 복사해 넣어주세요.' },
   { key: 'title', label: '제목', required: true, placeholder: '예: 9월 21일 리그전 A vs B' },
   { key: 'date', label: '업로드 날짜', type: 'datetext', required: true },
 ];
-const videoFields = () => VIDEO_FIELDS.map(f => f.key === 'season' ? { ...f, options: [['', '시즌 선택 안 함'], ...state.seasons.map(s => [s.id, s.name])] } : f);
+// 경기 고유 키: 시즌|주차|AB (시트가 바뀌어도 유지)
+const gameKey = g => `${g.seasonId}|${g.week}|${g.label}`;
+function gameOptions() {
+  const today = ymd(new Date()), groups = [];
+  for (const s of state.seasons) {
+    const items = [];
+    const weeks = [...new Set([...s.games.map(g => g.week), ...Object.keys(s.plan || {}).map(Number)])].sort((a, b) => b - a);
+    for (const w of weeks) {
+      const played = s.games.filter(g => g.week === w);
+      const date = s.weekDates[w] || '';
+      const list = played.length ? played.map(g => [g.label, g.teamA, g.teamB, ` (${g.scoreA}:${g.scoreB})`])
+        : (date && date <= today ? (s.plan[w]?.matchups || []).map(m => [m[2], m[0], m[1], '']) : []);
+      list.forEach(([lab, a, b, sc]) => items.push([`${s.id}|${w}|${lab}`, `${w}주차 ${date ? fmtDate(date, false) + ' ' : ''}${lab} ${a} vs ${b}${sc}`]));
+    }
+    if (items.length) groups.push({ group: s.name, items });
+  }
+  return groups;
+}
+const gameLabel = key => { const [sid, w, lab] = String(key).split('|'); const s = state.seasons.find(x => x.id === sid); const g = s && s.games.find(x => x.week === +w && x.label === lab); return s ? `${s.name} ${w}주차 ${lab}${g ? ` ${g.teamA} vs ${g.teamB}` : ''}` : ''; };
+const videoFields = () => VIDEO_FIELDS.map(f => f.key === 'season' ? { ...f, options: [['', '시즌 선택 안 함'], ...state.seasons.map(s => [s.id, s.name])] }
+  : f.key === 'game' ? { ...f, options: [['', '연결 안 함'], ...gameOptions()] } : f);
+function fixVideo(v) { if (v.category !== 'season') v.game = ''; if (v.game) v.season = v.game.split('|')[0]; return v; }
+// 경기를 고르면 비어 있는 제목을 채워줘요
+function hookGamePick() {
+  const f = $('#mf'); if (!f || !f.elements.game) return;
+  f.elements.game.addEventListener('change', () => { if (f.elements.game.value && !f.elements.title.value.trim()) f.elements.title.value = gameLabel(f.elements.game.value); });
+}
 const NEWS_FIELDS = [
   { key: 'title', label: '제목', required: true },
   { key: 'body', label: '내용', type: 'textarea', required: true },
@@ -1413,6 +1476,22 @@ async function deletePdf(articleId, parts) {
     else if (demo.articleFiles) delete demo.articleFiles[`${articleId}_${i}`];
   }
 }
+async function loadB64(a) {
+  let b64 = '';
+  for (let i = 0; i < (a.parts || 0); i++) {
+    const d = FB ? (await fdb.collection('articleFiles').doc(`${a.id}_${i}`).get()).data() : (demo.articleFiles || {})[`${a.id}_${i}`];
+    if (!d) throw new Error('기사 파일 일부를 찾지 못했어요.');
+    b64 += d.data;
+  }
+  return b64;
+}
+const htmlCache = {};
+async function loadHtml(a) {
+  if (htmlCache[a.id]) return htmlCache[a.id];
+  const bin = atob(await loadB64(a)), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return (htmlCache[a.id] = new TextDecoder('utf-8').decode(bytes));
+}
 async function loadPdf(a) {
   if (pdfCache[a.id]) return pdfCache[a.id];
   let b64 = '';
@@ -1428,6 +1507,8 @@ async function loadPdf(a) {
 async function openArticle(id) {
   const a = state.articles.find(x => x.id === id); if (!a) return;
   if (a.link) { window.open(a.link, '_blank', 'noopener'); return; }
+  // HTML 기사: 사이트 안의 기사 페이지를 새 창으로 (주소를 공유할 수 있어요)
+  if (a.type === 'html') { window.open(location.href.split('#')[0] + '#/news/' + a.id, '_blank'); return; }
   // 팝업 차단을 피하려고 클릭하자마자 새 창을 먼저 열고, PDF를 받은 뒤 그 창에 띄워요
   const w = window.open('', '_blank');
   if (w) { w.document.write(`<title>${esc(a.title)}</title><body style="font-family:sans-serif;background:#170F33;color:#fff;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p id="m">📰 기사를 불러오는 중이에요…</p></body>`); w.document.close(); }
@@ -1440,38 +1521,63 @@ async function openArticle(id) {
   } catch (e) { if (w) w.close(); alert('기사를 열지 못했어요: ' + (e.message || e)); }
 }
 const ARTICLE_FIELDS = [
-  { key: 'title', label: '기사 제목', required: true, placeholder: '예: 딸피, 개막 3연승… 양성원 원맨쇼는 계속된다' },
+  { key: 'pdf', label: '기사 파일', type: 'pdf', required: true },
+  { key: 'title', label: '기사 제목', required: true, placeholder: 'HTML 기사를 올리면 자동으로 채워져요' },
   { key: 'date', label: '날짜', type: 'datetext', required: true },
-  { key: 'pdf', label: '기사 PDF', type: 'pdf', required: true },
 ];
+const fileKind = f => (/html$/i.test(f.type) || /\.html?$/i.test(f.name)) ? 'html' : 'pdf';
 const addArticle = () => withAuth('admin', () => openForm({ title: 'MOMENTUM ESPN 기사 등록', saveLabel: '올리기', fields: ARTICLE_FIELDS, data: { date: ymd(new Date()) },
   onSave: async v => {
     const id = newId();
+    $('#merr').style.color = 'var(--accent-ink)';
     const parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; });
-    const doc = { title: v.title, date: v.date, parts, size: v.pdf.size, createdAt: new Date().toISOString() };
+    const doc = { title: v.title, date: v.date, parts, size: v.pdf.size, type: fileKind(v.pdf), createdAt: new Date().toISOString() };
     if (FB) await fdb.collection('articles').doc(id).set(doc); else { demo.articles.push({ id, ...doc }); demoSave(); demoSync(); }
   } }));
 const editArticle = id => withAuth('admin', () => { const a = state.articles.find(x => x.id === id); if (!a) return;
   openForm({ title: '기사 수정', fields: ARTICLE_FIELDS, data: { ...a, pdf: a.parts ? 'yes' : '' },
     onSave: async v => {
       const patch = { title: v.title, date: v.date };
-      if (v.pdf) { await deletePdf(id, a.parts); patch.parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; }); patch.size = v.pdf.size; }
+      if (v.pdf) { await deletePdf(id, a.parts); patch.parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; }); patch.size = v.pdf.size; patch.type = fileKind(v.pdf); htmlCache[id] = null; }
       return store.set('articles', id, patch);
     },
     onDelete: async () => { await deletePdf(id, a.parts); return store.remove('articles', id); } }); });
+function pageArticle(id) {
+  const a = state.articles.find(x => x.id === id);
+  if (!a) return `<div class="wv-top"><a class="back-btn" href="#/league">‹ 리그로</a></div><p class="loading">${state.articlesLoaded ? '기사를 찾지 못했어요. 지워졌을 수 있어요.' : '📰 기사를 불러오는 중이에요…'}</p>`;
+  return `<div class="art-top"><a class="back-btn" href="#/league">‹ MOMENTUM ESPN</a><button class="btn sm" data-share-article>🔗 링크 복사</button></div>
+    ${a.type === 'pdf' ? `<div class="art-pdf card"><p><b>${esc(a.title)}</b></p><button class="btn primary" data-article="${esc(a.id)}">📄 PDF로 기사 열기</button></div>`
+      : `<div class="art-holder" id="art-holder" data-id="${esc(a.id)}"><p class="loading">📰 기사를 불러오는 중이에요…</p></div>`}`;
+}
+async function mountArticle() {
+  const holder = document.getElementById('art-holder'); if (!holder || holder.querySelector('iframe')) return;
+  const a = state.articles.find(x => x.id === holder.dataset.id); if (!a) return;
+  try {
+    const html = await loadHtml(a);
+    if (!document.body.contains(holder) || holder.querySelector('iframe')) return;
+    const f = document.createElement('iframe');
+    f.className = 'art-frame'; f.title = a.title;
+    f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    f.srcdoc = html;
+    const fit = () => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + 'px'; } catch (e) {} };
+    f.onload = () => { fit(); try { new ResizeObserver(fit).observe(f.contentDocument.body); f.contentDocument.querySelectorAll('img').forEach(i => i.addEventListener('load', fit)); f.contentDocument.querySelectorAll('a[href^="http"]').forEach(l => l.target = '_blank'); } catch (e) {} };
+    holder.innerHTML = ''; holder.appendChild(f);
+    document.title = a.title + ' | MOMENTUM ESPN';
+  } catch (e) { holder.innerHTML = `<p class="empty">기사를 불러오지 못했어요: ${esc(e.message || e)}</p>`; }
+}
 function espnHTML() {
   const list = state.articles.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)));
   const today = ymd(new Date()), weekAgo = ymd(new Date(Date.now() - 7 * 864e5));
   return `<section class="sec espn"><div class="sec-head"><h3 class="en big-h espn-logo">MOMENTUM <span>ESPN</span></h3><button class="btn sm" data-add-article>+ 기사 등록</button></div>
     ${list.length ? `<ul class="espn-list ${list.length > 5 ? 'scroll' : ''}">${list.map(a => {
       const [, m, d] = String(a.date).split('-').map(Number);
-      return `<li><button class="espn-item" data-article="${esc(a.id)}"><span class="espn-date num">${m}.${d}</span><span class="espn-title">${esc(a.title)}</span>${a.date >= weekAgo && a.date <= today ? '<span class="espn-new">NEW</span>' : ''}<span class="espn-go" aria-hidden="true">↗</span></button>
+      return `<li><button class="espn-item" data-article="${esc(a.id)}"><span class="espn-date num">${m}.${d}</span><span class="espn-title">${esc(a.title)}</span>${a.type === 'pdf' ? '<span class="espn-pdf">PDF</span>' : ''}${a.date >= weekAgo && a.date <= today ? '<span class="espn-new">NEW</span>' : ''}<span class="espn-go" aria-hidden="true">↗</span></button>
         ${can('admin') ? `<button class="link-btn" data-edit-article="${esc(a.id)}">수정</button>` : ''}</li>`; }).join('')}</ul>`
       : `<p class="empty" style="margin-top:12px">아직 기사가 없어요.${can('admin') ? '' : ' 곧 첫 리포트가 올라올 거예요.'}</p>`}
   </section>`;
 }
-const addVideo = cat => withAuth('admin', () => openForm({ title: '영상 등록', fields: videoFields(), data: { date: ymd(new Date()), category: cat || 'season', season: state.videoSeason && state.videoSeason !== 'all' ? state.videoSeason : (state.seasons[0] || {}).id }, onSave: v => store.add('videos', v) }));
-const editVideo = id => withAuth('admin', () => { const x = { category: 'etc', ...state.videos.find(v => v.id === id) }; openForm({ title: '영상 수정', fields: videoFields(), data: x, onSave: v => store.set('videos', id, v), onDelete: () => store.remove('videos', id) }); });
+const addVideo = cat => withAuth('admin', () => { openForm({ title: '영상 등록', fields: videoFields(), data: { date: ymd(new Date()), category: cat || 'season', season: state.videoSeason && state.videoSeason !== 'all' ? state.videoSeason : (state.seasons[0] || {}).id }, onSave: v => store.add('videos', fixVideo(v)) }); hookGamePick(); });
+const editVideo = id => withAuth('admin', () => { const x = { category: 'etc', ...state.videos.find(v => v.id === id) }; openForm({ title: '영상 수정', fields: videoFields(), data: x, onSave: v => store.set('videos', id, fixVideo(v)), onDelete: () => store.remove('videos', id) }); hookGamePick(); });
 const addNews = () => withAuth('admin', () => openForm({ title: '공지 쓰기', fields: NEWS_FIELDS, onSave: v => store.add('news', { ...v, date: ymd(new Date()) }) }));
 const editNews = id => withAuth('admin', () => { const n = state.news.find(x => x.id === id); openForm({ title: '공지 수정', fields: NEWS_FIELDS, data: n, onSave: v => store.set('news', id, v), onDelete: () => store.remove('news', id) }); });
 
@@ -1853,7 +1959,8 @@ function render() {
   const parts = location.hash.split('/'), page = parts[1] || 'home', arg = parts[2];
   const pages = { home: pageHome, schedule: pageSchedule, league: pageLeague, players: pagePlayers, stats: pageStats, watch: pageWatch };
   const vid = page === 'watch' && arg === 'v' && parts[3] ? parts[3] : '';
-  const html = vid ? pageWatchVideo(vid) : page === 'player' && arg ? pagePlayer(decodeURIComponent(arg)) : (pages[page] || pageHome)();
+  const html = vid ? pageWatchVideo(vid) : page === 'news' && arg ? pageArticle(arg) : page === 'player' && arg ? pagePlayer(decodeURIComponent(arg)) : (pages[page] || pageHome)();
+  const keepArt = page === 'news' && document.querySelector(`#art-holder[data-id="${arg}"] iframe`);
   // 영상 재생 중에 데이터가 새로 들어와도 플레이어를 다시 만들지 않아요 (재생이 끊기지 않게)
   const keep = vid && document.querySelector(`#wv-frame iframe[data-id="${vid}"]`);
   const src = state.seasons.map(s => `${s.name}: ${s.source === 'live' ? '구글 시트에서 실시간' : s.source === 'archive' ? '보관된 기록' : `저장된 데이터 (${SNAP_DATE} 기준)`}`).join(' / ');
@@ -1862,10 +1969,19 @@ function render() {
   const focusKey = document.activeElement?.dataset?.keep, caret = document.activeElement?.selectionStart;
   $('#view').innerHTML = html + `<p class="status">${esc(src)}${FB ? '' : FB_EXPECTED ? ' / ⚠️ 저장 기능을 불러오지 못했어요. 새로고침해주세요' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
   if (keep) { const f = document.getElementById('wv-frame'); f.innerHTML = ''; f.appendChild(keep); }
+  if (keepArt) { const hd = document.getElementById('art-holder'); if (hd) { hd.innerHTML = ''; hd.appendChild(keepArt); } }
+  else if (page === 'news') mountArticle();
   document.querySelectorAll('#view [data-keep]').forEach(el => { if (kept[el.dataset.keep] !== undefined) el.value = kept[el.dataset.keep]; if (el.dataset.keep === focusKey) { el.focus(); try { el.setSelectionRange(caret, caret); } catch (e) {} } });
   requestAnimationFrame(fitHomeSchedule);
-  const navKey = page === 'player' ? 'players' : (pages[page] ? page : 'home');
+  const navKey = page === 'player' ? 'players' : page === 'news' ? 'league' : (pages[page] ? page : 'home');
   document.querySelectorAll('.nav a').forEach(a => a.getAttribute('href') === '#/' + navKey ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+}
+// 영상·기사 화면: 배너를 건너뛰고 본문이 바로 보이게
+function scrollToContent() {
+  if (!/\/watch\/v\/|\/news\//.test(location.hash)) return false;
+  const top = document.querySelector('.wv-top, .art-top'), nav = document.querySelector('.navbar');
+  window.scrollTo(0, top ? top.getBoundingClientRect().top + window.scrollY - (nav ? nav.offsetHeight : 0) : 0);
+  return true;
 }
 const scrollMemo = {};
 window.addEventListener('hashchange', e => {
@@ -1875,11 +1991,7 @@ window.addEventListener('hashchange', e => {
   render();
   // 영상 화면에서 뒤로 오면 보던 위치로, 그 외에는 맨 위로
   const back = oldHash.includes('/watch/v/') && scrollMemo[location.hash] !== undefined;
-  if (location.hash.includes('/watch/v/')) {
-    // 영상 화면: 배너를 건너뛰고 플레이어가 화면에 꽉 차게 보이도록 스크롤
-    const top = document.querySelector('.wv-top'), nav = document.querySelector('.navbar');
-    window.scrollTo(0, top ? top.getBoundingClientRect().top + window.scrollY - (nav ? nav.offsetHeight : 0) : 0);
-  } else window.scrollTo(0, back ? scrollMemo[location.hash] : 0);
+  if (!scrollToContent()) window.scrollTo(0, back ? scrollMemo[location.hash] : 0);
 });
 let lastScroll = 0; window.addEventListener('scroll', () => { lastScroll = window.scrollY; }, { passive: true });
 // 달력 날짜 칸을 누르면 그 날짜로 일정 등록
@@ -1953,6 +2065,7 @@ document.addEventListener('click', e => {
   if (d.del) { const [c, id] = d.del.split(':'); if (confirm('정말 삭제할까요?')) store.remove(c, id).catch(err => alert(errMsg(err))); return; }
   if ('logout' in d) return logout();
   if (d.article) return openArticle(d.article);
+  if ('shareArticle' in d) { const url = location.href; if (navigator.share) navigator.share({ title: document.title, url }).catch(() => {}); else navigator.clipboard.writeText(url).then(() => { t.textContent = '✓ 복사됐어요'; setTimeout(() => t.textContent = '🔗 링크 복사', 1500); }).catch(() => prompt('이 주소를 복사하세요', url)); return; }
   if ('addArticle' in d) return addArticle();
   if (d.editArticle) return editArticle(d.editArticle);
   if (d.cheerMore) { state.cheerAll[d.cheerMore] = !state.cheerAll[d.cheerMore]; return render(); }
@@ -1982,13 +2095,13 @@ async function loadFeed() {
   if (FB) {
     firebase.initializeApp(FIREBASE);
     fdb = firebase.firestore(); fauth = firebase.auth();
-    DYN.forEach(c => fdb.collection(c).onSnapshot(s => { state[c] = s.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, err => console.error(c, err)));
+    DYN.forEach(c => fdb.collection(c).onSnapshot(s => { state[c] = s.docs.map(x => ({ id: x.id, ...x.data() })); if (c === 'articles') state.articlesLoaded = true; render(); }, err => console.error(c, err)));
     fauth.onAuthStateChanged(u => { state.role = roleOf(u); render(); });
-  } else { demo = demoLoad(); DYN.forEach(c => state[c] = demo[c] = demo[c] || []); }
+  } else { demo = demoLoad(); DYN.forEach(c => state[c] = demo[c] = demo[c] || []); state.articlesLoaded = true; }
   state.seasons = await loadAllSeasons();
   state.seasonId = state.seasons[0]?.id;
   if (!state.seasons.length) { $('#view').innerHTML = '<p class="empty sec">기록 시트를 불러오지 못했어요. CONFIG의 sheetId와 시트 공유 설정을 확인하세요.</p>'; return; }
-  render();
+  render(); requestAnimationFrame(scrollToContent);
   loadFeed();
 })();
 </script>
