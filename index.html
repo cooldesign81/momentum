@@ -569,8 +569,19 @@ html,body{overflow-x:clip}
 .art-holder{background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--line);min-height:200px}
 .art-frame{display:block;width:100%;border:0;min-height:400px;background:#fff}
 .art-pdf{padding:24px;text-align:center}
-.box-video{display:inline-block;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;border-radius:999px;padding:8px 18px;margin-bottom:4px;box-shadow:inset 0 -3px 0 var(--accent)}
-.box-video:hover{filter:brightness(1.1)}
+.box-video{display:flex;align-items:center;gap:16px;margin:0 auto 18px;max-width:560px;padding:10px;border-radius:16px;background:#1A1030;color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.25);border:2px solid #FF0000}
+.box-video:hover{transform:translateY(-1px)}
+.box-video:hover .yt-play svg path:first-child{fill:#CC0000}
+.bv-thumb{position:relative;flex:0 0 200px;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}
+.bv-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85}
+.yt-play{position:absolute;inset:0;display:grid;place-items:center}
+.yt-play svg{width:62px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.bv-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bv-text b{font-size:1.15rem}
+.bv-text small{font-size:.8rem;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bv-text small.muted{color:#bbb}
+@media(max-width:520px){.box-video{flex-direction:column;align-items:stretch;gap:8px}.bv-thumb{flex:none;width:100%}}
+.sb-vid{background:#FF0000;color:#fff;border-radius:4px;padding:1px 6px;letter-spacing:0;margin-right:4px}
 /* banner */
 .hero.has-banner{background:#07070B;position:relative;overflow:hidden}
 /* 넓은 화면: 배너는 본문 폭(1000px)까지만, 양옆은 배너 색을 흐리게 채움 */
@@ -1109,7 +1120,9 @@ function openBox(id) {
   $('#sheet').innerHTML = `<button class="btn x" data-close>닫기</button>
     <p class="muted" style="margin:6px 0 0">${esc(s.name)} ${g.week}주차${g.date ? `, ${fmtDate(g.date)}` : ''}</p>
     <div class="score-line"><span class="tm">${esc(g.teamA)}</span><span class="sc en num ${g.scoreA < g.scoreB ? 'lose' : ''}">${g.scoreA}</span><span class="muted">:</span><span class="sc en num ${g.scoreB < g.scoreA ? 'lose' : ''}">${g.scoreB}</span><span class="tm">${esc(g.teamB)}</span></div>
-    ${vid ? `<p style="text-align:center;margin-top:-8px"><a class="box-video" href="#/watch/v/${ytId(vid.url)}" data-close>▶ 경기 영상 보기</a>${vm.auto ? '<br><small class="muted">제목과 날짜로 자동 연결된 영상이에요</small>' : ''}</p>` : ''}
+    ${vid ? `<a class="box-video" href="#/watch/v/${ytId(vid.url)}" data-close>
+        <span class="bv-thumb"><img src="https://i.ytimg.com/vi/${ytId(vid.url)}/mqdefault.jpg" alt=""><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-2.5-5.4-5.4-6.2C55.8.1 34 0 34 0S12.2.1 6.9 1.6C4 2.4 2.3 4.8 1.5 7.7 0 13 0 24 0 24s0 11 1.5 16.3c.8 2.9 2.5 5.4 5.4 6.2C12.2 47.9 34 48 34 48s21.8-.1 27.1-1.6c2.9-.8 4.6-3.2 5.4-6.2C68 35 68 24 68 24s0-11-1.5-16.3z" fill="#FF0000"/><path d="M45 24 27 14v20" fill="#fff"/></svg></span></span>
+        <span class="bv-text"><b>경기 영상 보기</b><small>${esc(vid.title || '')}</small>${vm.auto ? '<small class="muted">제목과 날짜로 자동 연결된 영상이에요</small>' : ''}</span></a>` : ''}
     ${tbl(g.teamA, g.a)}${tbl(g.teamB, g.b)}`;
   $('#modal').hidden = false; document.body.style.overflow = 'hidden';
   $('#sheet').querySelector('button')?.focus();
@@ -1203,8 +1216,8 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
       </div></div>`).join('') : '<p class="muted" style="margin:0">이 시즌의 팀 정보를 찾지 못했어요.</p>'}
       <small>세 팀이 매주 서로 붙으니 팀마다 다른 색을 골라주세요.</small></div>`;
     if (f.type === 'pdf') return `<div class="field"><span>${esc(f.label)}${f.required && !v ? ' *' : ''}</span>
-      <label class="pdf-drop" id="pdz"><input type="file" accept=".html,.htm,text/html,application/pdf,.pdf" id="pdf-in" hidden><span id="pdf-name">${v ? '📰 지금 올라가 있는 기사 파일이 있어요. 바꾸려면 새 파일을 고르세요.' : '📰 여기를 눌러 기사 파일(HTML 또는 PDF)을 고르거나 끌어다 놓으세요'}</span></label>
-      <small>HTML 기사는 제목과 날짜가 자동으로 채워져요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
+      <label class="pdf-drop" id="pdz"><input type="file" accept=".html,.htm,text/html" id="pdf-in" hidden><span id="pdf-name">${v ? '📰 지금 올라가 있는 기사 파일이 있어요. 바꾸려면 새 파일을 고르세요.' : '📰 여기를 눌러 HTML 기사 파일을 고르거나 끌어다 놓으세요'}</span></label>
+      <small>HTML 파일만 올릴 수 있어요. 제목과 날짜가 자동으로 채워져요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
     if (f.type === 'photo') return `<div class="field"><span>${esc(f.label)}</span>
       <div class="photo-row"><img class="photo-prev" id="pp" ${v ? `src="${esc(v)}"` : 'hidden'} alt="">
         <div class="paste-zone" id="pz" contenteditable="true" role="textbox" aria-label="사진 붙여넣기 영역" data-ph="📋 여기를 누르고 붙여넣기 (Ctrl+V)&#10;또는 사진을 끌어다 놓기"></div></div>
@@ -1249,7 +1262,7 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
     const pickPdf = file => {
       if (!file) return;
       const isHtml = /html$/i.test(file.type) || /\.html?$/i.test(file.name), isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
-      if (!isHtml && !isPdf) { $('#merr').textContent = 'HTML이나 PDF 파일만 올릴 수 있어요.'; return; }
+      if (!isHtml) { $('#merr').textContent = isPdf ? 'PDF는 올릴 수 없어요. HTML 기사 파일로 올려주세요.' : 'HTML 기사 파일만 올릴 수 있어요.'; return; }
       if (file.size > PDF_MAX_MB * 1024 * 1024) { $('#merr').textContent = `파일이 너무 커요 (${(file.size / 1048576).toFixed(1)}MB). ${PDF_MAX_MB}MB 이하로 줄여주세요.`; return; }
       pdfFile = file; $('#merr').textContent = '';
       $('#pdf-name').textContent = `${isHtml ? '📰' : '📄'} ${file.name} (${(file.size / 1048576).toFixed(1)}MB)`; $('#pdz').classList.add('picked');
@@ -1418,7 +1431,7 @@ function gameOptions() {
         : (date && date <= today ? (s.plan[w]?.matchups || []).map(m => [m[2], m[0], m[1], '']) : []);
       list.forEach(([lab, a, b, sc]) => items.push([`${s.id}|${w}|${lab}`, `${w}주차 ${date ? fmtDate(date, false) + ' ' : ''}${lab} ${a} vs ${b}${sc}`]));
     }
-    if (items.length) groups.push({ group: s.name, items });
+    if (items.length) groups.push({ group: s.name, id: s.id, items });
   }
   return groups;
 }
@@ -1429,6 +1442,16 @@ function fixVideo(v) { if (v.category !== 'season') v.game = ''; if (v.game) v.s
 // 경기를 고르면 비어 있는 제목을 채워줘요
 function hookGamePick() {
   const f = $('#mf'); if (!f || !f.elements.game) return;
+  const all = gameOptions(), sel = f.elements.game;
+  const fill = () => {
+    const sid = f.elements.season.value, keep = sel.value;
+    const groups = sid ? all.filter(g => g.id === sid) : all;
+    const opt = ([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`;
+    sel.innerHTML = groups.length ? opt(['', '연결 안 함']) + groups.map(g => `<optgroup label="${esc(g.group)}">${g.items.map(opt).join('')}</optgroup>`).join('')
+      : opt(['', `${(state.seasons.find(s => s.id === sid) || {}).name || '이 시즌'}은 아직 끝난 경기가 없어요`]);
+    if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+  };
+  fill(); f.elements.season.addEventListener('change', fill);
   f.elements.game.addEventListener('change', () => { if (f.elements.game.value && !f.elements.title.value.trim()) f.elements.title.value = gameLabel(f.elements.game.value); });
 }
 const NEWS_FIELDS = [
@@ -1504,11 +1527,16 @@ async function loadPdf(a) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return (pdfCache[a.id] = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
 }
-async function openArticle(id) {
+function openArticle(id) {
+  const a = state.articles.find(x => x.id === id); if (!a) return;
+  if (a.link) { window.open(a.link, '_blank', 'noopener'); return; }
+  // 기사는 항상 사이트 안 기사 페이지로 (주소 공유 가능). 파일이 진짜 PDF면 그 페이지에서 PDF 버튼을 보여줘요.
+  window.open(location.href.split('#')[0] + '#/news/' + a.id, '_blank');
+}
+async function openPdf(id) {
   const a = state.articles.find(x => x.id === id); if (!a) return;
   if (a.link) { window.open(a.link, '_blank', 'noopener'); return; }
   // HTML 기사: 사이트 안의 기사 페이지를 새 창으로 (주소를 공유할 수 있어요)
-  if (a.type === 'html') { window.open(location.href.split('#')[0] + '#/news/' + a.id, '_blank'); return; }
   // 팝업 차단을 피하려고 클릭하자마자 새 창을 먼저 열고, PDF를 받은 뒤 그 창에 띄워요
   const w = window.open('', '_blank');
   if (w) { w.document.write(`<title>${esc(a.title)}</title><body style="font-family:sans-serif;background:#170F33;color:#fff;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p id="m">📰 기사를 불러오는 중이에요…</p></body>`); w.document.close(); }
@@ -1546,8 +1574,7 @@ function pageArticle(id) {
   const a = state.articles.find(x => x.id === id);
   if (!a) return `<div class="wv-top"><a class="back-btn" href="#/league">‹ 리그로</a></div><p class="loading">${state.articlesLoaded ? '기사를 찾지 못했어요. 지워졌을 수 있어요.' : '📰 기사를 불러오는 중이에요…'}</p>`;
   return `<div class="art-top"><a class="back-btn" href="#/league">‹ MOMENTUM ESPN</a><button class="btn sm" data-share-article>🔗 링크 복사</button></div>
-    ${a.type === 'pdf' ? `<div class="art-pdf card"><p><b>${esc(a.title)}</b></p><button class="btn primary" data-article="${esc(a.id)}">📄 PDF로 기사 열기</button></div>`
-      : `<div class="art-holder" id="art-holder" data-id="${esc(a.id)}"><p class="loading">📰 기사를 불러오는 중이에요…</p></div>`}`;
+    <div class="art-holder" id="art-holder" data-id="${esc(a.id)}"><p class="loading">📰 기사를 불러오는 중이에요…</p></div>`;
 }
 async function mountArticle() {
   const holder = document.getElementById('art-holder'); if (!holder || holder.querySelector('iframe')) return;
@@ -1555,6 +1582,7 @@ async function mountArticle() {
   try {
     const html = await loadHtml(a);
     if (!document.body.contains(holder) || holder.querySelector('iframe')) return;
+    if (html.startsWith('%PDF')) { holder.innerHTML = `<div class="art-pdf"><p><b>${esc(a.title)}</b></p><button class="btn primary" data-article-pdf="${esc(a.id)}">📄 PDF로 기사 열기</button></div>`; return; }
     const f = document.createElement('iframe');
     f.className = 'art-frame'; f.title = a.title;
     f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
@@ -1711,7 +1739,7 @@ function topScorer(g) {
 function scoreboard(g) {
   const aw = g.scoreA > g.scoreB, bw = g.scoreB > g.scoreA, ts = topScorer(g);
   return `<button class="sb" data-game="${g.id}">
-    <div class="sb-top"><span>${esc(g.label)} MATCH</span><span>FINAL</span></div>
+    <div class="sb-top"><span>${esc(g.label)} MATCH</span><span>${videoForGame(g) ? '<span class="sb-vid">▶ 영상</span> ' : ''}FINAL</span></div>
     <div class="sb-row ${aw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamA)}${esc(g.teamA)}</span><span class="sc en num">${g.scoreA}</span></div>
     <div class="sb-row ${bw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamB)}${esc(g.teamB)}</span><span class="sc en num">${g.scoreB}</span></div>
     ${ts ? `<div class="sb-foot">최다 득점 <b>${esc(ts.name)}</b> ${ts.pts}점<span class="go">박스스코어 ›</span></div>` : ''}</button>`;
@@ -2065,6 +2093,7 @@ document.addEventListener('click', e => {
   if (d.del) { const [c, id] = d.del.split(':'); if (confirm('정말 삭제할까요?')) store.remove(c, id).catch(err => alert(errMsg(err))); return; }
   if ('logout' in d) return logout();
   if (d.article) return openArticle(d.article);
+  if (d.articlePdf) return openPdf(d.articlePdf);
   if ('shareArticle' in d) { const url = location.href; if (navigator.share) navigator.share({ title: document.title, url }).catch(() => {}); else navigator.clipboard.writeText(url).then(() => { t.textContent = '✓ 복사됐어요'; setTimeout(() => t.textContent = '🔗 링크 복사', 1500); }).catch(() => prompt('이 주소를 복사하세요', url)); return; }
   if ('addArticle' in d) return addArticle();
   if (d.editArticle) return editArticle(d.editArticle);
