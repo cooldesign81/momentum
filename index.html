@@ -583,7 +583,7 @@ html,body{overflow-x:clip}
 @media(max-width:520px){.box-video{flex-direction:column;align-items:stretch;gap:8px}.bv-thumb{flex:none;width:100%}}
 .sb-vid{background:#FF0000;color:#fff;border-radius:4px;padding:1px 6px;letter-spacing:0;margin-right:4px}
 .about-holder{margin-top:12px;border-radius:16px;overflow:hidden;background:var(--surface);border:1px solid var(--line)}
-.about-frame{display:block;width:100%;border:0;min-height:120px;background:transparent}
+.about-frame{display:block;width:100%;border:0;min-height:120px;background:transparent;overflow:hidden}
 /* banner */
 .hero.has-banner{background:#07070B;position:relative;overflow:hidden}
 /* 넓은 화면: 배너는 본문 폭(1000px)까지만, 양옆은 배너 색을 흐리게 채움 */
@@ -1584,9 +1584,23 @@ function htmlFrame(html, title, cls) {
   const f = document.createElement('iframe');
   f.className = cls; f.title = title;
   f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+  f.setAttribute('scrolling', 'no');
   f.srcdoc = html;
-  const fit = () => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + 'px'; } catch (e) {} };
-  f.onload = () => { fit(); try { new ResizeObserver(fit).observe(f.contentDocument.body); f.contentDocument.querySelectorAll('img').forEach(i => i.addEventListener('load', fit)); f.contentDocument.querySelectorAll('a[href^="http"]').forEach(l => l.target = '_blank'); } catch (e) {} };
+  // 안쪽 스크롤 없이 내용 높이에 딱 맞추기 (글꼴·이미지가 늦게 불러와져도 다시 맞춤)
+  const fit = () => { try { const d = f.contentDocument; f.style.height = Math.max(d.documentElement.scrollHeight, d.body.scrollHeight) + 2 + 'px'; } catch (e) {} };
+  f.onload = () => {
+    try {
+      const d = f.contentDocument, st = d.createElement('style');
+      st.textContent = 'html,body{overflow:hidden!important;height:auto!important}';
+      d.head.appendChild(st);
+      new ResizeObserver(fit).observe(d.body);
+      d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
+      d.querySelectorAll('a[href^="http"]').forEach(l => l.target = '_blank');
+      if (d.fonts) d.fonts.ready.then(fit);
+    } catch (e) {}
+    fit(); [300, 1000, 2500].forEach(t => setTimeout(fit, t));
+  };
+  window.addEventListener('resize', fit);
   return f;
 }
 async function mountAbout() {
@@ -1620,13 +1634,7 @@ async function mountArticle() {
     const html = await loadHtml(a);
     if (!document.body.contains(holder) || holder.querySelector('iframe')) return;
     if (html.startsWith('%PDF')) { holder.innerHTML = `<div class="art-pdf"><p><b>${esc(a.title)}</b></p><button class="btn primary" data-article-pdf="${esc(a.id)}">📄 PDF로 기사 열기</button></div>`; return; }
-    const f = document.createElement('iframe');
-    f.className = 'art-frame'; f.title = a.title;
-    f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
-    f.srcdoc = html;
-    const fit = () => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + 'px'; } catch (e) {} };
-    f.onload = () => { fit(); try { new ResizeObserver(fit).observe(f.contentDocument.body); f.contentDocument.querySelectorAll('img').forEach(i => i.addEventListener('load', fit)); f.contentDocument.querySelectorAll('a[href^="http"]').forEach(l => l.target = '_blank'); } catch (e) {} };
-    holder.innerHTML = ''; holder.appendChild(f);
+    holder.innerHTML = ''; holder.appendChild(htmlFrame(html, a.title, 'art-frame'));
     document.title = a.title + ' | MOMENTUM ESPN';
   } catch (e) { holder.innerHTML = `<p class="empty">기사를 불러오지 못했어요: ${esc(e.message || e)}</p>`; }
 }
