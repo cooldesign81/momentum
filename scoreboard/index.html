@@ -64,10 +64,16 @@
   header .file { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
 
   .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: calc(100% - 53px); }
-  .main { padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .main { padding: 12px 16px; overflow: hidden; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  #editor { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .stage-wrap { flex: 1; min-height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .side { border-left: 1px solid var(--line); overflow: auto; background: var(--panel); }
   @media (max-width: 900px) {
     .app { grid-template-columns: 1fr; height: auto; }
+    .main { overflow: visible; }
+    #editor { flex: none; }
+    .stage-wrap { flex: none; height: 56vw; }
+    .pads { grid-template-columns: 1fr; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
   }
 
@@ -79,16 +85,17 @@
   .drop.over { border-color: var(--accent); color: var(--text); }
   .drop strong { color: var(--text); font-size: 16px; }
 
-  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; align-self: center; width: 100%; }
+  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; flex: none; }
   .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .stage canvas { pointer-events: none; }
 
-  .transport { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .transport .q { font-weight: 900; font-size: 18px; min-width: 44px; text-align: center; }
+  .transport { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .transport .time { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); margin-left: 6px; }
   .transport .sp { flex: 1; }
   .speed button.on { border-color: var(--accent); color: var(--accent); }
 
-  .timeline { position: relative; height: 38px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .timeline { flex: none; position: relative; height: 30px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
   .timeline .trim { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.08); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); pointer-events: none; }
   .timeline .mk { position: absolute; width: 2px; pointer-events: none; }
   .timeline .mk.h { top: 4px; height: 13px; }
@@ -97,21 +104,21 @@
   .timeline .mk.f { opacity: .9; }
   .timeline .head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); pointer-events: none; }
 
-  .pads { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .pad { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-  .pad .top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .pad .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #555; }
+  .pads { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: none; }
+  .pad { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .pad .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .pad .sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #555; flex: none; }
   .pad .nm { font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pad .sc { font-size: 28px; font-weight: 300; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .pad .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .pad .row button { padding: 10px 0; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .pad .sc { font-size: 24px; line-height: 1; font-weight: 300; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+  .pad .row { display: grid; grid-template-columns: repeat(4, 1fr) repeat(2, .75fr); gap: 5px; }
+  .pad .row button { padding: 9px 0; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
   .pad .row button kbd { font-weight: 400; }
   .pad .row button.foul { color: var(--warn); }
-  .pad .fl { display: flex; gap: 3px; margin-top: 8px; }
-  .pad .fl i { flex: 1; height: 5px; background: #3a3f48; border-radius: 1px; }
+  .pad .row button.minor { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .pad .row button.foul.minor { color: #b8a93a; }
+  .pad .fl { display: flex; gap: 3px; width: 90px; flex: none; }
+  .pad .fl i { flex: 1; height: 6px; background: #3a3f48; border-radius: 1px; }
   .pad .fl i.on { background: var(--warn); }
-  .gbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .gbar .q { font-weight: 900; font-size: 18px; min-width: 52px; }
 
   section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
   section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; letter-spacing: .3px; }
@@ -160,26 +167,12 @@
       <div>또는 위의 <b>영상 열기</b> 버튼을 누르세요. 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요.</div>
     </div>
 
-    <div id="editor" class="hidden" style="display:flex;flex-direction:column;gap:12px">
-      <div class="stage" id="stage">
-        <video id="video" playsinline preload="auto"></video>
-        <canvas id="overlay"></canvas>
-      </div>
-
-      <div class="transport">
-        <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
-        <button data-seek="-10">-10초</button>
-        <button data-seek="-5">-5초</button>
-        <button data-seek="5">+5초</button>
-        <button data-seek="10">+10초</button>
-        <span class="time" id="timeLabel">0:00 / 0:00</span>
-        <span class="sp"></span>
-        <span class="speed" id="speed">
-          <button data-rate="1" class="on">1x</button>
-          <button data-rate="1.5">1.5x</button>
-          <button data-rate="2">2x</button>
-          <button data-rate="3">3x</button>
-        </span>
+    <div id="editor" class="hidden">
+      <div class="stage-wrap" id="stageWrap">
+        <div class="stage" id="stage">
+          <video id="video" playsinline preload="auto"></video>
+          <canvas id="overlay"></canvas>
+        </div>
       </div>
 
       <div class="timeline" id="timeline" title="클릭해서 이동">
@@ -188,41 +181,45 @@
         <div class="head" id="playhead"></div>
       </div>
 
-      <div class="gbar">
+      <div class="transport">
+        <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
+        <button data-seek="-5">-5초</button>
+        <button data-seek="5">+5초</button>
+        <span class="time" id="timeLabel">0:00 / 0:00</span>
+        <span class="speed" id="speed">
+          <button data-rate="1" class="on">1x</button>
+          <button data-rate="1.5">1.5x</button>
+          <button data-rate="2">2x</button>
+          <button data-rate="3">3x</button>
+        </span>
+        <span class="sp"></span>
         <span class="q" id="curQuarter">1ST</span>
         <button id="btnNextQ">다음 쿼터 <kbd>N</kbd></button>
         <button id="btnUndo">되돌리기 <kbd>Ctrl+Z</kbd></button>
-        <span class="hint">영상을 보면서 득점·파울 순간에 버튼이나 단축키를 누르면 그 시점에 기록돼요. 일시정지 상태에서도 기록할 수 있어요.</span>
       </div>
 
       <div class="pads">
         <div class="pad" data-team="0">
-          <div class="top"><span class="sw"></span><span class="nm"></span><span class="sc">0</span></div>
+          <div class="top"><span class="sw"></span><span class="nm"></span><span class="fl"></span><span class="sc">0</span></div>
           <div class="row">
             <button data-add="pts" data-v="1">+1 <kbd>1</kbd></button>
             <button data-add="pts" data-v="2">+2 <kbd>2</kbd></button>
             <button data-add="pts" data-v="3">+3 <kbd>3</kbd></button>
             <button data-add="foul" data-v="1" class="foul">파울 <kbd>4</kbd></button>
+            <button data-add="pts" data-v="-1" class="minor">-1 <kbd>Q</kbd></button>
+            <button data-add="foul" data-v="-1" class="foul minor">파울-1 <kbd>R</kbd></button>
           </div>
-          <div class="row" style="margin-top:6px">
-            <button data-add="pts" data-v="-1">-1 <kbd>Q</kbd></button>
-            <button data-add="foul" data-v="-1" class="foul">파울-1 <kbd>R</kbd></button>
-          </div>
-          <div class="fl"></div>
         </div>
         <div class="pad" data-team="1">
-          <div class="top"><span class="sw"></span><span class="nm"></span><span class="sc">0</span></div>
+          <div class="top"><span class="sw"></span><span class="nm"></span><span class="fl"></span><span class="sc">0</span></div>
           <div class="row">
             <button data-add="pts" data-v="1">+1 <kbd>7</kbd></button>
             <button data-add="pts" data-v="2">+2 <kbd>8</kbd></button>
             <button data-add="pts" data-v="3">+3 <kbd>9</kbd></button>
             <button data-add="foul" data-v="1" class="foul">파울 <kbd>0</kbd></button>
+            <button data-add="pts" data-v="-1" class="minor">-1 <kbd>U</kbd></button>
+            <button data-add="foul" data-v="-1" class="foul minor">파울-1 <kbd>P</kbd></button>
           </div>
-          <div class="row" style="margin-top:6px">
-            <button data-add="pts" data-v="-1">-1 <kbd>U</kbd></button>
-            <button data-add="foul" data-v="-1" class="foul">파울-1 <kbd>P</kbd></button>
-          </div>
-          <div class="fl"></div>
         </div>
       </div>
     </div>
@@ -247,7 +244,7 @@
       </div>
       <div class="grid2" style="margin-top:8px">
         <div class="field"><label>팀파울 칸 수</label><input type="number" id="foulSlots" min="1" max="10"></div>
-        <div class="field"><label>기록 시점 보정 (초)</label><input type="number" id="lag" step="0.5" title="버튼을 늦게 누르는 만큼 앞당겨 기록"></div>
+        <div class="field"><label>기록 시점 보정 (초)</label><input type="number" id="lag" step="0.5" min="0" title="버튼을 늦게 누르는 만큼 앞당겨 기록 (예: 1 → 누른 시점보다 1초 앞)"></div>
       </div>
       <button id="btnSwap" style="margin-top:10px;width:100%">왼쪽/오른쪽 팀 바꾸기</button>
     </section>
@@ -686,7 +683,7 @@ function drawClassic(ctx, W, H, st, s) {
     const sw = ctx.measureText(score).width;
     ctx.fillText(score, bx + bw - 4 * s, by + h2 / 2 + 3 * s);
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = ink(cfg.teams[i].color);
     ctx.textAlign = 'left';
     fitText(ctx, cfg.teams[i].name, 400, 42 * s, bw - sw - 12 * s);
     ctx.fillText(cfg.teams[i].name, bx + 4 * s, by + h2 / 2 + 2 * s);
@@ -842,9 +839,19 @@ function openFile(f) {
   syncForm();
   changed();
 }
+// Fit the video inside the space left above the controls, keeping its aspect ratio.
+function fitStage() {
+  const wrap = $('#stageWrap'), st = $('#stage');
+  if (!video.videoWidth || !wrap.clientWidth) return;
+  const ar = video.videoWidth / video.videoHeight;
+  let w = wrap.clientWidth, h = w / ar;
+  if (h > wrap.clientHeight) { h = wrap.clientHeight; w = h * ar; }
+  st.style.width = `${Math.floor(w)}px`;
+  st.style.height = `${Math.floor(h)}px`;
+}
+new ResizeObserver(fitStage).observe($('#stageWrap'));
 video.addEventListener('loadedmetadata', () => {
-  $('#stage').style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
-  $('#stage').style.maxWidth = `calc((100vh - 330px) * ${video.videoWidth / video.videoHeight})`;
+  fitStage();
   renderMarkers();
 });
 video.addEventListener('play', () => { $('#btnPlay').textContent = '❚❚ 일시정지'; });
@@ -1072,6 +1079,8 @@ function setProgress(p, label) { $('#exportBar').style.width = `${Math.round(p *
 function showMsg(text, err) { const m = $('#exportMsg'); m.textContent = text; m.classList.toggle('err', !!err); }
 
 // ---------- style picker ----------
+// Size (%) that makes each style fill ~90% of its thumbnail.
+const THUMB_SIZE = { bar: 90 * 440 / 608, stack: 62, glass: 90 * 450 / 640, classic: 72 };
 function renderStyles() {
   const box = $('#styles');
   if (!box.children.length) {
@@ -1091,7 +1100,7 @@ function renderStyles() {
     const g = x.createLinearGradient(0, 0, 0, c.height);
     g.addColorStop(0, '#c9b49a'); g.addColorStop(1, '#8a6d4c');
     x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
-    Object.assign(cfg, { style: b.dataset.style, pos: 'tc', size: 88 });
+    Object.assign(cfg, { style: b.dataset.style, pos: 'tc', size: THUMB_SIZE[b.dataset.style] });
     drawBoard(x, c.width, c.height, demo);
     Object.assign(cfg, saved);
   });
