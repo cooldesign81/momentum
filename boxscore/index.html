@@ -120,7 +120,30 @@
   .pad .grid button.foul { color: var(--warn); }
   .pad .ast { border: 1px dashed var(--accent); border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
   .pad .ast button { padding: 3px 8px; font-size: 12px; }
-  .toast { font-size: 12px; text-align: center; min-height: 18px; color: var(--muted); }
+  .toast { font-size: 12px; min-height: 18px; color: var(--muted); }
+  .modebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: none; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 5px 14px; background: var(--panel); color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: #0b1a17; font-weight: 700; }
+
+  .gridEntry { overflow-x: auto; flex: none; }
+  .gtab { border-collapse: collapse; width: 100%; min-width: 900px; table-layout: fixed; font-size: 13px; }
+  .gtab th, .gtab td { border: 1px solid var(--line); padding: 0; height: 38px; }
+  .gtab th { background: var(--panel-2); font-weight: 700; font-size: 12px; white-space: nowrap; }
+  .gtab th.tm { text-align: left; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
+  .gtab.a th.tm { color: var(--ta); } .gtab.b th.tm { color: var(--tb); }
+  .gtab th.make { color: var(--accent); } .gtab th.miss { color: var(--muted); font-weight: 500; } .gtab th.foul { color: var(--warn); }
+  .gtab td.no { text-align: right; padding: 0 6px; color: var(--muted); background: var(--panel); font-variant-numeric: tabular-nums; }
+  .gtab td.nm { padding: 0 8px; font-weight: 700; background: var(--panel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gtab td.nm.g { color: var(--warn); }
+  .gtab td { background: var(--bg); }
+  .gtab td button { display: block; width: 100%; height: 36px; border: 0; border-radius: 0; background: transparent; font-size: 16px; font-weight: 300; font-variant-numeric: tabular-nums; padding: 0; }
+  .gtab td button:hover { background: var(--panel-2); }
+  .gtab td button:active, .gtab td button.hit { background: rgba(143,240,224,.28); }
+  .gtab.b td button:active, .gtab.b td button.hit { background: rgba(255,184,107,.28); }
+  .gtab + .gtab { margin-top: 8px; }
+  .gridEntry .hint { margin-top: 6px; }
   .toast.err { color: var(--danger); }
 
   .tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
@@ -199,19 +222,23 @@
       <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
     </div>
 
-    <div class="entry">
+    <div class="modebar">
+      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
+      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+      <span class="toast" id="toast"></span>
+    </div>
+
+    <div class="entry" id="pickEntry">
       <div class="team a" id="teamA"></div>
       <div class="pad">
         <div class="who" id="who"></div>
         <div class="grid" id="statPad"></div>
         <div class="ast hidden" id="astBar"></div>
-        <div class="row" style="justify-content:center">
-          <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
-        </div>
-        <div class="toast" id="toast"></div>
       </div>
       <div class="team b" id="teamB"></div>
     </div>
+
+    <div class="gridEntry hidden" id="gridEntry"></div>
   </div>
 
   <aside class="side">
@@ -262,7 +289,7 @@
           <div class="field"><label title="버튼을 늦게 누르는 만큼 앞당겨 기록">시간 보정(초)</label><input type="number" id="lag" step="0.5" min="0"></div>
           <div class="field"><label>되감기 간격(초)</label><input type="number" id="skip" step="1" min="1"></div>
         </div>
-        <label class="check" style="margin-bottom:6px"><input type="checkbox" id="askAst"> 득점하면 어시스트 준 선수 물어보기</label>
+        <label class="check" style="margin-bottom:6px"><input type="checkbox" id="askAst"> 득점하면 어시스트 준 선수 물어보기 (선수 선택 방식)</label>
         <label class="check"><input type="checkbox" id="keepSel"> 기록 후에도 선수 선택 유지</label>
       </section>
       <section>
@@ -375,7 +402,7 @@ const KEYMAP = Object.fromEntries(STATS.map(s => [s.key.toLowerCase(), s.k]));
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 const OPT_KEY = 'mm-box:opts';
-const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true }, lsGet(OPT_KEY));
+const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'pick' }, lsGet(OPT_KEY));
 function newGame() {
   return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], played: {}, source: null, updated: Date.now() };
 }
@@ -577,7 +604,7 @@ function record(k, who = selected) {
   undoStack.push(e.id);
   if (k !== 'ast') clearAst();
   toast(`${who.name} · ${STAT[k].short}`);
-  if (opts.askAst && (k === 'p2' || k === 'p3')) askAssist(who, e.t);
+  if (opts.askAst && opts.mode === 'pick' && (k === 'p2' || k === 'p3')) askAssist(who, e.t);
   if (!opts.keepSel && who === selected) selected = null;
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 }
@@ -639,7 +666,59 @@ function renderEntry() {
   $('#sbA').textContent = game.teams[0].name; $('#sbB').textContent = game.teams[1].name;
   $('#sbScore').textContent = `${scoreOf(0)} : ${scoreOf(1)}`;
   $('#evCount').textContent = game.events.length || '';
+  if (opts.mode === 'grid') {
+    renderGrid();
+    if (lastHit) {
+      const b = [...$$('#gridEntry [data-g]')].find(x => +x.dataset.g === lastHit.team && x.dataset.name === lastHit.name && x.dataset.k === lastHit.k);
+      lastHit = null;
+      if (b) { b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 250); }
+    }
+  }
 }
+
+// ---------- 표 입력 방식 ----------
+// 열 순서는 기록지 양식 그대로
+const GRID_COLS = [['ft', '1점 성공'], ['p2', '2점 성공'], ['p3', '3점 성공'], ['mft', '1점 실패'], ['m2', '2점 실패'], ['m3', '3점 실패'],
+  ['oreb', '공격리바'], ['dreb', '수비리바'], ['ast', '어시스트'], ['stl', '스틸'], ['to', '턴오버'], ['blk', '블락'], ['pf', '파울']];
+function renderGrid() {
+  const cnt = {};
+  game.events.forEach(e => { const key = e.team + '|' + e.player + '|' + e.k; cnt[key] = (cnt[key] || 0) + 1; });
+  const colgroup = `<colgroup><col style="width:34px"><col style="width:110px">${GRID_COLS.map(() => '<col>').join('')}</colgroup>`;
+  $('#gridEntry').innerHTML = [0, 1].map(ti => {
+    const names = onCourt(ti);
+    return `<table class="gtab ${ti ? 'b' : 'a'}">${colgroup}<thead><tr><th class="tm" colspan="2" title="${esc(game.teams[ti].name)}">${esc(game.teams[ti].name)} <span class="muted">${scoreOf(ti)}</span></th>` +
+      GRID_COLS.map(([k, l]) => `<th class="${STAT[k].cls || ''}">${l}</th>`).join('') + `</tr></thead><tbody>` +
+      (names.length ? names.map((n, i) => `<tr><td class="no">${i + 1}</td><td class="nm ${isGuest(n) ? 'g' : ''}" title="${esc(n)}">${esc(n)}</td>` +
+        GRID_COLS.map(([k]) => `<td><button data-g="${ti}" data-name="${esc(n)}" data-k="${k}">${cnt[ti + '|' + n + '|' + k] || ''}</button></td>`).join('') + '</tr>').join('')
+        : `<tr><td colspan="${GRID_COLS.length + 2}" class="hint" style="padding:8px">오른쪽 [경기 설정]에서 로스터를 넣어주세요.</td></tr>`) +
+      `</tbody></table>`;
+  }).join('') + `<div class="hint">칸을 누르면 1씩 올라가요. 잘못 눌렀으면 그 칸을 오른쪽 클릭(휴대폰은 길게 누르기)하면 1 내려가요. 코트 위 5명은 [경기 설정] 로스터 순서로 바꿔요.</div>`;
+}
+let lastHit = null;
+$('#gridEntry').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-g]'); if (!b) return;
+  lastHit = { team: +b.dataset.g, name: b.dataset.name, k: b.dataset.k };
+  record(b.dataset.k, { team: +b.dataset.g, name: b.dataset.name });
+});
+// 오른쪽 클릭: 그 선수의 그 기록 중 가장 최근 것 하나 지우기
+$('#gridEntry').addEventListener('contextmenu', ev => {
+  const b = ev.target.closest('[data-g]'); if (!b) return;
+  ev.preventDefault();
+  const ti = +b.dataset.g, name = b.dataset.name, k = b.dataset.k;
+  const e = game.events.filter(x => x.team === ti && x.player === name && x.k === k).sort((a, b) => b.id - a.id)[0];
+  if (!e) return;
+  removeEvent(e.id);
+  toast(`지움: ${name} · ${STAT[k].short}`);
+});
+function setMode(m) {
+  opts.mode = m === 'grid' ? 'grid' : 'pick'; saveOpts();
+  $$('#modeSeg button').forEach(x => x.classList.toggle('on', x.dataset.mode === opts.mode));
+  $('#pickEntry').classList.toggle('hidden', opts.mode !== 'pick');
+  $('#gridEntry').classList.toggle('hidden', opts.mode !== 'grid');
+  if (opts.mode === 'grid') { selected = null; clearAst(); }
+  renderEntry();
+}
+$('#modeSeg').addEventListener('click', ev => { const b = ev.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 $('#statPad').innerHTML = STATS.map(s => `<button class="${s.cls || ''}" data-k="${s.k}">${s.label} <kbd>${s.key}</kbd></button>`).join('');
 $('#statPad').addEventListener('click', ev => { const b = ev.target.closest('[data-k]'); if (b) record(b.dataset.k); });
 
@@ -1060,6 +1139,7 @@ function tick() {
 setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 
 loadGame(lsGet('mm-box:last'));
+setMode(opts.mode);
 requestAnimationFrame(tick);
 </script>
 </body>
