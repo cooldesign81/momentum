@@ -156,6 +156,15 @@
   .styles button.on { border-color: var(--accent); color: var(--accent); }
   .styles canvas { width: 100%; aspect-ratio: 16 / 7; border-radius: 5px; display: block; }
   .check { display: flex; align-items: center; gap: 6px; padding-bottom: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .clips { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow: auto; }
+  .clip { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .clip.cur { border-color: var(--accent); }
+  .clip .n { color: var(--muted); font-weight: 700; }
+  .clip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clip .d { color: var(--muted); font-family: ui-monospace, monospace; }
+  .clip button { padding: 1px 6px; font-size: 11px; }
+  .timeline .mk.bound { top: 0; bottom: 0; width: 2px; background: #6f7a8c; }
+  .events tr.auto td { color: var(--muted); font-style: italic; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -165,13 +174,14 @@
   <div class="file" id="fileName"></div>
   <div class="sp"></div>
   <button id="btnOpen">영상 열기</button>
-  <input type="file" id="fileInput" accept="video/*" class="hidden">
+  <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
 </header>
 
 <div class="app">
   <div class="main">
     <div class="drop" id="drop">
       <strong>경기 영상을 여기로 끌어다 놓으세요</strong>
+      <div>쿼터별로 나눠 찍은 영상은 <b>한꺼번에 여러 개</b> 선택하면 한 경기로 이어져요.</div>
       <div>또는 위의 <b>영상 열기</b> 버튼을 누르세요. 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요.</div>
     </div>
 
@@ -234,6 +244,12 @@
   </div>
 
   <aside class="side">
+    <section>
+      <h2>영상 <span id="clipCount"></span> <button id="btnAddClip" class="mini">+ 영상 추가</button></h2>
+      <div class="clips" id="clips"></div>
+      <label class="check" style="padding:6px 0 0"><input type="checkbox" id="autoQ"> 다음 영상으로 넘어가면 자동으로 다음 쿼터</label>
+    </section>
+
     <section>
       <h2>경기 정보 <button id="btnSwap" class="mini" title="왼쪽/오른쪽 팀 바꾸기">⇄ 좌우 바꾸기</button></h2>
       <div class="team-row head"><span></span><span>팀 이름</span><span>바탕</span><span>글씨</span></div>
@@ -320,12 +336,14 @@ const DEFAULT_CFG = {
   trimStart: null,
   trimEnd: null,
   quality: 'high',
+  autoQ: true,
 };
 let cfg = structuredClone(DEFAULT_CFG);
 let events = [];           // {id, t, kind: 'pts'|'foul'|'q', team, v}
 let undoStack = [];
 let nextId = 1;
-let file = null;
+let clips = [];            // {file, key, url, dur} in play order
+let cur = 0;               // index of the clip loaded in <video>
 let storeKey = null;
 
 const video = $('#video');
@@ -337,13 +355,45 @@ function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { 
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function save() {
   lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality });
-  if (storeKey) lsSet(storeKey, { cfg, events });
+  if (storeKey) lsSet(storeKey, { cfg, events, order: clips.map(c => c.key) });
 }
 const last = lsGet('mm-sb:last-cfg');
 if (last) Object.assign(cfg, last);
 
 // ---------- game logic ----------
-function sorted() { return [...events].sort((a, b) => a.t - b.t || a.id - b.id); }
+// ---------- multi-clip timeline ----------
+// Events live on one continuous game timeline: clip k covers [offset(k), offset(k) + dur).
+function offset(k) { let o = 0; for (let i = 0; i < k; i++) o += clips[i].dur; return o; }
+function total() { return offset(clips.length); }
+function clipAt(T) {
+  let o = 0;
+  for (let k = 0; k < clips.length; k++) {
+    if (T < o + clips[k].dur || k === clips.length - 1) return [k, Math.max(0, T - o)];
+    o += clips[k].dur;
+  }
+  return [0, 0];
+}
+function gTime() { return clips.length ? offset(cur) + video.currentTime : 0; }
+let pendingSeek = null;
+function seekG(T, play) {
+  if (!clips.length) return;
+  T = Math.max(0, Math.min(total() - 0.05, T));
+  const [k, t] = clipAt(T);
+  if (k !== cur || !video.src) {
+    const wasPlaying = play ?? !video.paused;
+    cur = k;
+    pendingSeek = { t, play: wasPlaying };
+    video.src = clips[k].url;
+    renderClips();
+  } else if (pendingSeek) pendingSeek.t = t;
+  else video.currentTime = t;
+}
+// Synthetic quarter changes at each clip boundary (negative ids sort before real events at the same time).
+function autoEvents() {
+  if (!cfg.autoQ) return [];
+  return clips.slice(1).map((c, i) => ({ id: -(i + 1), t: offset(i + 1), kind: 'q', team: 0, v: 1, auto: true, clip: i + 2 }));
+}
+function sorted() { return [...events, ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
 function stateAt(t) {
   const st = { t, q: cfg.startQ, score: [0, 0], fouls: [0, 0], last: [null, null] };
   for (const e of sorted()) {
@@ -367,8 +417,8 @@ function quarterLabel(q) {
 }
 
 function addEvent(kind, team, v) {
-  if (!file) return;
-  const t = Math.max(0, video.currentTime - (Number(cfg.lag) || 0));
+  if (!clips.length) return;
+  const t = Math.max(0, gTime() - (Number(cfg.lag) || 0));
   const e = { id: nextId++, t, kind, team, v };
   events.push(e);
   undoStack.push(e.id);
@@ -696,11 +746,11 @@ function renderOverlay() {
     overlay.height = video.videoHeight;
   }
   octx.clearRect(0, 0, overlay.width, overlay.height);
-  drawBoard(octx, overlay.width, overlay.height, stateAt(video.currentTime));
+  drawBoard(octx, overlay.width, overlay.height, stateAt(gTime()));
 }
 let lastLiveKey = '';
 function renderLive() {
-  const st = stateAt(video.currentTime);
+  const st = stateAt(gTime());
   const key = JSON.stringify(st) + JSON.stringify(cfg.teams) + cfg.foulSlots;
   if (key !== lastLiveKey) {
     lastLiveKey = key;
@@ -717,11 +767,11 @@ function renderLive() {
   renderOverlay();
 }
 function tick() {
-  if (file) {
+  if (clips.length) {
     renderLive();
-    const d = video.duration || 0;
-    $('#timeLabel').textContent = `${fmt(video.currentTime)} / ${fmt(d)}`;
-    $('#playhead').style.left = d ? `${video.currentTime / d * 100}%` : '0';
+    const d = total(), T = gTime();
+    $('#timeLabel').textContent = `${fmt(T)} / ${fmt(d)}`;
+    $('#playhead').style.left = d ? `${T / d * 100}%` : '0';
     highlightCurrentRow();
   }
   requestAnimationFrame(tick);
@@ -747,11 +797,12 @@ function parseTime(str) {
 const KIND_LABEL = { pts: v => (v > 0 ? `+${v}점` : `${v}점`), foul: v => (v > 0 ? '파울' : '파울 취소'), q: () => '다음 쿼터' };
 function renderEvents() {
   const list = sorted();
-  $('#evCount').textContent = list.length ? `(${list.length})` : '';
-  if (!list.length) { $('#events').innerHTML = '<div class="empty">아직 기록이 없어요</div>'; return; }
+  $('#evCount').textContent = events.length ? `(${events.length})` : '';
+  if (!events.length && list.length < 2) { $('#events').innerHTML = '<div class="empty">아직 기록이 없어요</div>'; return; }
   const st = { q: cfg.startQ, score: [0, 0], fouls: [0, 0] };
   const rows = list.map(e => {
     applyEvent(st, e);
+    if (e.auto) return `<tr class="auto" data-id="${e.id}"><td>${fmt(e.t, true)}</td><td>${quarterLabel(st.q)}</td><td colspan="2">영상 ${e.clip} 시작</td><td style="color:var(--accent)">${st.score[0]} : ${st.score[1]}</td><td></td></tr>`;
     const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${cfg.teams[e.team].color};color:${teamInk(e.team)}">${esc(cfg.teams[e.team].name)}</span>`;
     return `<tr data-id="${e.id}">
       <td><input type="text" class="t" value="${fmt(e.t, true)}"></td>
@@ -765,7 +816,7 @@ function renderEvents() {
   $('#events').innerHTML = `<table>${rows.join('')}</table>`;
 }
 function highlightCurrentRow() {
-  const t = video.currentTime;
+  const t = gTime();
   let cur = null;
   for (const e of sorted()) { if (e.t <= t) cur = e.id; else break; }
   $$('#events tr').forEach(tr => tr.classList.toggle('cur', Number(tr.dataset.id) === cur));
@@ -773,12 +824,14 @@ function highlightCurrentRow() {
 $('#events').addEventListener('click', ev => {
   const tr = ev.target.closest('tr');
   if (!tr) return;
-  const e = events.find(x => x.id === Number(tr.dataset.id));
+  const id = Number(tr.dataset.id);
+  if (id < 0) { const a = autoEvents().find(x => x.id === id); if (a) seekG(a.t); return; }
+  const e = events.find(x => x.id === id);
   if (!e) return;
   const act = ev.target.closest('button')?.dataset.act;
   if (act === 'del') { events = events.filter(x => x !== e); changed(); }
-  else if (act === 'here') { e.t = video.currentTime; changed(); }
-  else if (ev.target.tagName !== 'INPUT') video.currentTime = e.t;
+  else if (act === 'here') { e.t = gTime(); changed(); }
+  else if (ev.target.tagName !== 'INPUT') seekG(e.t);
 });
 $('#events').addEventListener('change', ev => {
   if (!ev.target.matches('input.t')) return;
@@ -791,9 +844,10 @@ function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<'
 
 // ---------- timeline ----------
 function renderMarkers() {
-  const d = video.duration;
+  const d = total();
   if (!d) { $('#markers').innerHTML = ''; return; }
-  $('#markers').innerHTML = events.map(e => {
+  const bounds = clips.slice(1).map((c, i) => `<div class="mk bound" style="left:${offset(i + 1) / d * 100}%" title="영상 ${i + 2}"></div>`).join('');
+  $('#markers').innerHTML = bounds + events.map(e => {
     const left = `${e.t / d * 100}%`;
     if (e.kind === 'q') return `<div class="mk q" style="left:${left}"></div>`;
     const color = e.kind === 'foul' ? '#f2e000' : (e.team === 0 ? '#8ff0e0' : '#ff7a7a');
@@ -807,27 +861,111 @@ function renderMarkers() {
 }
 $('#timeline').addEventListener('click', ev => {
   const r = ev.currentTarget.getBoundingClientRect();
-  if (video.duration) video.currentTime = (ev.clientX - r.left) / r.width * video.duration;
+  if (clips.length) seekG((ev.clientX - r.left) / r.width * total());
 });
 
 // ---------- opening files ----------
-function openFile(f) {
-  if (!f) return;
-  file = f;
-  $('#fileName').textContent = f.name;
-  video.src = URL.createObjectURL(f);
-  storeKey = `mm-sb:${f.name}:${f.size}`;
-  const saved = lsGet(storeKey);
-  events = saved?.events || [];
-  if (saved?.cfg) Object.assign(cfg, saved.cfg);
-  nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
-  undoStack = [];
+const byName = new Intl.Collator('ko', { numeric: true }).compare;
+const clipKey = f => `${f.name}:${f.size}`;
+function probeDuration(url) {
+  return new Promise((res, rej) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration)) return res(v.duration);
+      // Some recordings (e.g. WebM without a duration header) only reveal it after seeking to the end.
+      v.ontimeupdate = () => { if (isFinite(v.duration)) { v.ontimeupdate = null; res(v.duration); } };
+      v.currentTime = 1e9;
+    };
+    v.onerror = () => rej(new Error('영상을 읽지 못했어요'));
+    v.src = url;
+  });
+}
+async function openFiles(list, append) {
+  list = [...list].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
+  if (!list.length) return;
+  list.sort((a, b) => byName(a.name, b.name));
+  $('#fileName').textContent = '영상 불러오는 중…';
+  const added = [];
+  for (const f of list) {
+    if (append && clips.some(c => c.key === clipKey(f))) continue;
+    const url = URL.createObjectURL(f);
+    try { added.push({ file: f, key: clipKey(f), url, dur: await probeDuration(url) }); }
+    catch { URL.revokeObjectURL(url); alert(`${f.name}: 영상을 읽지 못했어요.`); }
+  }
+  if (!added.length && !append) { $('#fileName').textContent = ''; return; }
+  if (append) {
+    const old = toLocal();
+    clips.push(...added);
+    fromLocal(old);
+    save();
+  } else {
+    clips.forEach(c => URL.revokeObjectURL(c.url));
+    clips = added;
+    storeKey = 'mm-sb:' + clips.map(c => c.key).sort().join('|');
+    const saved = lsGet(storeKey) || (clips.length === 1 ? lsGet(`mm-sb:${clips[0].key}`) : null);
+    if (saved?.order) clips.sort((x, y) => saved.order.indexOf(x.key) - saved.order.indexOf(y.key));
+    events = saved?.events || [];
+    if (saved?.cfg) Object.assign(cfg, saved.cfg);
+    nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
+    undoStack = [];
+    cur = 0;
+    video.removeAttribute('src');
+    seekG(0, false);
+  }
   $('#drop').classList.add('hidden');
   $('#editor').classList.remove('hidden');
   $('#exportMsg').textContent = '';
   syncForm();
+  renderClips();
   changed();
 }
+// Clip edits (reorder/remove/add) keep each event attached to the moment in its own clip.
+function toLocal() {
+  return events.map(e => { const [k, t] = clipAt(e.t); return { e, key: clips[k]?.key, t }; });
+}
+function fromLocal(list) {
+  events = list.filter(x => clips.some(c => c.key === x.key)).map(x => {
+    const k = clips.findIndex(c => c.key === x.key);
+    return { ...x.e, t: offset(k) + x.t };
+  });
+}
+function editClips(fn) {
+  const T = gTime(), [k0, t0] = clipAt(T), key0 = clips[k0]?.key;
+  const old = toLocal();
+  fn();
+  fromLocal(old);
+  undoStack = [];
+  const k = clips.findIndex(c => c.key === key0);
+  cur = -1;
+  if (clips.length) seekG(k >= 0 ? offset(k) + t0 : 0, false);
+  renderClips();
+  changed();
+}
+function renderClips() {
+  const box = $('#clips');
+  $('#clipCount').textContent = clips.length > 1 ? `(${clips.length}개 · ${fmt(total())})` : '';
+  $('#fileName').textContent = clips.length === 1 ? clips[0].file.name : clips.length ? `${clips.length}개 영상 · ${fmt(total())}` : '';
+  box.innerHTML = clips.map((c, i) => `<div class="clip ${i === cur ? 'cur' : ''}" data-i="${i}" title="${esc(c.file.name)}">
+    <span class="n">${i + 1}</span><span class="nm">${esc(c.file.name)}</span><span class="d">${fmt(c.dur)}</span>
+    <span><button data-act="up" title="위로">▲</button><button data-act="down" title="아래로">▼</button><button data-act="rm" title="빼기">✕</button></span>
+  </div>`).join('');
+}
+$('#clips').addEventListener('click', ev => {
+  const row = ev.target.closest('.clip');
+  if (!row) return;
+  const i = Number(row.dataset.i), act = ev.target.closest('button')?.dataset.act;
+  if (act === 'up' && i > 0) editClips(() => clips.splice(i - 1, 0, clips.splice(i, 1)[0]));
+  else if (act === 'down' && i < clips.length - 1) editClips(() => clips.splice(i + 1, 0, clips.splice(i, 1)[0]));
+  else if (act === 'rm') {
+    if (clips.length === 1) return;
+    const n = events.filter(e => clipAt(e.t)[0] === i).length;
+    if (n && !confirm(`이 영상에 있는 기록 ${n}개도 함께 지워져요. 뺄까요?`)) return;
+    editClips(() => { URL.revokeObjectURL(clips[i].url); clips.splice(i, 1); });
+  } else if (!act) seekG(offset(i));
+});
+$('#btnAddClip').onclick = () => { addMode = true; $('#fileInput').click(); };
+let addMode = false;
 // Fit the video inside the space left above the controls, keeping its aspect ratio.
 function fitStage() {
   const wrap = $('#stageWrap'), st = $('#stage');
@@ -840,28 +978,36 @@ function fitStage() {
 }
 new ResizeObserver(fitStage).observe($('#stageWrap'));
 video.addEventListener('loadedmetadata', () => {
+  if (pendingSeek) {
+    video.currentTime = pendingSeek.t;
+    video.playbackRate = video.defaultPlaybackRate;
+    if (pendingSeek.play) video.play();
+    pendingSeek = null;
+  }
   fitStage();
   renderMarkers();
 });
 video.addEventListener('play', () => { $('#btnPlay').textContent = '❚❚ 일시정지'; });
 video.addEventListener('pause', () => { $('#btnPlay').textContent = '▶ 재생'; });
+// Continue straight into the next quarter's clip.
+video.addEventListener('ended', () => { if (cur < clips.length - 1) seekG(offset(cur + 1), true); });
 
-$('#btnOpen').onclick = () => $('#fileInput').click();
-$('#fileInput').onchange = e => openFile(e.target.files[0]);
+$('#btnOpen').onclick = () => { addMode = false; $('#fileInput').click(); };
+$('#fileInput').onchange = e => { const add = addMode && clips.length > 0; addMode = false; openFiles(e.target.files, add); e.target.value = ''; };
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
 document.addEventListener('drop', e => {
-  const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
-  if (f) openFile(f);
+  const files = e.dataTransfer?.files;
+  if (files?.length) openFiles(files, clips.length > 0 && e.shiftKey);
 });
 
 // ---------- controls ----------
 function togglePlay() { video.paused ? video.play() : video.pause(); }
 $('#btnPlay').onclick = togglePlay;
-$$('[data-seek]').forEach(b => b.onclick = () => { video.currentTime = Math.max(0, video.currentTime + Number(b.dataset.seek)); });
+$$('[data-seek]').forEach(b => b.onclick = () => seekG(gTime() + Number(b.dataset.seek)));
 $$('#speed button').forEach(b => b.onclick = () => {
-  video.playbackRate = Number(b.dataset.rate);
+  video.playbackRate = video.defaultPlaybackRate = Number(b.dataset.rate);
   $$('#speed button').forEach(x => x.classList.toggle('on', x === b));
 });
 $$('.pad').forEach(p => {
@@ -880,7 +1026,7 @@ const KEYMAP = {
   Numpad7: ['pts', 1, 1], Numpad8: ['pts', 1, 2], Numpad9: ['pts', 1, 3], Numpad0: ['foul', 1, 1],
 };
 document.addEventListener('keydown', e => {
-  if (!file) return;
+  if (!clips.length) return;
   if (e.target.matches('input, select, textarea')) return;
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -888,7 +1034,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     e.preventDefault();
     const step = (e.shiftKey ? 1 : 5) * (e.code === 'ArrowLeft' ? -1 : 1);
-    video.currentTime = Math.max(0, video.currentTime + step);
+    seekG(gTime() + step);
     return;
   }
   if (e.code === 'KeyN') { addEvent('q', 0, 1); return; }
@@ -909,6 +1055,7 @@ function syncForm() {
   $('#lag').value = cfg.lag;
   $('#pos').value = cfg.pos;
   $('#flash').checked = !!cfg.flash;
+  $('#autoQ').checked = cfg.autoQ !== false;
   renderStyles();
   $('#size').value = cfg.size; $('#sizeVal').textContent = cfg.size;
   $('#trimStart').value = cfg.trimStart != null ? fmt(cfg.trimStart, true) : '';
@@ -923,6 +1070,7 @@ function readForm() {
   cfg.lag = Number($('#lag').value) || 0;
   cfg.pos = $('#pos').value;
   cfg.flash = $('#flash').checked;
+  cfg.autoQ = $('#autoQ').checked;
   cfg.size = Number($('#size').value); $('#sizeVal').textContent = cfg.size;
   cfg.trimStart = parseTime($('#trimStart').value);
   cfg.trimEnd = parseTime($('#trimEnd').value);
@@ -938,14 +1086,14 @@ $('#btnSwap').onclick = () => {
   events.forEach(e => { if (e.kind !== 'q') e.team = 1 - e.team; });
   syncForm(); changed();
 };
-$('#btnTrimStart').onclick = () => { cfg.trimStart = video.currentTime; syncForm(); changed(); };
-$('#btnTrimEnd').onclick = () => { cfg.trimEnd = video.currentTime; syncForm(); changed(); };
+$('#btnTrimStart').onclick = () => { cfg.trimStart = gTime(); syncForm(); changed(); };
+$('#btnTrimEnd').onclick = () => { cfg.trimEnd = gTime(); syncForm(); changed(); };
 $('#btnClear').onclick = () => {
   if (events.length && confirm('기록을 모두 지울까요? 되돌릴 수 없어요.')) { events = []; undoStack = []; changed(); }
 };
 $('#btnSaveJson').onclick = () => {
-  const blob = new Blob([JSON.stringify({ version: 1, video: file?.name, cfg, events }, null, 2)], { type: 'application/json' });
-  download(blob, (file?.name.replace(/\.[^.]+$/, '') || 'game') + '-scoreboard.json');
+  const blob = new Blob([JSON.stringify({ version: 2, videos: clips.map(c => ({ name: c.file.name, duration: c.dur })), cfg, events }, null, 2)], { type: 'application/json' });
+  download(blob, baseName() + '-scoreboard.json');
 };
 $('#btnLoadJson').onclick = () => $('#jsonInput').click();
 $('#jsonInput').onchange = async e => {
@@ -962,6 +1110,7 @@ $('#jsonInput').onchange = async e => {
     syncForm(); changed();
   } catch { alert('기록 파일을 읽지 못했어요.'); }
 };
+function baseName() { return (clips[0]?.file.name.replace(/\.[^.]+$/, '') || 'game') + (clips.length > 1 ? `-외${clips.length - 1}개` : ''); }
 function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -973,11 +1122,13 @@ function download(blob, name) {
 }
 
 // ---------- export ----------
-let conversion = null;
-$('#btnCancel').onclick = () => conversion?.cancel();
+// Clips are decoded one after another, the scoreboard is drawn on each frame, and everything is
+// re-encoded into a single MP4. Audio is resampled to the first clip's format so clips join cleanly.
+let exporting = null;
+$('#btnCancel').onclick = () => { if (exporting) exporting.canceled = true; };
 $('#btnExport').onclick = async () => {
-  if (!file) { showMsg('먼저 영상을 열어 주세요.', true); return; }
-  const outName = file.name.replace(/\.[^.]+$/, '') + '-scoreboard.mp4';
+  if (!clips.length) { showMsg('먼저 영상을 열어 주세요.', true); return; }
+  const outName = baseName() + '-scoreboard.mp4';
 
   // Ask for the save location first, while we still hold the click's user activation.
   let writable = null;
@@ -996,7 +1147,9 @@ $('#btnExport').onclick = async () => {
   $('#exportBox').classList.remove('hidden');
   setProgress(0, '준비 중…');
   showMsg('');
+  const job = exporting = { canceled: false };
   const started = performance.now();
+  let output = null;
   try {
     const MB = await import(MEDIABUNNY_URL);
     await Promise.all([
@@ -1007,61 +1160,111 @@ $('#btnExport').onclick = async () => {
       document.fonts.load(`200 40px ${FONT}`, '0123456789'),
     ]);
 
-    const input = new MB.Input({ source: new MB.BlobSource(file), formats: MB.ALL_FORMATS });
-    const vt = await input.getPrimaryVideoTrack();
-    if (!vt) throw new Error('영상 트랙을 찾지 못했어요.');
-    const W = vt.displayWidth & ~1, H = vt.displayHeight & ~1;
+    // Game-timeline range to export, and the clips it touches.
+    const S = Math.max(0, cfg.trimStart ?? 0), E = Math.min(total(), cfg.trimEnd ?? total());
+    if (E - S < 0.1) throw new Error('내보낼 구간이 너무 짧아요. 시작/끝을 확인해 주세요.');
+    const parts = [];
+    clips.forEach((c, k) => {
+      const o = offset(k), from = Math.max(S, o) - o, to = Math.min(E, o + c.dur) - o;
+      if (to - from > 0.01) parts.push({ c, k, o, from, to });
+    });
+
+    const opened = await Promise.all(parts.map(async part => {
+      const input = new MB.Input({ source: new MB.BlobSource(part.c.file), formats: MB.ALL_FORMATS });
+      const vt = await input.getPrimaryVideoTrack();
+      if (!vt) throw new Error(`${part.c.file.name}: 영상 트랙을 찾지 못했어요.`);
+      if (!(await vt.canDecode())) throw new Error(`${part.c.file.name}: 이 브라우저에서 열 수 없는 영상 형식이에요.`);
+      const at = await input.getPrimaryAudioTrack();
+      return { ...part, input, vt, at: at && (await at.canDecode()) ? at : null, t0: await vt.getFirstTimestamp() };
+    }));
+
+    const first = opened[0].vt;
+    const W = first.displayWidth & ~1, H = first.displayHeight & ~1;
     const codec = await MB.getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], { width: W, height: H });
     if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
+    const quality = { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
 
     const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
-    const output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
-
+    output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
-    const t0 = await vt.getFirstTimestamp();
-    const quality = { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
-    // Output timestamps start at 0 at trim.start, so map them back by adding the trim offset.
-    const trimOffset = cfg.trimStart ?? 0;
-    const trim = { start: trimOffset + t0 };
-    if (cfg.trimEnd != null) trim.end = cfg.trimEnd + t0;
+    const videoSource = new MB.CanvasSource(canvas, { codec, bitrate: quality });
+    output.addVideoTrack(videoSource);
 
-    conversion = await MB.Conversion.init({
-      input, output,
-      trim,
-      video: {
-        codec,
-        bitrate: quality,
-        forceTranscode: true,
-        processedWidth: W,
-        processedHeight: H,
-        process: sample => {
-          sample.draw(ctx, 0, 0, W, H);
-          drawBoard(ctx, W, H, stateAt(sample.timestamp + trimOffset));
-          return canvas;
-        },
-      },
-    });
-    if (!conversion.isValid) {
-      throw new Error('이 영상 형식은 변환할 수 없어요: ' + conversion.discardedTracks.map(d => `${d.track.type} (${d.reason})`).join(', '));
+    let audioSource = null;
+    const firstAudio = opened.find(o => o.at)?.at;
+    if (firstAudio) {
+      const sampleRate = firstAudio.sampleRate, numberOfChannels = firstAudio.numberOfChannels;
+      const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
+      if (acodec) {
+        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: MB.QUALITY_HIGH, transform: { sampleRate, numberOfChannels } });
+        output.addAudioTrack(audioSource);
+      }
     }
-    conversion.onProgress = p => {
+    await output.start();
+
+    const span = E - S;
+    let base = 0, done = 0, lastV = -1, lastA = 0;
+    const report = t => {
+      const p = Math.min(1, (done + t) / span);
       const el = (performance.now() - started) / 1000;
       const eta = p > 0.02 ? el / p - el : null;
-      setProgress(p, `${Math.round(p * 100)}%` + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
+      setProgress(p, `${Math.round(p * 100)}%` + (opened.length > 1 ? ` · 영상 ${partNo}/${opened.length}` : '') + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
     };
-    await conversion.execute();
+    let partNo = 0;
+    for (const part of opened) {
+      partNo++;
+      const { vt, at, t0, o, from, to } = part;
+      const len = to - from;
+      const videoJob = (async () => {
+        for await (const sample of new MB.VideoSampleSink(vt).samples(t0 + from, t0 + to)) {
+          if (job.canceled) { sample.close(); throw new Error('canceled'); }
+          const local = sample.timestamp - t0;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, W, H);
+          // Letterbox clips whose size differs from the first one.
+          const sc = Math.min(W / sample.displayWidth, H / sample.displayHeight);
+          const dw = sample.displayWidth * sc, dh = sample.displayHeight * sc;
+          sample.draw(ctx, (W - dw) / 2, (H - dh) / 2, dw, dh);
+          drawBoard(ctx, W, H, stateAt(o + local));
+          const ts = Math.max(base + local - from, lastV + 0.001);
+          lastV = ts;
+          const dur = sample.duration;
+          sample.close();
+          await videoSource.add(ts, dur);
+          report(Math.max(0, local - from));
+        }
+      })();
+      const audioJob = (async () => {
+        if (!at || !audioSource) return;
+        for await (const s of new MB.AudioSampleSink(at).samples(t0 + from, t0 + to)) {
+          if (job.canceled) { s.close(); throw new Error('canceled'); }
+          const ts = base + (s.timestamp - t0) - from;
+          if (ts < lastA - 0.02) { s.close(); continue; }
+          s.setTimestamp(Math.max(ts, lastA));
+          lastA = s.timestamp + s.duration;
+          await audioSource.add(s);
+          s.close();
+        }
+      })();
+      await Promise.all([videoJob, audioJob]);
+      done += len;
+      base = Math.max(base + len, lastV + 0.001, lastA);
+      part.input.dispose?.();
+    }
+    await output.finalize();
 
     if (!writable) download(new Blob([target.buffer], { type: 'video/mp4' }), outName);
     setProgress(1, '완료');
     showMsg(`내보내기 완료 (${fmt((performance.now() - started) / 1000)} 걸림). ${writable ? '저장한 위치에서 파일을 확인하세요.' : '다운로드 폴더를 확인하세요.'}`);
   } catch (err) {
-    if (conversion?.state === 'canceled') showMsg('내보내기를 취소했어요.');
+    try { if (output && output.state !== 'finalized') await output.cancel(); } catch {}
+    if (job.canceled) showMsg('내보내기를 취소했어요.');
     else { console.error(err); showMsg('내보내기에 실패했어요: ' + (err?.message || err), true); }
     try { await writable?.abort(); } catch {}
   } finally {
-    conversion = null;
+    exporting = null;
     $('#btnExport').disabled = false;
     setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
   }
@@ -1097,6 +1300,9 @@ function renderStyles() {
   });
 }
 document.fonts.ready.then(() => renderStyles());
+
+// Handle for automated tests.
+window.__sb = { gTime, seekG, get cur() { return cur; }, get pending() { return !!pendingSeek; } };
 
 syncForm();
 renderEvents();
