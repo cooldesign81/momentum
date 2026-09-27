@@ -357,6 +357,14 @@
       <section>
         <h2>리그 시트에서 팀·로스터 가져오기</h2>
         <div class="btns" style="margin-bottom:8px"><button id="btnSheet">시트 읽기</button><span class="hint" id="sheetMsg"></span></div>
+        <details id="sheetSetup" style="margin-bottom:8px">
+          <summary class="hint" style="cursor:pointer">읽어올 시트 설정 · <span id="sheetNow"></span></summary>
+          <div class="field" style="margin-top:8px"><label>리그 기록 시트 주소 (또는 시트 ID)</label>
+            <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit"></div>
+          <div class="btns"><button class="mini" id="sheetSave">저장</button><button class="mini" id="sheetReset">기본 시트로</button><a class="mini hint" id="sheetOpen" target="_blank" rel="noopener" style="align-self:center">시트 열기 ↗</a></div>
+          <div class="hint" id="sheetSetMsg" style="margin-top:6px">시트가 바뀌면 여기에 새 주소를 넣으세요. 시트 [공유]가 "링크가 있는 모든 사용자: 뷰어"여야 읽을 수 있어요. 이 브라우저에만 저장돼요.<br>
+            시트로 기록을 <b>보내는</b> 기능은 시트에 설치한 Apps Script가 담당해서, 시트를 바꾸면 새 시트에도 스크립트를 설치하고 [박스스코어] 탭의 웹 앱 URL을 바꿔야 해요. 모멘텀 사이트가 읽는 시트는 index.html의 CONFIG.league.sheetId예요.</div>
+        </details>
         <div class="grid2 hidden" id="sheetPick">
           <div class="field"><label>주차</label><select id="weekSel"></select></div>
           <div class="field"><label>경기</label><select id="matchSel"></select></div>
@@ -570,7 +578,10 @@ function parseTime(str) {
   if (parts.some(isNaN)) return null;
   return parts.reduce((acc, p) => acc * 60 + p, 0);
 }
-const SHEET_ID = '1_ufPBGuOO4if6MAWgTZ9FQ75Nec1hnUYVWx-ZUkoUak';   // index.html의 CONFIG.league.sheetId와 같은 시트
+const DEFAULT_SHEET_ID = '1_ufPBGuOO4if6MAWgTZ9FQ75Nec1hnUYVWx-ZUkoUak';   // index.html의 CONFIG.league.sheetId와 같은 시트
+// 읽어올 시트는 [경기 설정] > 읽어올 시트 설정에서 바꿀 수 있어요 (브라우저마다 저장).
+const sheetIdOf = v => { v = String(v || '').trim(); const m = v.match(/\/spreadsheets\/d\/([\w-]{20,})/); return m ? m[1] : (/^[\w-]{20,}$/.test(v) ? v : ''); };
+const sheetId = () => sheetIdOf(lsGet('mm-box:sheet')) || DEFAULT_SHEET_ID;
 
 // ---------- 기록 항목 ----------
 // 리그 시트 Week 탭의 열 순서 (PLAYER 다음부터)
@@ -593,7 +604,8 @@ const STATS = [
   { k: 'pf', label: '파울', short: '파울', key: 'F', cls: 'foul', fx: { pf: 1 } },
 ];
 const STAT = Object.fromEntries(STATS.map(s => [s.k, s]));
-const KEYMAP = Object.fromEntries(STATS.map(s => [s.key.toLowerCase(), s.k]));
+// 한글 입력 상태에서도 되도록 글자(ev.key)가 아니라 자판 위치(ev.code)로 찾아요.
+const KEYMAP = Object.fromEntries(STATS.flatMap(s => /\d/.test(s.key) ? [['Digit' + s.key, s.k], ['Numpad' + s.key, s.k]] : [['Key' + s.key, s.k]]));
 
 // ---------- 저장 ----------
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
@@ -759,6 +771,10 @@ async function openFiles(files, append) {
   files = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name));
   if (!files.length) return;
   files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  // 같은 영상들을 다시 열면, 저장된 순서(영상 목록에서 바꾼 순서)대로 놓아야 기록 시간이 맞아요.
+  const saved = game.source?.type === 'file' ? game.source.names : null;
+  if (!append && saved && files.length === saved.length && files.every(f => saved.includes(f.name)))
+    files.sort((a, b) => saved.indexOf(a.name) - saved.indexOf(b.name));
   if (!(append && mode === 'file' && clips.length)) attachSource({ type: 'file', names: files.map(f => f.name) });
   const load = async list => Promise.all(list.map(async f => { const url = URL.createObjectURL(f); return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }));
   if (append && mode === 'file' && clips.length) {
@@ -772,6 +788,7 @@ async function openFiles(files, append) {
   clips.forEach(c => URL.revokeObjectURL(c.url));
   clips = await load(files);
   mode = 'file'; cur = 0; pendingSeek = null;
+  sortedCache = null; lastBoardKey = '';
   video.src = clips[0].url;
   showStage();
   updateSrcLabel();
@@ -809,6 +826,7 @@ async function openYt(url) {
   video.pause(); video.removeAttribute('src'); video.load();
   clips.forEach(c => URL.revokeObjectURL(c.url)); clips = [];
   mode = 'yt';
+  sortedCache = null; lastBoardKey = '';
   renderClips();
   showStage();
   attachSource({ type: 'yt', id });
@@ -967,16 +985,28 @@ $('#gridEntry').addEventListener('click', ev => {
   lastHit = { team: +b.dataset.g, name: b.dataset.name, k: b.dataset.k };
   record(b.dataset.k, { team: +b.dataset.g, name: b.dataset.name });
 });
-// 오른쪽 클릭: 그 선수의 그 기록 중 가장 최근 것 하나 지우기
-$('#gridEntry').addEventListener('contextmenu', ev => {
-  const b = ev.target.closest('[data-g]'); if (!b) return;
-  ev.preventDefault();
+// 오른쪽 클릭 (휴대폰은 길게 누르기): 그 선수의 그 기록 중 가장 최근 것 하나 지우기
+function gridDecrement(b) {
   const ti = +b.dataset.g, name = b.dataset.name, k = b.dataset.k;
   const e = game.events.filter(x => x.team === ti && x.player === name && x.k === k).sort((a, b) => b.id - a.id)[0];
   if (!e) return;
   removeEvent(e.id);
   toast(`지움: ${name} · ${STAT[k].short}`);
+}
+let pressTimer = null, pressed = false;
+$('#gridEntry').addEventListener('contextmenu', ev => {
+  const b = ev.target.closest('[data-g]'); if (!b) return;
+  ev.preventDefault();
+  if (!pressed) gridDecrement(b);   // 길게 누르기로 이미 지웠으면 한 번 더 지우지 않아요
 });
+$('#gridEntry').addEventListener('touchstart', ev => {
+  const b = ev.target.closest('[data-g]'); if (!b) return;
+  pressed = false; clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { pressed = true; gridDecrement(b); }, 550);
+}, { passive: true });
+['touchend', 'touchmove', 'touchcancel'].forEach(t => $('#gridEntry').addEventListener(t, () => clearTimeout(pressTimer), { passive: true }));
+// 길게 눌러서 지운 뒤 손을 떼면 click이 따라오는데, 그때 +1이 되지 않게 막아요.
+$('#gridEntry').addEventListener('click', ev => { if (pressed) { pressed = false; ev.stopImmediatePropagation(); } }, true);
 function setMode(m) {
   opts.mode = m === 'grid' ? 'grid' : 'pick'; saveOpts();
   $$('#modeSeg button').forEach(x => x.classList.toggle('on', x.dataset.mode === opts.mode));
@@ -1094,14 +1124,14 @@ function renderNames() {
 }
 
 function renderLog() {
-  const f = $('#logFilter').value;
   const opts2 = [['', '전체 선수'], ...[0, 1].flatMap(ti => boxOf(ti).filter(l => l.n).map(l => [ti + ':' + l.name, `${game.teams[ti].name} · ${l.name}`]))];
+  let f = $('#logFilter').value;
+  if (!opts2.some(o => o[0] === f)) f = '';
   $('#logFilter').innerHTML = opts2.map(([v, l]) => `<option value="${esc(v)}" ${v === f ? 'selected' : ''}>${esc(l)}</option>`).join('');
   const list = [...game.events.filter(e => !f || f === e.team + ':' + e.player), ...(f ? [] : game.quarters.map(q => ({ ...q, q: true })))]
     .sort((a, b) => a.t - b.t || a.id - b.id);
-  let qn = +game.sb.startQ || 1;
   $('#log').innerHTML = list.length ? list.map(e => e.q
-    ? `<div class="ev qrow" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span>다음 쿼터 → ${quarterLabel(++qn)}</span><button class="x" data-delq="${e.id}" title="지우기">✕</button></div>`
+    ? `<div class="ev qrow" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span>다음 쿼터 → ${quarterLabel(stateAt(e.t).q)}</span><button class="x" data-delq="${e.id}" title="지우기">✕</button></div>`
     : `<div class="ev" data-id="${e.id}" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${e.id}" title="지우기">✕</button></div>`).join('')
     : '<section class="hint">아직 기록이 없어요.</section>';
   lastNow = null;
@@ -1167,7 +1197,7 @@ function renderGameSel() {
   if (!idx.some(g => g.id === game.id)) idx.unshift({ id: game.id, title: gameTitle(), updated: game.updated });
   $('#gameSel').innerHTML = idx.map(g => {
     const d = new Date(g.updated);
-    return `<option value="${g.id}" ${g.id === game.id ? 'selected' : ''}>${esc(g.id === game.id ? gameTitle() : g.title)} · ${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}</option>`;
+    return `<option value="${esc(g.id)}" ${g.id === game.id ? 'selected' : ''}>${esc(g.id === game.id ? gameTitle() : g.title)} · ${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}</option>`;
   }).join('');
 }
 function renderAll() { renderSetup(); renderGameSel(); renderEntry(); renderLog(); renderBox(); renderMarkers(); renderVideoPane(); }
@@ -1218,7 +1248,7 @@ function parseCSV(text) {
   return rows.map(r => r.map(v => v.trim()));
 }
 async function fetchSheet(sheet, range) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId()}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const t = await res.text();
@@ -1226,6 +1256,30 @@ async function fetchSheet(sheet, range) {
   return parseCSV(t);
 }
 let league = null;   // {rosters, weeks: [{no, date, matchups: [[a, b, label]]}]}
+function renderSheetSetup() {
+  const id = sheetId(), custom = id !== DEFAULT_SHEET_ID;
+  $('#sheetUrl').value = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+  $('#sheetOpen').href = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+  $('#sheetNow').textContent = custom ? `직접 지정한 시트 (${id.slice(0, 8)}…)` : '기본 리그 시트';
+  $('#sheetReset').disabled = !custom;
+}
+function setSheet(v) {
+  const m = $('#sheetSetMsg');
+  if (v != null) {
+    const id = sheetIdOf(v);
+    if (!id) { m.innerHTML = '<span style="color:var(--danger)">구글 시트 주소가 아니에요. 주소창의 https://docs.google.com/spreadsheets/d/… 전체를 붙여넣어 주세요.</span>'; return; }
+    lsSet('mm-box:sheet', id === DEFAULT_SHEET_ID ? null : id);
+  } else lsSet('mm-box:sheet', null);
+  league = null;
+  ['#sheetPick', '#btnApplyMatch'].forEach(x => $(x).classList.add('hidden'));
+  $('#sheetMsg').textContent = '';
+  renderSheetSetup();
+  m.textContent = '저장했어요. [시트 읽기]를 눌러 새 시트에서 팀·로스터를 가져오세요.';
+}
+$('#sheetSave').addEventListener('click', () => setSheet($('#sheetUrl').value));
+$('#sheetUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') setSheet($('#sheetUrl').value); });
+$('#sheetReset').addEventListener('click', () => setSheet(null));
+renderSheetSetup();
 $('#btnSheet').addEventListener('click', async () => {
   const msg = $('#sheetMsg'); msg.textContent = '읽는 중…';
   try {
@@ -1239,8 +1293,13 @@ $('#btnSheet').addEventListener('click', async () => {
       for (let r = 3; r < 44; r++) { const n = cell(lists, r, c); if (n && !/guest|게스트/i.test(n)) rosters[t].push(n); }
     });
     const grids = await Promise.all(Array.from({ length: 12 }, (_, i) => fetchSheet('Week ' + pad2(i + 1), 'A1:U64').catch(() => null)));
+    // 없는 탭을 요청하면 구글이 첫 탭 내용을 대신 돌려줄 때가 있어서, 앞 주차와 똑같은 탭은 없는 것으로 봐요.
+    const seen = new Set();
     const weeks = grids.map((g, i) => {
       if (!g) return null;
+      const sig = JSON.stringify(g);
+      if (seen.has(sig)) return null;
+      seen.add(sig);
       const m = (cell(g, 0, 20) || (g.find(r => /\d{4}\D+\d{1,2}\D+\d{1,2}/.test(r[20] || '')) || [])[20] || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
       const matchups = [];
       g.forEach((row, r) => { if (/MATCH\s*$/i.test(row[0] || '')) { const a = cell(g, r + 2, 0), b = cell(g, r + 2, 20); if (a && b) matchups.push([a, b, row[0].replace(/\s*MATCH/i, '').trim()]); } });
@@ -1310,9 +1369,11 @@ $('#jsonInput').addEventListener('change', async ev => {
     const g = JSON.parse(await f.text());
     if (!g || !Array.isArray(g.events) || !Array.isArray(g.teams)) throw new Error();
     flushSave();
-    game = { ...newGame(), ...g, played: g.played || {} };
-    undoStack = []; selected = null; clearAst();
-    save(); renderAll(); toast('기록 파일을 불러왔어요.');
+    // 새 경기로 저장해서 불러와요 (같은 id의 기존 경기를 덮어쓰지 않게). loadGame이 빠진 설정을 채워요.
+    const id = Date.now().toString(36);
+    lsSet('mm-box:g:' + id, { ...newGame(), ...g, id, updated: Date.now() });
+    loadGame(id); clearAst();
+    save(); toast('기록 파일을 새 경기로 불러왔어요.');
   } catch { toast('기록 파일이 아니에요.', true); }
 });
 function clearRecords() {
@@ -1423,7 +1484,7 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyN') { ev.preventDefault(); addQuarter(); return; }
   if (ev.code === 'BracketLeft') { ev.preventDefault(); markCutIn(); return; }
   if (ev.code === 'BracketRight') { ev.preventDefault(); markCutOut(); return; }
-  const k = KEYMAP[ev.key.toLowerCase()];
+  const k = KEYMAP[ev.code];
   if (k) { ev.preventDefault(); record(k); }
 });
 
@@ -1564,6 +1625,7 @@ function editClips(fn) {
   const evs = game.events.map(e => ({ e, ...loc(e.t) }));
   const qs = game.quarters.map(q => ({ e: q, ...loc(q.t) }));
   const oldCuts = game.sb.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
+  const oldTrim = ['trimStart', 'trimEnd'].map(k => game.sb[k] == null ? null : loc(game.sb[k]));
   fn();
   const idx = key => clips.findIndex(c => c.key === key);
   const back = list => list.filter(x => idx(x.key) >= 0).map(x => ({ ...x.e, t: offset(idx(x.key)) + x.t }));
@@ -1573,6 +1635,8 @@ function editClips(fn) {
     const ks = idx(c.s.key), ke = idx(c.e.key);
     return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
   }).map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
+  // 내보낼 시작·끝도 자기 영상을 따라가요. 그 영상을 뺐으면 지워요.
+  ['trimStart', 'trimEnd'].forEach((k, i) => { const x = oldTrim[i]; game.sb[k] = x && idx(x.key) >= 0 ? offset(idx(x.key)) + x.t : null; });
   cutStart = null; undoStack = [];
   game.source = { type: 'file', names: clips.map(c => c.name) };
   const k = idx(key0);
@@ -2315,7 +2379,8 @@ function tick() {
   if (mode) {
     if (game.sb.skipCuts && !player.paused() && !pendingSeek) {
       const c = cutAt(player.time());
-      if (c) player.seek(c.e);
+      if (c && c.e >= player.duration() - 0.1) { player.pause(); player.seek(c.s); }
+      else if (c) player.seek(c.e);
     }
     renderLive();
     const t = player.time(), D = player.duration();
@@ -2337,6 +2402,8 @@ function tick() {
 }
 setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 
+window.addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 loadGame(lsGet('mm-box:last'));
 setMode(opts.mode);
 requestAnimationFrame(tick);
