@@ -37,21 +37,34 @@
   .muted { color: var(--muted); }
   .hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
 
-  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  body { display: flex; flex-direction: column; }
+  /* 맨 위 바: 왼쪽 제목 · 가운데 점수 · 오른쪽 입력 방식과 영상 열기 */
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); flex: none; }
+  header .hl, header .hr { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  header .hr { justify-content: flex-end; }
+  header button { white-space: nowrap; flex: none; }
+  header .yt-in { flex: 0 1 280px; min-width: 130px; }
+  header .yt-in input { width: 100%; min-width: 0; }
+  /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
+  @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
+  @media (max-width: 1350px) { header #btnUndo kbd, header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
   header .yt-in { display: flex; gap: 6px; }
-  header .yt-in input { width: 260px; }
 
-  .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; height: calc(100% - 53px); }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
   .main { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   .side { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
   @media (max-width: 1000px) {
     .app { grid-template-columns: 1fr; height: auto; }
     .main { overflow: visible; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
-    header .yt-in input { width: 180px; }
+    header { display: flex; flex-wrap: wrap; }
+    header .hl { flex: 1; }
+    header .scorebar { order: 3; width: 100%; }
+    header .hr { flex-wrap: wrap; }
+
   }
 
   .drop { border: 2px dashed var(--line); border-radius: 12px; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 24px; }
@@ -74,7 +87,7 @@
   .timeline .head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); pointer-events: none; }
 
   .scorebar { display: flex; align-items: center; justify-content: center; gap: 14px; font-weight: 700; flex: none; }
-  .scorebar .nm { font-size: 15px; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scorebar .nm { font-size: 15px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .scorebar .nm.a { color: var(--ta); } .scorebar .nm.b { color: var(--tb); }
   .scorebar .sc { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; }
 
@@ -120,8 +133,10 @@
   .pad .grid button.foul { color: var(--warn); }
   .pad .ast { border: 1px dashed var(--accent); border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
   .pad .ast button { padding: 3px 8px; font-size: 12px; }
-  .toast { font-size: 12px; min-height: 18px; color: var(--muted); }
-  .modebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: none; }
+  /* 입력 알림: 점수 바로 아래에 잠깐 떠요 */
+  .toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 20; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 14px; pointer-events: none; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .toast:empty { display: none; }
+  .modebar { display: flex; align-items: center; gap: 8px; flex: none; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; padding: 5px 14px; background: var(--panel); color: var(--muted); }
   .seg button + button { border-left: 1px solid var(--line); }
@@ -192,15 +207,27 @@
 </head>
 <body>
 <header>
-  <h1>MOMENTUM <span>BOX SCORE</span></h1>
-  <div class="src" id="srcLabel"></div>
-  <div class="yt-in">
-    <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
-    <button id="btnYt">열기</button>
+  <div class="hl">
+    <h1>MOMENTUM <span>BOX SCORE</span></h1>
+    <div class="src" id="srcLabel"></div>
   </div>
-  <button id="btnOpen">영상 파일 열기</button>
-  <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
+  <div class="scorebar">
+    <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
+  </div>
+  <div class="hr">
+    <div class="modebar">
+      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
+      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+    </div>
+    <div class="yt-in">
+      <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
+      <button id="btnYt">열기</button>
+    </div>
+    <button id="btnOpen">영상 파일 열기</button>
+    <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
+  </div>
 </header>
+<div class="toast" id="toast"></div>
 
 <div class="app">
   <div class="main">
@@ -229,15 +256,6 @@
       <div class="head" id="playhead"></div>
     </div>
 
-    <div class="scorebar">
-      <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
-    </div>
-
-    <div class="modebar">
-      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
-      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
-      <span class="toast" id="toast"></span>
-    </div>
 
     <div class="entry" id="pickEntry">
       <div class="team a" id="teamA"></div>
@@ -654,6 +672,7 @@ function removeEvent(id) {
 let toastTimer = null;
 function toast(msg, err) {
   const el = $('#toast'); el.textContent = msg; el.classList.toggle('err', !!err);
+  el.style.top = $('header').getBoundingClientRect().bottom + 6 + 'px';
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.textContent = ''; }, 3500);
 }
 
