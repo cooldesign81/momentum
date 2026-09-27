@@ -89,6 +89,8 @@
   .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .stage canvas { pointer-events: none; }
 
+  .transport button { padding: 6px 9px; }
+  .transport .speed button { padding: 6px 7px; }
   .transport .q { font-weight: 900; font-size: 18px; min-width: 44px; text-align: center; }
   .transport { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .transport .time { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); margin-left: 6px; }
@@ -168,6 +170,13 @@
   details.adv { margin-top: 8px; }
   details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 2px 0 6px; }
   details.adv .grid3 { row-gap: 6px; }
+  .timeline .cut { position: absolute; top: 0; bottom: 0; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(255,90,90,.45) 0 4px, rgba(255,90,90,.15) 4px 8px); border-left: 1px solid var(--danger); border-right: 1px solid var(--danger); }
+  .timeline .cut.pending { border-right: 0; background: rgba(255,90,90,.18); }
+  .cuts-head { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .cuts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .cuts .cut-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-family: ui-monospace, monospace; padding: 2px 4px 2px 8px; border: 1px solid rgba(255,90,90,.5); border-radius: 5px; cursor: pointer; }
+  .cuts .cut-chip button { padding: 0 5px; font-size: 11px; }
+  .cuts .none { font-size: 12px; color: var(--muted); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -215,8 +224,10 @@
         </span>
         <span class="sp"></span>
         <span class="q" id="curQuarter">1ST</span>
+        <button id="btnCutIn" title="잘라낼 구간 시작을 현재 위치로 ([ 키)">✂ <kbd>[</kbd></button>
+        <button id="btnCutOut" title="잘라낼 구간 끝을 현재 위치로 (] 키)"><kbd>]</kbd> ✂</button>
         <button id="btnNextQ">다음 쿼터 <kbd>N</kbd></button>
-        <button id="btnUndo">되돌리기 <kbd>Ctrl+Z</kbd></button>
+        <button id="btnUndo" title="마지막 기록 취소">↶ <kbd>Ctrl+Z</kbd></button>
       </div>
 
       <div class="pads">
@@ -284,7 +295,7 @@
       <h2>기록 목록 <span id="evCount"></span></h2>
       <div class="events" id="events"></div>
       <div class="hint" style="margin-top:4px">행 클릭: 장면 이동 · 시간 직접 수정 · <b>⌖</b>: 현재 위치로 옮기기</div>
-      <div class="hint">단축키: <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 5초 (Shift 1초) · 점수 버튼의 키</div>
+      <div class="hint">단축키: <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 5초 (Shift 1초) · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · 점수 버튼의 키</div>
       <div class="grid3" style="margin-top:8px">
         <button id="btnSaveJson">기록 저장</button>
         <button id="btnLoadJson">불러오기</button>
@@ -299,6 +310,11 @@
         <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
         <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
       </div>
+      <div class="cuts-head">
+        <span>잘라낼 구간 <span id="cutCount"></span></span>
+        <label class="check" style="padding:0"><input type="checkbox" id="skipCuts"> 재생할 때 건너뛰기</label>
+      </div>
+      <div class="cuts" id="cuts"></div>
       <div class="grid2" style="margin-top:8px">
         <div class="field"><label>형식</label>
           <select id="format" title="YouTube: 1920×1080 · H.264 · 30fps · AAC 스테레오 (DaVinci Resolve YouTube 프리셋과 같음)">
@@ -372,6 +388,8 @@ const DEFAULT_CFG = {
   flash: true,
   trimStart: null,
   trimEnd: null,
+  cuts: [],             // [{s, e}] game-time ranges removed from preview playback and export
+  skipCuts: true,
   quality: 'source',
   format: 'youtube',
   res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
@@ -436,6 +454,60 @@ function autoEvents() {
   if (!cfg.autoQ) return [];
   return clips.slice(1).map((c, i) => ({ id: -(i + 1), t: offset(i + 1), kind: 'q', team: 0, v: 1, auto: true, clip: i + 2 }));
 }
+// ---------- cuts ----------
+let cutStart = null;       // pending '[' position waiting for ']'
+function normCuts(list) {
+  const out = [];
+  for (const c of [...list].filter(c => c.e - c.s > 0.05).sort((a, b) => a.s - b.s)) {
+    const last = out[out.length - 1];
+    if (last && c.s <= last.e) last.e = Math.max(last.e, c.e); else out.push({ s: c.s, e: c.e });
+  }
+  return out;
+}
+function addCut(a, b) { cfg.cuts = normCuts([...cfg.cuts, { s: Math.min(a, b), e: Math.max(a, b) }]); cutStart = null; changed(); }
+function cutAt(T) { return cfg.cuts.find(c => T >= c.s && T < c.e); }
+// Export ranges: [S, E] minus the cuts.
+function keepRanges(S, E) {
+  const out = [];
+  let t = S;
+  for (const c of cfg.cuts) {
+    if (c.e <= t || c.s >= E) continue;
+    if (c.s > t) out.push([t, c.s]);
+    t = Math.max(t, c.e);
+  }
+  if (E > t) out.push([t, E]);
+  return out.filter(([a, b]) => b - a > 0.05);
+}
+function renderCuts() {
+  $('#cutCount').textContent = cfg.cuts.length ? `(${cfg.cuts.length}개 · ${fmt(cfg.cuts.reduce((n, c) => n + c.e - c.s, 0))})` : '';
+  $('#cuts').innerHTML = cfg.cuts.length
+    ? cfg.cuts.map((c, i) => `<span class="cut-chip" data-i="${i}" title="클릭: 구간 시작으로 이동">${fmt(c.s)}–${fmt(c.e)}<button data-act="rm" title="잘라내기 취소">✕</button></span>`).join('')
+    : `<span class="none">${cutStart != null ? `${fmt(cutStart)}부터 자르는 중… 끝 위치에서 ] 를 누르세요` : '영상에서 [ 와 ] 로 잘라낼 부분을 지정하세요 (작전타임, 쉬는 시간 등)'}</span>`;
+}
+$('#cuts').addEventListener('click', ev => {
+  const chip = ev.target.closest('.cut-chip');
+  if (!chip) return;
+  const i = Number(chip.dataset.i);
+  if (ev.target.closest('[data-act="rm"]')) { cfg.cuts.splice(i, 1); changed(); }
+  else seekG(cfg.cuts[i].s);
+});
+function markCutIn() {
+  if (!clips.length) return;
+  const T = gTime();
+  cutStart = T;
+  renderCuts(); renderMarkers();
+}
+function markCutOut() {
+  if (!clips.length) return;
+  const T = gTime();
+  if (cutStart == null) {
+    // ']' without '[': cut from the end of the previous cut (or the start) up to here.
+    const prev = cfg.cuts.filter(c => c.e <= T).pop();
+    cutStart = prev ? prev.e : 0;
+  }
+  if (Math.abs(T - cutStart) < 0.1) return;
+  addCut(cutStart, T);
+}
 // Cached because the preview loop reads it every frame; changed() clears it.
 let sortedCache = null;
 function sorted() { return sortedCache ??= [...events, ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
@@ -477,7 +549,7 @@ function undo() {
   }
 }
 let rev = 0;
-function changed() { sortedCache = null; rev++; save(); renderEvents(); renderMarkers(); renderLive(); }
+function changed() { sortedCache = null; rev++; save(); renderEvents(); renderMarkers(); renderCuts(); renderLive(); }
 
 // ---------- scoreboard drawing ----------
 const FONT = "'Noto Sans KR', system-ui, sans-serif";
@@ -823,6 +895,10 @@ function renderLive() {
 let lastTimeText = '', lastHead = '';
 function tick() {
   if (clips.length) {
+    if (cfg.skipCuts && !video.paused && !pendingSeek) {
+      const c = cutAt(gTime());
+      if (c) seekG(c.e, true);
+    }
     renderLive();
     const d = total(), T = gTime();
     const txt = `${fmt(T)} / ${fmt(d)}`;
@@ -913,6 +989,9 @@ function renderMarkers() {
     const color = e.kind === 'foul' ? '#f2e000' : (e.team === 0 ? '#8ff0e0' : '#ff7a7a');
     return `<div class="mk ${e.team === 0 ? 'h' : 'a'} ${e.kind === 'foul' ? 'f' : ''}" style="left:${left};background:${color}"></div>`;
   }).join('');
+  const cutsHtml = cfg.cuts.map(c => `<div class="cut" style="left:${c.s / d * 100}%;width:${(c.e - c.s) / d * 100}%"></div>`).join('')
+    + (cutStart != null ? `<div class="cut pending" style="left:${cutStart / d * 100}%;width:0.4%"></div>` : '');
+  $('#markers').insertAdjacentHTML('afterbegin', cutsHtml);
   const s = cfg.trimStart ?? 0, en = cfg.trimEnd ?? d;
   const box = $('#trimBox');
   box.style.display = (cfg.trimStart != null || cfg.trimEnd != null) ? '' : 'none';
@@ -966,6 +1045,8 @@ async function openFiles(list, append) {
     const saved = lsGet(storeKey) || (clips.length === 1 ? lsGet(`mm-sb:${clips[0].key}`) : null);
     if (saved?.order) clips.sort((x, y) => saved.order.indexOf(x.key) - saved.order.indexOf(y.key));
     events = saved?.events || [];
+    Object.assign(cfg, { trimStart: null, trimEnd: null, cuts: [] });
+    cutStart = null;
     if (saved?.cfg) { Object.assign(cfg, saved.cfg); if (!saved.cfg.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
     migrateExport(saved?.cfg);
     nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
@@ -994,8 +1075,17 @@ function fromLocal(list) {
 function editClips(fn) {
   const T = gTime(), [k0, t0] = clipAt(T), key0 = clips[k0]?.key;
   const old = toLocal();
+  // Cuts follow their clip too; a cut spanning two clips that are no longer adjacent is dropped.
+  const loc = t => { const [k, lt] = clipAt(t); return { key: clips[k]?.key, t: lt }; };
+  const oldCuts = cfg.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
   fn();
   fromLocal(old);
+  const idx = x => clips.findIndex(c => c.key === x.key);
+  cfg.cuts = normCuts(oldCuts.filter(c => {
+    const ks = idx(c.s), ke = idx(c.e);
+    return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
+  }).map(c => ({ s: offset(idx(c.s)) + c.s.t, e: offset(idx(c.e)) + c.e.t + 0.001 })));
+  cutStart = null;
   undoStack = [];
   const k = clips.findIndex(c => c.key === key0);
   cur = -1;
@@ -1075,6 +1165,8 @@ $$('.pad').forEach(p => {
   const team = Number(p.dataset.team);
   p.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { addEvent(b.dataset.add, team, Number(b.dataset.v)); b.blur(); });
 });
+$('#btnCutIn').onclick = e => { markCutIn(); e.currentTarget.blur(); };
+$('#btnCutOut').onclick = e => { markCutOut(); e.currentTarget.blur(); };
 $('#btnNextQ').onclick = e => { addEvent('q', 0, 1); e.currentTarget.blur(); };
 $('#btnUndo').onclick = e => { undo(); e.currentTarget.blur(); };
 
@@ -1099,6 +1191,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyN') { addEvent('q', 0, 1); return; }
+  if (e.code === 'BracketLeft') { markCutIn(); return; }
+  if (e.code === 'BracketRight') { markCutOut(); return; }
+  if (e.code === 'Escape' && cutStart != null) { cutStart = null; renderCuts(); renderMarkers(); return; }
   const m = KEYMAP[e.code];
   if (m) { e.preventDefault(); addEvent(...m); }
 });
@@ -1116,6 +1211,7 @@ function syncForm() {
   $('#lag').value = cfg.lag;
   $('#pos').value = cfg.pos;
   $('#flash').checked = !!cfg.flash;
+  $('#skipCuts').checked = cfg.skipCuts !== false;
   $('#autoQ').checked = cfg.autoQ !== false;
   renderStyles();
   $('#size').value = cfg.size; $('#sizeVal').textContent = cfg.size;
@@ -1135,6 +1231,7 @@ function readForm() {
   cfg.lag = Number($('#lag').value) || 0;
   cfg.pos = $('#pos').value;
   cfg.flash = $('#flash').checked;
+  cfg.skipCuts = $('#skipCuts').checked;
   cfg.autoQ = $('#autoQ').checked;
   cfg.size = Number($('#size').value); $('#sizeVal').textContent = cfg.size;
   cfg.trimStart = parseTime($('#trimStart').value);
@@ -1251,19 +1348,29 @@ $('#btnExport').onclick = async () => {
     const S = Math.max(0, cfg.trimStart ?? 0), E = Math.min(total(), cfg.trimEnd ?? total());
     if (E - S < 0.1) throw new Error('내보낼 구간이 너무 짧아요. 시작/끝을 확인해 주세요.');
     const parts = [];
-    clips.forEach((c, k) => {
-      const o = offset(k), from = Math.max(S, o) - o, to = Math.min(E, o + c.dur) - o;
-      if (to - from > 0.01) parts.push({ c, k, o, from, to });
-    });
+    for (const [a, z] of keepRanges(S, E)) {
+      clips.forEach((c, k) => {
+        const o = offset(k), from = Math.max(a, o) - o, to = Math.min(z, o + c.dur) - o;
+        if (to - from > 0.01) parts.push({ c, k, o, from, to });
+      });
+    }
+    if (!parts.length) throw new Error('잘라낸 구간을 빼고 나면 내보낼 부분이 없어요.');
 
-    const opened = await Promise.all(parts.map(async part => {
-      const input = new MB.Input({ source: new MB.BlobSource(part.c.file), formats: MB.ALL_FORMATS });
-      const vt = await input.getPrimaryVideoTrack();
-      if (!vt) throw new Error(`${part.c.file.name}: 영상 트랙을 찾지 못했어요.`);
-      if (!(await vt.canDecode())) throw new Error(`${part.c.file.name}: 이 브라우저에서 열 수 없는 영상 형식이에요.`);
-      const at = await input.getPrimaryAudioTrack();
-      return { ...part, input, vt, at: at && (await at.canDecode()) ? at : null, t0: await vt.getFirstTimestamp() };
-    }));
+    // One decoder input per clip, shared by every part cut from it.
+    const inputs = new Map();
+    const openClip = k => {
+      if (!inputs.has(k)) inputs.set(k, (async () => {
+        const c = clips[k];
+        const input = new MB.Input({ source: new MB.BlobSource(c.file), formats: MB.ALL_FORMATS });
+        const vt = await input.getPrimaryVideoTrack();
+        if (!vt) throw new Error(`${c.file.name}: 영상 트랙을 찾지 못했어요.`);
+        if (!(await vt.canDecode())) throw new Error(`${c.file.name}: 이 브라우저에서 열 수 없는 영상 형식이에요.`);
+        const at = await input.getPrimaryAudioTrack();
+        return { input, vt, at: at && (await at.canDecode()) ? at : null, t0: await vt.getFirstTimestamp() };
+      })());
+      return inputs.get(k);
+    };
+    const opened = await Promise.all(parts.map(async part => ({ ...part, ...(await openClip(part.k)) })));
 
     // 'youtube' matches the video team's Resolve preset: 1920×1080 (1080×1920 for portrait),
     // H.264, constant 30 fps, AAC stereo 48 kHz. 'original' keeps the first clip's size and timing.
@@ -1312,17 +1419,17 @@ $('#btnExport').onclick = async () => {
     await output.start();
     const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
 
-    const span = E - S;
+    const span = parts.reduce((n, p) => n + p.to - p.from, 0);
     let base = 0, done = 0, lastV = -1, lastA = 0, nextF = 0;
     const report = t => {
       const p = Math.min(1, (done + t) / span);
       const el = (performance.now() - started) / 1000;
       const eta = p > 0.02 ? el / p - el : null;
-      setProgress(p, `${Math.round(p * 100)}%` + (opened.length > 1 ? ` · 영상 ${partNo}/${opened.length}` : '') + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
+      setProgress(p, `${Math.round(p * 100)}%` + (clips.length > 1 ? ` · 영상 ${curClip}/${clips.length}` : '') + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
     };
-    let partNo = 0;
+    let curClip = 1;
     for (const part of opened) {
-      partNo++;
+      curClip = part.k + 1;
       const { vt, at, t0, o, from, to } = part;
       const len = to - from;
       const videoJob = (async () => {
@@ -1380,8 +1487,8 @@ $('#btnExport').onclick = async () => {
       await Promise.all([videoJob, audioJob]);
       done += len;
       base = Math.max(base + len, lastV + 0.001, lastA, FPS ? nextF / FPS : 0);
-      part.input.dispose?.();
     }
+    for (const p of inputs.values()) (await p).input.dispose?.();
     await output.finalize();
 
     if (!writable) download(new Blob([target.buffer], { type: 'video/mp4' }), outName);
