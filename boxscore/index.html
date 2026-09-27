@@ -340,9 +340,19 @@
 
     <div class="pane" id="pane-setup">
       <section>
-        <h2>경기 <button id="btnNew" class="mini">+ 새 경기</button></h2>
-        <select id="gameSel"></select>
-        <div class="hint" style="margin-top:6px">입력한 기록은 이 브라우저에 자동 저장돼요.</div>
+        <h2>경기</h2>
+        <select id="gameSel" title="저장된 경기 목록"></select>
+        <div class="btns" style="margin-top:8px">
+          <button id="btnNew" class="primary">+ 새 경기</button>
+          <button id="btnClearHere">기록 지우기</button>
+          <button id="btnDelGame" style="color:var(--danger)">경기 삭제</button>
+        </div>
+        <div class="hint" style="margin-top:6px">
+          <b>새 경기</b>: 지금 경기는 목록에 남겨두고 빈 경기로 시작해요.<br>
+          <b>기록 지우기</b>: 팀·로스터·영상 설정은 두고 선수 기록과 쿼터 표시만 비워요.<br>
+          <b>경기 삭제</b>: 이 경기를 목록에서 완전히 지워요.<br>
+          입력한 기록은 이 브라우저에 자동 저장돼요.
+        </div>
       </section>
       <section>
         <h2>리그 시트에서 팀·로스터 가져오기</h2>
@@ -606,23 +616,31 @@ function newGame() {
 }
 function gameIndex() { return lsGet('mm-box:index') || []; }
 let game = null;
-let saveTimer = null;
+let saveTimer = null, pendingSave = null;
+// 저장은 잠깐 모았다가 한 번에 써요. 경기를 바꾸기 전에는 flushSave()로 먼저 끝내요.
+function writeGame(g) {
+  lsSet('mm-box:g:' + g.id, g);
+  const idx = gameIndex().filter(x => x.id !== g.id);
+  idx.unshift({ id: g.id, title: gameTitle(g), updated: g.updated });
+  lsSet('mm-box:index', idx.slice(0, 60));
+  lsSet('mm-box:last', g.id);
+}
+function flushSave() {
+  clearTimeout(saveTimer);
+  if (pendingSave) { writeGame(pendingSave); pendingSave = null; }
+}
 function save() {
   game.updated = Date.now();
   touch();
   lsSet(SB_LAST, Object.fromEntries(SB_CARRY.map(k => [k, game.sb[k]])));
+  if (pendingSave && pendingSave !== game) flushSave();
+  pendingSave = game;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    lsSet('mm-box:g:' + game.id, game);
-    const idx = gameIndex().filter(g => g.id !== game.id);
-    idx.unshift({ id: game.id, title: gameTitle(), updated: game.updated });
-    lsSet('mm-box:index', idx.slice(0, 60));
-    lsSet('mm-box:last', game.id);
-    renderGameSel();
-  }, 150);
+  saveTimer = setTimeout(() => { flushSave(); renderGameSel(); }, 150);
 }
-const gameTitle = () => game.title || `${game.teams[0].name} vs ${game.teams[1].name}`;
+const gameTitle = (g = game) => g.title || `${g.teams[0].name} vs ${g.teams[1].name}`;
 function loadGame(id) {
+  flushSave();
   const g = id && lsGet('mm-box:g:' + id);
   game = g || newGame();
   game.played = game.played || {};
@@ -741,6 +759,7 @@ async function openFiles(files, append) {
   files = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name));
   if (!files.length) return;
   files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  if (!(append && mode === 'file' && clips.length)) attachSource({ type: 'file', names: files.map(f => f.name) });
   const load = async list => Promise.all(list.map(async f => { const url = URL.createObjectURL(f); return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }));
   if (append && mode === 'file' && clips.length) {
     // 뒤에 이어 붙이면 앞 영상들의 시간은 그대로라 기록을 옮길 필요가 없어요.
@@ -757,9 +776,17 @@ async function openFiles(files, append) {
   showStage();
   updateSrcLabel();
   renderClips();
-  const src = { type: 'file', names: clips.map(c => c.name) };
-  if (!game.events.length || !game.source) { game.source = src; save(); }
-  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
+}
+// 기록이 있는 경기에 다른 영상을 열면, 새 경기로 기록할지 지금 경기에 이어서 기록할지 물어봐요.
+function attachSource(src) {
+  const n = game.events.length + game.quarters.length;
+  if (!n || !game.source) { game.source = src; save(); return; }
+  if (JSON.stringify(game.source) === JSON.stringify(src)) return;
+  const ok = confirm(`지금 경기 '${gameTitle()}'에 기록 ${game.events.length}개가 있어요.\n\n` +
+    `[확인] 새 경기를 만들어서 이 영상을 기록해요. 지금 경기는 목록에 그대로 저장돼요.\n` +
+    `[취소] 지금 경기에 이어서 기록해요. (같은 경기의 영상을 다시 열 때)`);
+  if (ok) { startNewGame(src); toast('새 경기를 만들었어요. 이전 경기는 [경기 설정] 목록에 있어요.'); }
+  else toast('지금 경기에 이어서 기록해요.');
 }
 function ytIdOf(url) { const m = String(url).match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/); return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : ''); }
 function loadYtApi() {
@@ -784,11 +811,9 @@ async function openYt(url) {
   mode = 'yt';
   renderClips();
   showStage();
+  attachSource({ type: 'yt', id });
   $('#srcLabel').textContent = 'YouTube · ' + id;
   toast('유튜브 영상은 점수판 미리보기만 되고 내보내기는 안 돼요.', true);
-  const src = { type: 'yt', id };
-  if (!game.events.length || !game.source) { game.source = src; save(); }
-  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
   await loadYtApi();
   yt = new YT.Player('yt', {
     videoId: id,
@@ -1166,11 +1191,16 @@ $('#skip').addEventListener('change', ev => { opts.skip = Math.max(1, +ev.target
 $('#askAst').addEventListener('change', ev => { opts.askAst = ev.target.checked; saveOpts(); if (!opts.askAst) clearAst(); });
 $('#keepSel').addEventListener('change', ev => { opts.keepSel = ev.target.checked; saveOpts(); });
 $('#gameSel').addEventListener('change', ev => loadGame(ev.target.value));
-$('#btnNew').addEventListener('click', () => {
+function startNewGame(src) {
+  flushSave();
   game = newGame(); game.played = {}; undoStack = []; selected = null; clearAst();
-  if (mode === 'yt') game.source = { type: 'yt', id: ytIdOf($('#ytUrl').value) || null };
-  else if (mode === 'file') game.source = { type: 'file', names: clips.map(c => c.name) };
-  save(); renderAll(); toast('새 경기를 시작했어요.');
+  cutStart = null;
+  game.source = src;
+  save(); renderAll();
+}
+$('#btnNew').addEventListener('click', () => {
+  startNewGame(mode === 'yt' ? { type: 'yt', id: ytIdOf($('#ytUrl').value) || null } : mode === 'file' ? { type: 'file', names: clips.map(c => c.name) } : null);
+  toast('새 경기를 시작했어요.');
 });
 
 // ---------- 리그 시트 읽기 ----------
@@ -1279,15 +1309,32 @@ $('#jsonInput').addEventListener('change', async ev => {
   try {
     const g = JSON.parse(await f.text());
     if (!g || !Array.isArray(g.events) || !Array.isArray(g.teams)) throw new Error();
+    flushSave();
     game = { ...newGame(), ...g, played: g.played || {} };
     undoStack = []; selected = null; clearAst();
     save(); renderAll(); toast('기록 파일을 불러왔어요.');
   } catch { toast('기록 파일이 아니에요.', true); }
 });
-$('#btnClear').addEventListener('click', () => {
-  if (!game.events.length || !confirm('이 경기의 기록을 모두 지울까요?')) return;
-  game.events = []; game.played = {}; undoStack = []; clearAst();
-  save(); renderAll();
+function clearRecords() {
+  const n = game.events.length + game.quarters.length;
+  if (!n) { toast('지울 기록이 없어요.'); return; }
+  if (!confirm(`'${gameTitle()}' 경기의 기록 ${game.events.length}개${game.quarters.length ? `와 쿼터 표시 ${game.quarters.length}개` : ''}를 모두 지울까요? 되돌릴 수 없어요.\n(팀·로스터·영상 설정은 그대로 남아요)`)) return;
+  game.events = []; game.quarters = []; game.played = {}; undoStack = []; selected = null; clearAst();
+  save(); renderAll(); toast('기록을 모두 지웠어요.');
+}
+$('#btnClear').addEventListener('click', clearRecords);
+$('#btnClearHere').addEventListener('click', clearRecords);
+$('#btnDelGame').addEventListener('click', () => {
+  const n = game.events.length;
+  if (!confirm(`'${gameTitle()}' 경기를 목록에서 삭제할까요?${n ? ` 기록 ${n}개도 함께 지워져요.` : ''} 되돌릴 수 없어요.`)) return;
+  clearTimeout(saveTimer); pendingSave = null;
+  try { localStorage.removeItem('mm-box:g:' + game.id); } catch {}
+  const rest = gameIndex().filter(g => g.id !== game.id);
+  lsSet('mm-box:index', rest);
+  const title = gameTitle();
+  loadGame(rest[0]?.id);   // 남은 경기 중 가장 최근 것, 없으면 빈 경기
+  save();
+  toast(`'${title}' 경기를 삭제했어요.`);
 });
 
 // ---------- 구글 시트 연동 (Apps Script 웹 앱) ----------
