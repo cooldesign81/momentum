@@ -564,6 +564,7 @@ html,body{overflow-x:clip}
 .pdf-drop{display:flex;align-items:center;justify-content:center;min-height:84px;border:2px dashed var(--line);border-radius:12px;padding:12px;text-align:center;color:var(--muted);font-size:.9rem;cursor:pointer;background:var(--bg)}
 .pdf-drop:hover,.pdf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .pdf-drop.picked{border-style:solid;border-color:var(--accent);color:var(--ink);font-weight:700}
+.espn-views{flex:0 0 auto;font-size:.75rem;font-weight:700;color:var(--muted);white-space:nowrap}
 .espn-pdf{flex:0 0 auto;font-size:.62rem;font-weight:800;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px}
 .art-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 12px}
 .art-holder{background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--line);min-height:200px}
@@ -951,7 +952,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [] };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -1165,6 +1166,18 @@ function demoLoad() {
 }
 function demoSave() { try { localStorage.setItem(DEMO_KEY, JSON.stringify(demo)); } catch (e) {} }
 function demoSync() { DYN.forEach(c => state[c] = (demo[c] || []).map(d => ({ ...d }))); render(); }
+// 기사 조회수: articleViews/{기사 id} = { n: 숫자 }. 같은 브라우저에서는 기사마다 하루에 한 번만 올려요 (관리자는 안 셈).
+const VIEW_KEY = 'momentum-viewed-v1';
+function countView(id) {
+  if (!id || id === 'about' || can('admin')) return;
+  const today = ymd(new Date());
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem(VIEW_KEY)) || {}; } catch (e) {}
+  if (seen[id] === today) return;
+  seen[id] = today; try { localStorage.setItem(VIEW_KEY, JSON.stringify(seen)); } catch (e) {}
+  if (FB) fdb.collection('articleViews').doc(id).set({ n: firebase.firestore.FieldValue.increment(1) }, { merge: true }).catch(e => console.warn('조회수를 올리지 못했어요', e));
+  else { (demo.views = demo.views || {})[id] = (demo.views[id] || 0) + 1; state.views = { ...demo.views }; demoSave(); }
+}
+const viewsOf = id => state.views[id] || 0;
 const newId = () => 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const store = {
   async add(col, data) { if (FB) return fdb.collection(col).add(data); demo[col].push({ id: newId(), ...data }); demoSave(); demoSync(); },
@@ -1531,7 +1544,7 @@ async function loadPdf(a) {
 }
 function openArticle(id) {
   const a = state.articles.find(x => x.id === id); if (!a) return;
-  if (a.link) { window.open(a.link, '_blank', 'noopener'); return; }
+  if (a.link) { countView(a.id); window.open(a.link, '_blank', 'noopener'); return; }
   // 기사는 항상 사이트 안 기사 페이지로 (주소 공유 가능). 파일이 진짜 PDF면 그 페이지에서 PDF 버튼을 보여줘요.
   window.open(location.href.split('#')[0] + '#/news/' + a.id, '_blank');
 }
@@ -1630,6 +1643,7 @@ const editAbout = () => withAuth('admin', () => {
 async function mountArticle() {
   const holder = document.getElementById('art-holder'); if (!holder || holder.querySelector('iframe')) return;
   const a = state.articles.find(x => x.id === holder.dataset.id); if (!a) return;
+  countView(a.id);
   try {
     const html = await loadHtml(a);
     if (!document.body.contains(holder) || holder.querySelector('iframe')) return;
@@ -1644,7 +1658,7 @@ function espnHTML() {
   return `<section class="sec espn"><div class="sec-head"><h3 class="en big-h espn-logo">MOMENTUM <span>ESPN</span></h3><button class="btn sm" data-add-article>+ 기사 등록</button></div>
     ${list.length ? `<ul class="espn-list ${list.length > 5 ? 'scroll' : ''}">${list.map(a => {
       const [, m, d] = String(a.date).split('-').map(Number);
-      return `<li><button class="espn-item" data-article="${esc(a.id)}"><span class="espn-date num">${m}.${d}</span><span class="espn-title">${esc(a.title)}</span>${a.type === 'pdf' ? '<span class="espn-pdf">PDF</span>' : ''}${a.date >= weekAgo && a.date <= today ? '<span class="espn-new">NEW</span>' : ''}<span class="espn-go" aria-hidden="true">↗</span></button>
+      return `<li><button class="espn-item" data-article="${esc(a.id)}"><span class="espn-date num">${m}.${d}</span><span class="espn-title">${esc(a.title)}</span>${a.type === 'pdf' ? '<span class="espn-pdf">PDF</span>' : ''}${a.date >= weekAgo && a.date <= today ? '<span class="espn-new">NEW</span>' : ''}<span class="espn-views num" title="조회수">👁 ${viewsOf(a.id).toLocaleString()}</span><span class="espn-go" aria-hidden="true">↗</span></button>
         ${can('admin') ? `<button class="link-btn" data-edit-article="${esc(a.id)}">수정</button>` : ''}</li>`; }).join('')}</ul>`
       : `<p class="empty" style="margin-top:12px">아직 기사가 없어요.${can('admin') ? '' : ' 곧 첫 리포트가 올라올 거예요.'}</p>`}
   </section>`;
@@ -2175,8 +2189,9 @@ async function loadFeed() {
     firebase.initializeApp(FIREBASE);
     fdb = firebase.firestore(); fauth = firebase.auth();
     DYN.forEach(c => fdb.collection(c).onSnapshot(s => { state[c] = s.docs.map(x => ({ id: x.id, ...x.data() })); if (c === 'articles') state.articlesLoaded = true; render(); }, err => console.error(c, err)));
+    fdb.collection('articleViews').onSnapshot(s => { state.views = Object.fromEntries(s.docs.map(x => [x.id, x.data().n || 0])); render(); }, err => console.warn('조회수', err));
     fauth.onAuthStateChanged(u => { state.role = roleOf(u); render(); });
-  } else { demo = demoLoad(); DYN.forEach(c => state[c] = demo[c] = demo[c] || []); state.articlesLoaded = true; }
+  } else { demo = demoLoad(); DYN.forEach(c => state[c] = demo[c] = demo[c] || []); state.articlesLoaded = true; state.views = { ...(demo.views || {}) }; }
   state.seasons = await loadAllSeasons();
   state.seasonId = state.seasons[0]?.id;
   if (!state.seasons.length) { $('#view').innerHTML = '<p class="empty sec">기록 시트를 불러오지 못했어요. CONFIG의 sheetId와 시트 공유 설정을 확인하세요.</p>'; return; }
