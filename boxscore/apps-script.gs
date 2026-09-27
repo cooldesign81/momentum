@@ -94,6 +94,14 @@ function writeGame(req) {
     for (let r = 0; r < slots; r++) for (let c = 0; c < WIDTH; c++) if (formulas[r][c]) values[r][c] = formulas[r][c];
     range.setValues(values);
   }
+  // 점수 줄(블록 두 번째 줄): 사이트가 경기 점수를 여기서 읽어요. 수식이면 시트가 알아서 계산하니 그대로 두고,
+  // 손으로 쓴 글자면 새 점수로 바꿔요.
+  const scoreCell = sh.getRange(start + 2, 1);
+  if (!scoreCell.getFormula()) {
+    const pts = rows => rows.reduce((s, r) => s + (Number(r[1]) || 0), 0);
+    const [left, right] = [sides[0][1], sides[1][1]];
+    scoreCell.setValue(`${colA[start + 2]}  ${pts(left)} : ${pts(right)}  ${colU[start + 2]}`);
+  }
   return { ok: true, msg: `${tab} ${colA[start]}에 ${written}명 기록을 넣었어요.`, tab, swap };
 }
 
