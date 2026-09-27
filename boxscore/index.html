@@ -90,9 +90,25 @@
   .team.b .pl.sel { border-color: var(--tb); background: rgba(255,184,107,.14); }
   .pl.pf3 .s { color: var(--warn); }
   .pl.pf5 { opacity: .55; }
-  .team .add { display: flex; gap: 4px; margin-top: 2px; }
-  .team .add input { padding: 4px 6px; font-size: 12px; }
+  .team h3 .sub { font-weight: 400; color: var(--muted); padding: 0 6px; font-size: 11px; }
+  .team .bench { font-size: 11px; color: var(--muted); padding: 2px; }
   .team .empty { color: var(--muted); font-size: 12px; padding: 8px 2px; line-height: 1.6; }
+
+  .roster { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+  .rrow { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px 3px 6px; font-size: 13px; cursor: grab; }
+  .rrow.court { border-color: #3d4a5a; background: var(--panel-2); }
+  .rrow.drag { opacity: .4; }
+  .rrow.over { border-color: var(--accent); }
+  .rrow .no { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+  .rrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rrow .nm.g { color: var(--warn); }
+  .rrow .ctl { display: flex; gap: 2px; }
+  .rrow .ctl button { padding: 1px 6px; font-size: 11px; border-radius: 5px; line-height: 1.5; }
+  .rrow .ctl button:hover { border-color: var(--accent); }
+  .rsep { font-size: 11px; color: var(--muted); text-align: center; border-top: 1px dashed var(--line); margin: 3px 0 1px; padding-top: 2px; }
+  .radd { display: flex; gap: 4px; margin-top: 4px; }
+  .radd input { padding: 4px 6px; font-size: 12px; }
+  .radd button { white-space: nowrap; }
 
   .pad { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
   .pad .who { font-size: 13px; min-height: 20px; text-align: center; }
@@ -227,10 +243,18 @@
           <div class="field"><label style="color:var(--ta)">왼쪽 팀 (시트 A열)</label><input type="text" id="t0name"></div>
           <div class="field"><label style="color:var(--tb)">오른쪽 팀 (시트 U열)</label><input type="text" id="t1name"></div>
         </div>
-        <div class="grid2">
-          <div class="field"><label>왼쪽 로스터 (한 줄에 한 명)</label><textarea id="t0roster" rows="8"></textarea></div>
-          <div class="field"><label>오른쪽 로스터</label><textarea id="t1roster" rows="8"></textarea></div>
+        <div class="hint" style="margin-bottom:8px">위에서 5명이 지금 코트에서 뛰는 선수예요. 입력 화면에는 이 5명만 나와요. ▲▼ 버튼이나 끌어서 순서를 바꾸세요. 박스스코어와 시트에도 이 순서대로 들어가요.</div>
+        <div id="rosterEdit" style="display:flex;flex-direction:column;gap:6px">
+          <div class="field"><label style="color:var(--ta)">왼쪽 로스터</label><div class="roster" id="roster0"></div>
+            <div class="radd"><input type="text" id="add0" placeholder="선수 이름" list="allNames"><button class="mini" data-radd="0">추가</button></div>
+            <div class="radd"><input type="text" id="guest0" placeholder="게스트 이름 (없어도 돼요)"><button class="mini" data-rguest="0">게스트</button></div>
+          </div>
+          <div class="field"><label style="color:var(--tb)">오른쪽 로스터</label><div class="roster" id="roster1"></div>
+            <div class="radd"><input type="text" id="add1" placeholder="선수 이름" list="allNames"><button class="mini" data-radd="1">추가</button></div>
+            <div class="radd"><input type="text" id="guest1" placeholder="게스트 이름 (없어도 돼요)"><button class="mini" data-rguest="1">게스트</button></div>
+          </div>
         </div>
+        <datalist id="allNames"></datalist>
       </section>
       <section>
         <h2>입력 옵션</h2>
@@ -558,7 +582,7 @@ function record(k, who = selected) {
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 }
 function askAssist(who, t) {
-  const mates = game.teams[who.team].roster.filter(n => n !== who.name);
+  const mates = onCourt(who.team).filter(n => n !== who.name);
   if (!mates.length) return;
   astPending = { team: who.team, t };
   $('#astBar').innerHTML = `<span>어시스트?</span>${mates.map(n => `<button data-ast="${esc(n)}">${esc(n)}</button>`).join('')}<button data-ast="">없음 <kbd>Esc</kbd></button>`;
@@ -601,14 +625,14 @@ function renderEntry() {
   [0, 1].forEach(ti => {
     const t = game.teams[ti], el = ti ? $('#teamB') : $('#teamA');
     const byName = Object.fromEntries(lines[ti].map(l => [l.name, l]));
-    const names = [...t.roster, ...lines[ti].filter(l => !t.roster.includes(l.name)).map(l => l.name)];
+    const names = onCourt(ti), bench = t.roster.length - names.length;
     el.innerHTML = `<h3><span>${esc(t.name)}</span><span>${scoreOf(ti)}</span></h3>` +
       (names.length ? names.map(n => {
         const l = byName[n], sel = selected && selected.team === ti && selected.name === n;
         const line = [`${l.pts}점`, l.reb && `${l.reb}리`, l.ast && `${l.ast}어`, l.stl && `${l.stl}스`, l.blk && `${l.blk}블`, l.to && `${l.to}턴`, l.pf && `${l.pf}파울`].filter(Boolean).join(' ');
         return `<button class="pl ${sel ? 'sel' : ''} ${l.pf >= 5 ? 'pf5' : l.pf >= 4 ? 'pf3' : ''}" data-team="${ti}" data-name="${esc(n)}"><span class="n">${esc(n)}</span><span class="s">${line}</span></button>`;
-      }).join('') : `<div class="empty">오른쪽 [경기 설정]에서 로스터를 넣거나<br>아래에 이름을 추가하세요.</div>`) +
-      `<div class="add"><input type="text" placeholder="선수·게스트 추가" data-add="${ti}"><button class="mini" data-addbtn="${ti}">+</button></div>`;
+      }).join('') : `<div class="empty">오른쪽 [경기 설정]에서 로스터를 넣어주세요.</div>`) +
+      `<div class="bench">벤치 ${bench}명 · <button class="mini" data-sub="${ti}">선수 교체</button></div>`;
   });
   const s = selected;
   $('#who').innerHTML = s ? `<b class="${s.team ? 'b' : 'a'}">${esc(s.name)}</b> <span class="muted">· ${esc(game.teams[s.team].name)}</span>` : '<span class="muted">선수를 먼저 고르세요</span>';
@@ -619,6 +643,9 @@ function renderEntry() {
 $('#statPad').innerHTML = STATS.map(s => `<button class="${s.cls || ''}" data-k="${s.k}">${s.label} <kbd>${s.key}</kbd></button>`).join('');
 $('#statPad').addEventListener('click', ev => { const b = ev.target.closest('[data-k]'); if (b) record(b.dataset.k); });
 
+// 로스터 위에서 5명 = 지금 코트에서 뛰는 선수
+const COURT = 5;
+const onCourt = ti => game.teams[ti].roster.slice(0, COURT);
 function onTeamClick(ev) {
   const b = ev.target.closest('.pl');
   if (b) {
@@ -626,20 +653,99 @@ function onTeamClick(ev) {
     selected = selected && selected.team === ti && selected.name === name ? null : { team: ti, name };
     renderEntry(); return;
   }
-  const add = ev.target.closest('[data-addbtn]');
-  if (add) addPlayer(+add.dataset.addbtn);
+  const sub = ev.target.closest('[data-sub]');
+  if (sub) { showTab('setup'); $('#rosterEdit').scrollIntoView({ block: 'center' }); }
 }
-function addPlayer(ti) {
-  const inp = document.querySelector(`[data-add="${ti}"]`), name = inp.value.trim();
-  if (!name) return;
-  if (!game.teams[ti].roster.includes(name)) game.teams[ti].roster.push(name);
-  selected = { team: ti, name };
-  save(); renderAll();
+['#teamA', '#teamB'].forEach(s => $(s).addEventListener('click', onTeamClick));
+
+// ---------- 로스터 편집 (순서 바꾸기 · 게스트) ----------
+const isGuest = n => /guest|게스트/i.test(n);
+function renderRoster() {
+  [0, 1].forEach(ti => {
+    const r = game.teams[ti].roster;
+    $('#roster' + ti).innerHTML = r.map((n, i) => (i === COURT ? '<div class="rsep">▲ 코트 · 벤치 ▼</div>' : '') +
+      `<div class="rrow ${i < COURT ? 'court' : ''}" draggable="true" data-team="${ti}" data-i="${i}">
+        <span class="no">${i + 1}</span><span class="nm ${isGuest(n) ? 'g' : ''}" title="${isGuest(n) ? '게스트 (사이트 개인 기록에서 빠져요)' : ''}">${esc(n)}</span>
+        <span class="ctl"><button data-mv="-1" title="위로" ${i ? '' : 'disabled'}>▲</button><button data-mv="1" title="아래로" ${i < r.length - 1 ? '' : 'disabled'}>▼</button><button data-rm title="빼기">✕</button></span>
+      </div>`).join('') || '<div class="hint">아직 선수가 없어요.</div>';
+  });
 }
-['#teamA', '#teamB'].forEach(s => {
-  $(s).addEventListener('click', onTeamClick);
-  $(s).addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset.add !== undefined) addPlayer(+ev.target.dataset.add); });
+function rosterChanged() {
+  if (selected && !onCourt(selected.team).includes(selected.name)) selected = null;
+  clearAst();
+  save(); renderRoster(); renderEntry(); renderBox();
+}
+function moveRoster(ti, from, to) {
+  const r = game.teams[ti].roster;
+  if (to < 0 || to >= r.length || from === to) return;
+  const [n] = r.splice(from, 1); r.splice(to, 0, n);
+  rosterChanged();
+}
+function addToRoster(ti, names) {
+  const r = game.teams[ti].roster, other = game.teams[1 - ti].roster;
+  for (const n of names) {
+    if (r.includes(n)) { toast(`${n} 선수는 이미 있어요.`, true); continue; }
+    if (other.includes(n)) { toast(`${n} 선수는 상대 팀 로스터에 있어요.`, true); continue; }
+    r.push(n);
+  }
+  rosterChanged();
+}
+$('#rosterEdit').addEventListener('click', ev => {
+  const add = ev.target.closest('[data-radd]');
+  if (add) {
+    const ti = +add.dataset.radd, inp = $('#add' + ti);
+    const names = inp.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+    if (names.length) { addToRoster(ti, names); inp.value = ''; }
+    inp.focus(); return;
+  }
+  const g = ev.target.closest('[data-rguest]');
+  if (g) {
+    // 시트에서 쓰는 형식: Guest(이름), 이름이 없으면 Guest1, Guest2…  (사이트는 이 이름으로 게스트를 개인 기록에서 빼요)
+    const ti = +g.dataset.rguest, inp = $('#guest' + ti), nm = inp.value.trim();
+    const all = [...game.teams[0].roster, ...game.teams[1].roster];
+    let name = nm ? (isGuest(nm) ? nm : `Guest(${nm})`) : '';
+    if (!name) { let k = 1; while (all.includes('Guest' + k)) k++; name = 'Guest' + k; }
+    addToRoster(ti, [name]); inp.value = ''; return;
+  }
+  const row = ev.target.closest('.rrow'); if (!row) return;
+  const ti = +row.dataset.team, i = +row.dataset.i;
+  const mv = ev.target.closest('[data-mv]');
+  if (mv) { moveRoster(ti, i, i + +mv.dataset.mv); return; }
+  if (ev.target.closest('[data-rm]')) {
+    const n = game.teams[ti].roster[i];
+    if (game.events.some(e => e.team === ti && e.player === n) && !confirm(`${n} 선수는 기록이 있어요. 로스터에서 빼도 기록은 박스스코어에 남아요. 뺄까요?`)) return;
+    game.teams[ti].roster.splice(i, 1);
+    rosterChanged();
+  }
 });
+$('#rosterEdit').addEventListener('keydown', ev => {
+  if (ev.key !== 'Enter') return;
+  const m = ev.target.id.match(/^(add|guest)(\d)$/); if (!m) return;
+  ev.preventDefault();
+  document.querySelector(m[1] === 'add' ? `[data-radd="${m[2]}"]` : `[data-rguest="${m[2]}"]`).click();
+});
+// 끌어서 순서 바꾸기 (같은 팀 안에서)
+let dragRow = null;
+$('#rosterEdit').addEventListener('dragstart', ev => {
+  const row = ev.target.closest('.rrow'); if (!row) return;
+  dragRow = { ti: +row.dataset.team, i: +row.dataset.i };
+  ev.dataTransfer.setData('text/x-roster', '1'); ev.dataTransfer.effectAllowed = 'move';
+  row.classList.add('drag');
+});
+$('#rosterEdit').addEventListener('dragover', ev => {
+  const row = ev.target.closest('.rrow'); if (!row || !dragRow || +row.dataset.team !== dragRow.ti) return;
+  ev.preventDefault();
+  $$('.rrow.over').forEach(x => x.classList.remove('over')); row.classList.add('over');
+});
+$('#rosterEdit').addEventListener('drop', ev => {
+  const row = ev.target.closest('.rrow');
+  if (row && dragRow && +row.dataset.team === dragRow.ti) { ev.preventDefault(); moveRoster(dragRow.ti, dragRow.i, +row.dataset.i); }
+});
+$('#rosterEdit').addEventListener('dragend', () => { dragRow = null; $$('.rrow.drag, .rrow.over').forEach(x => x.classList.remove('drag', 'over')); });
+function renderNames() {
+  const names = league ? [...new Set(Object.values(league.rosters).flat())] : [];
+  $('#allNames').innerHTML = names.map(n => `<option value="${esc(n)}"></option>`).join('');
+}
 
 function renderLog() {
   const f = $('#logFilter').value;
@@ -690,7 +796,8 @@ $('#timeline').addEventListener('click', ev => {
 
 function renderSetup() {
   $('#title').value = game.title || '';
-  [0, 1].forEach(ti => { $('#t' + ti + 'name').value = game.teams[ti].name; $('#t' + ti + 'roster').value = game.teams[ti].roster.join('\n'); });
+  [0, 1].forEach(ti => { $('#t' + ti + 'name').value = game.teams[ti].name; });
+  renderRoster();
   $('#lag').value = opts.lag; $('#skip').value = opts.skip;
   $('#askAst').checked = opts.askAst; $('#keepSel').checked = opts.keepSel;
   if ($('#syncWeek').options.length) $('#syncWeek').value = game.week || 1;
@@ -709,11 +816,6 @@ function renderAll() { renderSetup(); renderGameSel(); renderEntry(); renderLog(
 $('#title').addEventListener('input', () => { game.title = $('#title').value; save(); });
 [0, 1].forEach(ti => {
   $('#t' + ti + 'name').addEventListener('input', ev => { game.teams[ti].name = ev.target.value; save(); renderEntry(); renderBox(); });
-  // 'change'(칸을 벗어날 때)에 다시 그리면 선수 버튼을 누르는 순간 버튼이 바뀌어 클릭이 씹혀서, 입력하는 대로 반영해요.
-  $('#t' + ti + 'roster').addEventListener('input', ev => {
-    game.teams[ti].roster = [...new Set(ev.target.value.split(/[\n,]/).map(s => s.trim()).filter(Boolean))];
-    save(); renderEntry(); renderBox();
-  });
 });
 $('#btnSwap').addEventListener('click', () => {
   game.teams.reverse();
@@ -780,6 +882,7 @@ $('#btnSheet').addEventListener('click', async () => {
     }).filter(Boolean);
     if (!Object.keys(rosters).length) throw new Error('팀을 못 찾았어요');
     league = { rosters, weeks };
+    renderNames();
     $('#weekSel').innerHTML = weeks.map(w => `<option value="${w.no}">Week ${pad2(w.no)}${w.date ? ' · ' + w.date : ''}</option>`).join('');
     renderMatchSel();
     $('#sheetPick').classList.remove('hidden'); $('#btnApplyMatch').classList.remove('hidden');
@@ -897,9 +1000,12 @@ $('#btnYt').addEventListener('click', () => openYt($('#ytUrl').value));
 $('#ytUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') openYt($('#ytUrl').value); });
 const drop = $('#drop');
 drop.addEventListener('click', () => $('#fileInput').click());
-['dragenter', 'dragover'].forEach(t => document.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach(t => document.addEventListener(t, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+// 로스터 순서 끌기는 영상 끌어놓기와 상관없으니 건너뛰어요.
+const isRosterDrag = ev => ev.dataTransfer && [...ev.dataTransfer.types].includes('text/x-roster');
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, ev => { if (isRosterDrag(ev)) return; ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, ev => { if (isRosterDrag(ev)) return; ev.preventDefault(); drop.classList.remove('over'); }));
 document.addEventListener('drop', ev => {
+  if (isRosterDrag(ev)) return;
   const txt = ev.dataTransfer.getData('text/plain');
   if (ev.dataTransfer.files.length) openFiles(ev.dataTransfer.files);
   else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
@@ -913,11 +1019,11 @@ $('#speed').addEventListener('click', ev => {
   rate = +b.dataset.r; player.rate(rate);
   $$('#speed button').forEach(x => x.classList.toggle('on', x === b));
 });
-$('#tabs').addEventListener('click', ev => {
-  const b = ev.target.closest('[data-tab]'); if (!b) return;
-  $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
-  $$('.pane').forEach(p => p.classList.toggle('hidden', p.id !== 'pane-' + b.dataset.tab));
-});
+function showTab(tab) {
+  $$('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
+  $$('.pane').forEach(p => p.classList.toggle('hidden', p.id !== 'pane-' + tab));
+}
+$('#tabs').addEventListener('click', ev => { const b = ev.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
 
 document.addEventListener('keydown', ev => {
   if (ev.target.closest('input, textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
