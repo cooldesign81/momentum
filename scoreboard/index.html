@@ -1213,13 +1213,14 @@ $('#btnExport').onclick = async () => {
     const videoSource = new MB.CanvasSource(canvas, { codec, bitrate: quality });
     output.addVideoTrack(videoSource);
 
-    let audioSource = null;
+    let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
     if (firstAudio) {
       const sampleRate = firstAudio.sampleRate, numberOfChannels = firstAudio.numberOfChannels;
       const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
       if (acodec) {
-        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: MB.QUALITY_HIGH, transform: { sampleRate, numberOfChannels } });
+        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: MB.QUALITY_HIGH });
+        audioFormat = { sampleRate, numberOfChannels };
         output.addAudioTrack(audioSource);
       }
     }
@@ -1260,8 +1261,12 @@ $('#btnExport').onclick = async () => {
       })();
       const audioJob = (async () => {
         if (!at || !audioSource) return;
-        for await (const s of new MB.AudioSampleSink(at).samples(t0 + from, t0 + to)) {
-          if (job.canceled) { s.close(); throw new Error('canceled'); }
+        const conform = makeResampler(MB, audioFormat.sampleRate, audioFormat.numberOfChannels);
+        for await (const raw of new MB.AudioSampleSink(at).samples(t0 + from, t0 + to)) {
+          if (job.canceled) { raw.close(); throw new Error('canceled'); }
+          const s = conform(raw);
+          if (s !== raw) raw.close();
+          if (!s) continue;
           const ts = base + (s.timestamp - t0) - from;
           if (ts < lastA - 0.02) { s.close(); continue; }
           s.setTimestamp(Math.max(ts, lastA));
@@ -1291,6 +1296,40 @@ $('#btnExport').onclick = async () => {
     setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
   }
 };
+// Clips from different phones/apps can have different sample rates (e.g. 44.1 vs 48 kHz) or
+// channel counts, but one audio track needs constant parameters. Converts each clip's samples to
+// the output format with linear interpolation, carrying state across chunks so there are no clicks.
+function makeResampler(MB, rate, ch) {
+  let prev = null, frac = 0;
+  return s => {
+    const n = s.numberOfFrames, sch = s.numberOfChannels, sr = s.sampleRate;
+    if (sr === rate && sch === ch) return s;
+    const src = [];
+    for (let c = 0; c < sch; c++) {
+      const a = new Float32Array(n);
+      s.copyTo(a, { planeIndex: c, format: 'f32-planar' });
+      src.push(a);
+    }
+    // Source channel mix for output channel c: mono→stereo duplicates, stereo→mono averages.
+    const mix = (i, c) => {
+      const at = (sc) => (i < 0 ? (prev ? prev[sc] : src[sc][0]) : src[sc][Math.min(i, n - 1)]);
+      if (ch === 1 && sch > 1) { let v = 0; for (let sc = 0; sc < sch; sc++) v += at(sc); return v / sch; }
+      return at(Math.min(c, sch - 1));
+    };
+    const step = sr / rate;
+    const outLen = n - 1 - frac >= 0 ? Math.floor((n - 1 - frac) / step) + 1 : 0;
+    const out = new Float32Array(outLen * ch);
+    for (let k = 0; k < outLen; k++) {
+      const p = frac + k * step, i = Math.floor(p), f = p - i;
+      for (let c = 0; c < ch; c++) out[c * outLen + k] = mix(i, c) * (1 - f) + mix(i + 1, c) * f;
+    }
+    const ts = s.timestamp + frac / sr;
+    frac += outLen * step - n;
+    prev = src.map(a => a[n - 1]);
+    if (!outLen) return null;
+    return new MB.AudioSample({ data: out, format: 'f32-planar', numberOfChannels: ch, sampleRate: rate, timestamp: ts });
+  };
+}
 // Bitrate matching the source clips (the highest among them), adjusted for codec efficiency
 // so e.g. an HEVC original re-encoded as H.264 gets proportionally more bits.
 const CODEC_EFF = { avc: 1, hevc: 0.6, vp9: 0.6, av1: 0.4, vp8: 1.2 };
