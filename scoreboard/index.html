@@ -393,7 +393,9 @@ function autoEvents() {
   if (!cfg.autoQ) return [];
   return clips.slice(1).map((c, i) => ({ id: -(i + 1), t: offset(i + 1), kind: 'q', team: 0, v: 1, auto: true, clip: i + 2 }));
 }
-function sorted() { return [...events, ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
+// Cached because the preview loop reads it every frame; changed() clears it.
+let sortedCache = null;
+function sorted() { return sortedCache ??= [...events, ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
 function stateAt(t) {
   const st = { t, q: cfg.startQ, score: [0, 0], fouls: [0, 0], last: [null, null] };
   for (const e of sorted()) {
@@ -431,7 +433,8 @@ function undo() {
     if (i >= 0) { events.splice(i, 1); changed(); return; }
   }
 }
-function changed() { save(); renderEvents(); renderMarkers(); renderLive(); }
+let rev = 0;
+function changed() { sortedCache = null; rev++; save(); renderEvents(); renderMarkers(); renderLive(); }
 
 // ---------- scoreboard drawing ----------
 const FONT = "'Noto Sans KR', system-ui, sans-serif";
@@ -739,19 +742,27 @@ function drawClassic(ctx, W, H, st, s) {
 }
 
 // ---------- preview loop ----------
-function renderOverlay() {
+// The overlay canvas matches the on-screen size (not the video's 4K/1080p size) and is only
+// redrawn when something visible changes, so the preview doesn't compete with video decoding.
+let lastBoardKey = '';
+function renderOverlay(st) {
   if (!video.videoWidth) return;
-  if (overlay.width !== video.videoWidth || overlay.height !== video.videoHeight) {
-    overlay.width = video.videoWidth;
-    overlay.height = video.videoHeight;
-  }
-  octx.clearRect(0, 0, overlay.width, overlay.height);
-  drawBoard(octx, overlay.width, overlay.height, stateAt(gTime()));
+  const stage = $('#stage');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(stage.clientWidth * dpr), h = Math.round(stage.clientHeight * dpr);
+  if (!w || !h) return;
+  const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
+  const key = `${w}x${h}|${rev}|${st.q}|${st.score}|${st.fouls}|${fl}`;
+  if (key === lastBoardKey) return;
+  lastBoardKey = key;
+  if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
+  octx.clearRect(0, 0, w, h);
+  drawBoard(octx, w, h, st);
 }
 let lastLiveKey = '';
 function renderLive() {
   const st = stateAt(gTime());
-  const key = JSON.stringify(st) + JSON.stringify(cfg.teams) + cfg.foulSlots;
+  const key = `${rev}|${st.q}|${st.score}|${st.fouls}`;
   if (key !== lastLiveKey) {
     lastLiveKey = key;
     $('#curQuarter').textContent = quarterLabel(st.q);
@@ -764,15 +775,18 @@ function renderLive() {
       p.querySelector('.fl').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < st.fouls[i] ? 'on' : ''}"></i>`).join('');
     });
   }
-  renderOverlay();
+  renderOverlay(st);
 }
+let lastTimeText = '', lastHead = '';
 function tick() {
   if (clips.length) {
     renderLive();
     const d = total(), T = gTime();
-    $('#timeLabel').textContent = `${fmt(T)} / ${fmt(d)}`;
-    $('#playhead').style.left = d ? `${T / d * 100}%` : '0';
-    highlightCurrentRow();
+    const txt = `${fmt(T)} / ${fmt(d)}`;
+    if (txt !== lastTimeText) { lastTimeText = txt; $('#timeLabel').textContent = txt; }
+    const head = d ? `${(T / d * 100).toFixed(2)}%` : '0';
+    if (head !== lastHead) { lastHead = head; $('#playhead').style.left = head; }
+    highlightCurrentRow(T);
   }
   requestAnimationFrame(tick);
 }
@@ -815,11 +829,14 @@ function renderEvents() {
   });
   $('#events').innerHTML = `<table>${rows.join('')}</table>`;
 }
-function highlightCurrentRow() {
-  const t = gTime();
-  let cur = null;
-  for (const e of sorted()) { if (e.t <= t) cur = e.id; else break; }
-  $$('#events tr').forEach(tr => tr.classList.toggle('cur', Number(tr.dataset.id) === cur));
+let lastRowKey = '';
+function highlightCurrentRow(t = gTime()) {
+  let id = null;
+  for (const e of sorted()) { if (e.t <= t) id = e.id; else break; }
+  const key = `${rev}|${id}`;
+  if (key === lastRowKey) return;
+  lastRowKey = key;
+  $$('#events tr').forEach(tr => tr.classList.toggle('cur', Number(tr.dataset.id) === id));
 }
 $('#events').addEventListener('click', ev => {
   const tr = ev.target.closest('tr');
@@ -1300,6 +1317,8 @@ function renderStyles() {
   });
 }
 document.fonts.ready.then(() => renderStyles());
+// Redraw once web fonts arrive so the preview doesn't keep a fallback-font frame.
+document.fonts.addEventListener('loadingdone', () => { lastBoardKey = ''; });
 
 // Handle for automated tests.
 window.__sb = { gTime, seekG, get cur() { return cur; }, get pending() { return !!pendingSeek; } };
