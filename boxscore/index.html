@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum 박스스코어 입력</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b21;
+    --panel-2: #20242c;
+    --line: #2c313b;
+    --text: #e8eaee;
+    --muted: #8b93a1;
+    --accent: #8ff0e0;
+    --warn: #f2e000;
+    --danger: #ff5a5a;
+    --ta: #8ff0e0;
+    --tb: #ffb86b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', system-ui, sans-serif; font-size: 14px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: #465063; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #0b1a17; border-color: var(--accent); font-weight: 700; }
+  button.mini { padding: 3px 8px; font-size: 12px; font-weight: 400; }
+  input[type=text], input[type=number], select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; }
+  textarea { resize: vertical; min-height: 64px; line-height: 1.5; }
+  kbd { display: inline-block; min-width: 18px; padding: 0 5px; text-align: center; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--bg); font-size: 11px; font-family: ui-monospace, monospace; font-weight: 400; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
+  header h1 span { color: var(--accent); }
+  header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
+  header .yt-in { display: flex; gap: 6px; }
+  header .yt-in input { width: 260px; }
+
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; height: calc(100% - 53px); }
+  .main { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .side { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  @media (max-width: 1000px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .main { overflow: visible; }
+    .side { border-left: 0; border-top: 1px solid var(--line); }
+    header .yt-in input { width: 180px; }
+  }
+
+  .drop { border: 2px dashed var(--line); border-radius: 12px; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 24px; }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .drop strong { color: var(--text); font-size: 16px; }
+
+  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; width: 100%; max-height: 52vh; aspect-ratio: 16 / 9; margin: 0 auto; flex: none; }
+  .stage video, .stage #yt, .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border: 0; }
+  .stage .shield { position: absolute; inset: 0; cursor: pointer; }
+
+  .transport { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: none; }
+  .transport .time { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); margin-left: 4px; }
+  .transport .sp { flex: 1; }
+  .speed button.on { border-color: var(--accent); color: var(--accent); }
+  .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .timeline .mk { position: absolute; width: 2px; height: 9px; pointer-events: none; opacity: .85; }
+  .timeline .mk.a { top: 3px; background: var(--ta); }
+  .timeline .mk.b { bottom: 3px; background: var(--tb); }
+  .timeline .cb { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; opacity: .4; pointer-events: none; }
+  .timeline .head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); pointer-events: none; }
+
+  .scorebar { display: flex; align-items: center; justify-content: center; gap: 14px; font-weight: 700; flex: none; }
+  .scorebar .nm { font-size: 15px; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scorebar .nm.a { color: var(--ta); } .scorebar .nm.b { color: var(--tb); }
+  .scorebar .sc { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; }
+
+  .entry { display: grid; grid-template-columns: 1fr minmax(250px, 300px) 1fr; gap: 10px; flex: none; }
+  @media (max-width: 700px) { .entry { grid-template-columns: 1fr 1fr; } .entry .pad { grid-column: 1 / -1; order: -1; } }
+  .team { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+  .team h3 { margin: 0 0 2px; font-size: 13px; display: flex; justify-content: space-between; gap: 6px; }
+  .team.a h3 { color: var(--ta); } .team.b h3 { color: var(--tb); }
+  .pl { text-align: left; padding: 6px 9px; display: flex; flex-direction: column; gap: 1px; }
+  .pl .n { font-weight: 700; }
+  .pl .s { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .team.a .pl.sel { border-color: var(--ta); background: rgba(143,240,224,.14); }
+  .team.b .pl.sel { border-color: var(--tb); background: rgba(255,184,107,.14); }
+  .pl.pf3 .s { color: var(--warn); }
+  .pl.pf5 { opacity: .55; }
+  .team .add { display: flex; gap: 4px; margin-top: 2px; }
+  .team .add input { padding: 4px 6px; font-size: 12px; }
+  .team .empty { color: var(--muted); font-size: 12px; padding: 8px 2px; line-height: 1.6; }
+
+  .pad { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .pad .who { font-size: 13px; min-height: 20px; text-align: center; }
+  .pad .who b.a { color: var(--ta); } .pad .who b.b { color: var(--tb); }
+  .pad .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .pad .grid button { padding: 9px 4px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+  .pad .grid button.make { color: var(--accent); }
+  .pad .grid button.miss { color: var(--muted); font-weight: 500; }
+  .pad .grid button.foul { color: var(--warn); }
+  .pad .ast { border: 1px dashed var(--accent); border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
+  .pad .ast button { padding: 3px 8px; font-size: 12px; }
+  .toast { font-size: 12px; text-align: center; min-height: 18px; color: var(--muted); }
+  .toast.err { color: var(--danger); }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
+  .tabs button { flex: 1; border: 0; border-radius: 0; background: none; padding: 11px 6px; color: var(--muted); font-weight: 700; border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .pane { overflow: auto; flex: 1; min-height: 0; }
+  section { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  section h2 { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 700; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .check { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .log { display: flex; flex-direction: column; }
+  .log .ev { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+  .log .ev:hover { background: var(--panel-2); }
+  .log .ev .t { font-family: ui-monospace, monospace; color: var(--muted); font-size: 12px; }
+  .log .ev .a { color: var(--ta); font-weight: 700; } .log .ev .b { color: var(--tb); font-weight: 700; }
+  .log .ev .x { border: 0; background: none; color: var(--muted); padding: 2px 6px; }
+  .log .ev .x:hover { color: var(--danger); }
+  .log .ev.now { background: rgba(143,240,224,.07); }
+
+  .box { overflow-x: auto; margin-bottom: 6px; }
+  .box table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .box th, .box td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+  .box th { color: var(--muted); font-weight: 500; }
+  .box th:first-child, .box td:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); }
+  .box th:nth-child(2), .box td:nth-child(2) { text-align: left; position: sticky; left: 26px; background: var(--panel); }
+  .box tr.dnp td { color: var(--muted); }
+  .box tr.tot td { font-weight: 700; border-top: 1px solid var(--muted); }
+  .box td.pts { font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MOMENTUM <span>BOX SCORE</span></h1>
+  <div class="src" id="srcLabel"></div>
+  <div class="yt-in">
+    <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
+    <button id="btnYt">열기</button>
+  </div>
+  <button id="btnOpen">영상 파일 열기</button>
+  <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
+</header>
+
+<div class="app">
+  <div class="main">
+    <div class="drop" id="drop">
+      <strong>경기 영상을 여기로 끌어다 놓거나, 위에서 유튜브 주소를 붙여넣으세요</strong>
+      <div>쿼터별로 나뉜 영상 여러 개를 한 번에 열면 이어서 한 경기로 봐요.</div>
+      <div class="hint">영상 없이도 아래에서 바로 기록할 수 있어요 (시간은 0:00으로 남아요).</div>
+    </div>
+    <div class="stage hidden" id="stage">
+      <video id="video" playsinline preload="auto" class="hidden"></video>
+      <div id="yt" class="hidden"></div>
+      <div class="shield hidden" id="shield" title="클릭: 재생/일시정지"></div>
+    </div>
+    <div class="transport hidden" id="transport">
+      <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
+      <button id="btnBack" title="5초 뒤로 (←)">−5초</button>
+      <button id="btnFwd" title="5초 앞으로 (→)">+5초</button>
+      <span class="time" id="timeLabel">0:00 / 0:00</span>
+      <span class="sp"></span>
+      <span class="speed" id="speed">
+        <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button>
+      </span>
+    </div>
+    <div class="timeline hidden" id="timeline" title="클릭해서 이동">
+      <div id="markers"></div>
+      <div class="head" id="playhead"></div>
+    </div>
+
+    <div class="scorebar">
+      <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
+    </div>
+
+    <div class="entry">
+      <div class="team a" id="teamA"></div>
+      <div class="pad">
+        <div class="who" id="who"></div>
+        <div class="grid" id="statPad"></div>
+        <div class="ast hidden" id="astBar"></div>
+        <div class="row" style="justify-content:center">
+          <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+        </div>
+        <div class="toast" id="toast"></div>
+      </div>
+      <div class="team b" id="teamB"></div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <div class="tabs" id="tabs">
+      <button data-tab="setup" class="on">경기 설정</button>
+      <button data-tab="log">기록 <span id="evCount"></span></button>
+      <button data-tab="box">박스스코어</button>
+    </div>
+
+    <div class="pane" id="pane-setup">
+      <section>
+        <h2>경기 <button id="btnNew" class="mini">+ 새 경기</button></h2>
+        <select id="gameSel"></select>
+        <div class="hint" style="margin-top:6px">입력한 기록은 이 브라우저에 자동 저장돼요.</div>
+      </section>
+      <section>
+        <h2>리그 시트에서 팀·로스터 가져오기</h2>
+        <div class="btns" style="margin-bottom:8px"><button id="btnSheet">시트 읽기</button><span class="hint" id="sheetMsg"></span></div>
+        <div class="grid2 hidden" id="sheetPick">
+          <div class="field"><label>주차</label><select id="weekSel"></select></div>
+          <div class="field"><label>경기</label><select id="matchSel"></select></div>
+        </div>
+        <button id="btnApplyMatch" class="primary hidden" style="width:100%">이 경기로 설정</button>
+      </section>
+      <section>
+        <h2>팀 · 로스터 <button id="btnSwap" class="mini" title="왼쪽/오른쪽 팀 바꾸기">⇄ 좌우 바꾸기</button></h2>
+        <div class="field"><label>경기 이름</label><input type="text" id="title" placeholder="예: Week 03 AB"></div>
+        <div class="grid2">
+          <div class="field"><label style="color:var(--ta)">왼쪽 팀 (시트 A열)</label><input type="text" id="t0name"></div>
+          <div class="field"><label style="color:var(--tb)">오른쪽 팀 (시트 U열)</label><input type="text" id="t1name"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>왼쪽 로스터 (한 줄에 한 명)</label><textarea id="t0roster" rows="8"></textarea></div>
+          <div class="field"><label>오른쪽 로스터</label><textarea id="t1roster" rows="8"></textarea></div>
+        </div>
+      </section>
+      <section>
+        <h2>입력 옵션</h2>
+        <div class="grid2">
+          <div class="field"><label title="버튼을 늦게 누르는 만큼 앞당겨 기록">시간 보정(초)</label><input type="number" id="lag" step="0.5" min="0"></div>
+          <div class="field"><label>되감기 간격(초)</label><input type="number" id="skip" step="1" min="1"></div>
+        </div>
+        <label class="check" style="margin-bottom:6px"><input type="checkbox" id="askAst"> 득점하면 어시스트 준 선수 물어보기</label>
+        <label class="check"><input type="checkbox" id="keepSel"> 기록 후에도 선수 선택 유지</label>
+      </section>
+      <section>
+        <h2>단축키</h2>
+        <div class="hint">
+          선수를 누른 뒤 기록 키를 누르세요.<br>
+          <kbd>2</kbd> 2점 성공 <kbd>W</kbd> 2점 실패 · <kbd>3</kbd> 3점 성공 <kbd>E</kbd> 3점 실패 · <kbd>1</kbd> 자유투 성공 <kbd>Q</kbd> 자유투 실패<br>
+          <kbd>R</kbd> 공격 리바 <kbd>D</kbd> 수비 리바 · <kbd>A</kbd> 어시스트 <kbd>S</kbd> 스틸 <kbd>B</kbd> 블록 <kbd>T</kbd> 턴오버 <kbd>F</kbd> 파울<br>
+          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> 되돌리기
+        </div>
+      </section>
+      <section>
+        <h2>기록 규칙 (리그 시트 기준)</h2>
+        <div class="hint">
+          · 3점슛은 필드골(FGM·FGA)에도 자동으로 들어가요.<br>
+          · 슛하다 파울 당해 안 들어가면 슛 시도는 기록하지 않아요. 들어가면(앤드원) 성공으로 기록하세요.<br>
+          · 리바운드·스틸은 마지막에 잡은 사람으로 기록해요.<br>
+          · 블록 당한 공을 잡은 것도 리바운드예요 (슛 시도도 기록).
+        </div>
+      </section>
+    </div>
+
+    <div class="pane hidden" id="pane-log">
+      <section class="row">
+        <select id="logFilter"></select>
+        <label class="check" style="white-space:nowrap"><input type="checkbox" id="logFollow" checked> 영상 따라가기</label>
+      </section>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="pane hidden" id="pane-box">
+      <section>
+        <h2 id="boxTitleA"></h2>
+        <div class="box" id="boxA"></div>
+        <div class="btns"><button id="copyA" class="primary">시트용 복사</button></div>
+      </section>
+      <section>
+        <h2 id="boxTitleB"></h2>
+        <div class="box" id="boxB"></div>
+        <div class="btns"><button id="copyB" class="primary">시트용 복사</button></div>
+      </section>
+      <section>
+        <h2>구글 시트로 보내기</h2>
+        <div class="grid2">
+          <div class="field"><label>주차</label><select id="syncWeek"></select></div>
+          <div class="field"><label>&nbsp;</label><button id="btnSync" class="primary">시트에 기록 넣기</button></div>
+        </div>
+        <div class="hint" id="syncMsg">왼쪽/오른쪽 팀 이름으로 그 주 탭의 경기 블록을 찾아서 선수 칸을 채워요. 수식 칸(PTS·REB·%·TEAM·점수 줄)은 그대로 둬요.</div>
+        <details id="syncSetup" style="margin-top:8px">
+          <summary class="hint" style="cursor:pointer">연동 설정</summary>
+          <div class="field" style="margin-top:8px"><label>Apps Script 웹 앱 URL</label><input type="text" id="syncUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+          <div class="field"><label>기록 입력 비밀번호 (스크립트 속성 BOX_KEY)</label><input type="text" id="syncKey" autocomplete="off"></div>
+          <div class="btns"><button id="btnSyncTest">연결 확인</button></div>
+          <div class="hint" style="margin-top:6px">처음 한 번 리그 시트에 <a href="apps-script.gs" target="_blank" style="color:var(--accent)">apps-script.gs</a>를 설치해야 해요. 방법은 파일 맨 위에 적혀 있어요. URL과 비밀번호는 이 브라우저에만 저장돼요.</div>
+        </details>
+      </section>
+      <section>
+        <h2>직접 붙여넣기</h2>
+        <div class="hint">
+          1. 리그 시트의 해당 주(Week) 탭에서 이 경기 블록을 찾아요.<br>
+          2. 왼쪽 팀은 A열, 오른쪽 팀은 U열의 <b>PLAYER 바로 아래 칸</b>을 클릭하고 [시트용 복사] → 붙여넣기(Ctrl+V).<br>
+          3. 선수 이름부터 PF까지 19칸이 순서대로 들어가요. 체크를 끈 선수(결장)는 빠져요.<br>
+          4. 점수 줄(예: <i>팀A 35 : 33 팀B</i>)은 아래 버튼으로 복사해서 블록 두 번째 줄에 넣어요.
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button id="copyScore">점수 줄 복사</button>
+          <button id="btnCsv">CSV 저장</button>
+          <button id="btnSaveJson">기록 파일 저장</button>
+          <button id="btnLoadJson">기록 파일 불러오기</button>
+          <button id="btnClear" style="color:var(--danger)">기록 모두 지우기</button>
+        </div>
+        <input type="file" id="jsonInput" accept="application/json,.json" class="hidden">
+      </section>
+    </div>
+  </aside>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad2 = n => String(n).padStart(2, '0');
+const fmt = t => { t = Math.max(0, t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t % 60); return (h ? h + ':' + pad2(m) : m) + ':' + pad2(s); };
+const SHEET_ID = '1_ufPBGuOO4if6MAWgTZ9FQ75Nec1hnUYVWx-ZUkoUak';   // index.html의 CONFIG.league.sheetId와 같은 시트
+
+// ---------- 기록 항목 ----------
+// 리그 시트 Week 탭의 열 순서 (PLAYER 다음부터)
+const OUT = [['pts', 'PTS'], ['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%'], ['tpm', '3PM'], ['tpa', '3PA'], ['tpp', '3P%'], ['ftm', 'FTM'], ['fta', 'FTA'], ['ftp', 'FT%'],
+  ['reb', 'REB'], ['ast', 'AST'], ['to', 'TO'], ['stl', 'STL'], ['blk', 'BLK'], ['oreb', 'OREB'], ['dreb', 'DREB'], ['pf', 'PF']];
+const COUNT_KEYS = OUT.map(o => o[0]).filter(k => !/p$/.test(k) || k === 'pts');
+const STATS = [
+  { k: 'p2', label: '2점 성공', short: '2점 성공', key: '2', cls: 'make', fx: { pts: 2, fgm: 1, fga: 1 } },
+  { k: 'm2', label: '2점 실패', short: '2점 실패', key: 'W', cls: 'miss', fx: { fga: 1 } },
+  { k: 'p3', label: '3점 성공', short: '3점 성공', key: '3', cls: 'make', fx: { pts: 3, fgm: 1, fga: 1, tpm: 1, tpa: 1 } },
+  { k: 'm3', label: '3점 실패', short: '3점 실패', key: 'E', cls: 'miss', fx: { fga: 1, tpa: 1 } },
+  { k: 'ft', label: '자유투 성공', short: '자유투 성공', key: '1', cls: 'make', fx: { pts: 1, ftm: 1, fta: 1 } },
+  { k: 'mft', label: '자유투 실패', short: '자유투 실패', key: 'Q', cls: 'miss', fx: { fta: 1 } },
+  { k: 'oreb', label: '공격 리바', short: '공격 리바운드', key: 'R', fx: { oreb: 1, reb: 1 } },
+  { k: 'dreb', label: '수비 리바', short: '수비 리바운드', key: 'D', fx: { dreb: 1, reb: 1 } },
+  { k: 'ast', label: '어시스트', short: '어시스트', key: 'A', fx: { ast: 1 } },
+  { k: 'stl', label: '스틸', short: '스틸', key: 'S', fx: { stl: 1 } },
+  { k: 'blk', label: '블록', short: '블록', key: 'B', fx: { blk: 1 } },
+  { k: 'to', label: '턴오버', short: '턴오버', key: 'T', fx: { to: 1 } },
+  { k: 'pf', label: '파울', short: '파울', key: 'F', cls: 'foul', fx: { pf: 1 } },
+];
+const STAT = Object.fromEntries(STATS.map(s => [s.k, s]));
+const KEYMAP = Object.fromEntries(STATS.map(s => [s.key.toLowerCase(), s.k]));
+
+// ---------- 저장 ----------
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+const OPT_KEY = 'mm-box:opts';
+const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true }, lsGet(OPT_KEY));
+function newGame() {
+  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], played: {}, source: null, updated: Date.now() };
+}
+function gameIndex() { return lsGet('mm-box:index') || []; }
+let game = null;
+let saveTimer = null;
+function save() {
+  game.updated = Date.now();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    lsSet('mm-box:g:' + game.id, game);
+    const idx = gameIndex().filter(g => g.id !== game.id);
+    idx.unshift({ id: game.id, title: gameTitle(), updated: game.updated });
+    lsSet('mm-box:index', idx.slice(0, 60));
+    lsSet('mm-box:last', game.id);
+    renderGameSel();
+  }, 150);
+}
+const gameTitle = () => game.title || `${game.teams[0].name} vs ${game.teams[1].name}`;
+function loadGame(id) {
+  const g = id && lsGet('mm-box:g:' + id);
+  game = g || newGame();
+  game.played = game.played || {};
+  undoStack = [];
+  selected = null; astPending = null;
+  renderAll();
+}
+
+// ---------- 계산 ----------
+function blankLine(name) { const l = { name }; COUNT_KEYS.forEach(k => l[k] = 0); return l; }
+function finishLine(l) {
+  l.fgp = l.fga ? l.fgm / l.fga : null;
+  l.tpp = l.tpa ? l.tpm / l.tpa : null;
+  l.ftp = l.fta ? l.ftm / l.fta : null;
+  return l;
+}
+// 팀별 [선수 기록...] — 로스터 순서, 로스터에 없는데 기록이 있는 선수는 뒤에
+function boxOf(ti) {
+  const t = game.teams[ti], m = new Map();
+  t.roster.forEach(n => m.set(n, blankLine(n)));
+  for (const e of game.events) {
+    if (e.team !== ti) continue;
+    if (!m.has(e.player)) m.set(e.player, blankLine(e.player));
+    const l = m.get(e.player); l.n = (l.n || 0) + 1;
+    Object.entries(STAT[e.k].fx).forEach(([k, v]) => l[k] += v);
+  }
+  return [...m.values()].map(l => { l.played = isPlayed(ti, l); return finishLine(l); });
+}
+function isPlayed(ti, l) { const o = game.played[ti + ':' + l.name]; return o === undefined ? !!l.n : o; }
+function totalOf(lines) {
+  const t = blankLine('TEAM');
+  lines.filter(l => l.played).forEach(l => COUNT_KEYS.forEach(k => t[k] += l[k]));
+  return finishLine(t);
+}
+const scoreOf = ti => game.events.reduce((s, e) => s + (e.team === ti ? (STAT[e.k].fx.pts || 0) : 0), 0);
+const pct = v => v === null ? '' : Math.round(v * 1000) / 10 + '';
+const pctRaw = v => v === null ? '' : String(Math.round(v * 10000) / 10000);
+
+// ---------- 영상 (파일 여러 개 또는 유튜브) ----------
+const video = $('#video');
+let mode = null;          // 'file' | 'yt'
+let clips = [];           // {name, url, dur}
+let cur = 0;
+let yt = null, ytReady = false;
+function offset(k) { let o = 0; for (let i = 0; i < k; i++) o += clips[i].dur; return o; }
+function clipAt(T) {
+  let o = 0;
+  for (let k = 0; k < clips.length; k++) {
+    if (T < o + clips[k].dur || k === clips.length - 1) return [k, Math.max(0, T - o)];
+    o += clips[k].dur;
+  }
+  return [0, 0];
+}
+let pendingSeek = null;
+const player = {
+  time() {
+    if (mode === 'yt') return ytReady ? yt.getCurrentTime() || 0 : 0;
+    if (mode === 'file') return offset(cur) + (pendingSeek ? pendingSeek.t : video.currentTime);
+    return 0;
+  },
+  duration() {
+    if (mode === 'yt') return ytReady ? yt.getDuration() || 0 : 0;
+    if (mode === 'file') return offset(clips.length);
+    return 0;
+  },
+  paused() {
+    if (mode === 'yt') return !ytReady || yt.getPlayerState() !== 1;
+    return video.paused;
+  },
+  play() { if (mode === 'yt') ytReady && yt.playVideo(); else if (mode === 'file') video.play().catch(() => {}); },
+  pause() { if (mode === 'yt') ytReady && yt.pauseVideo(); else if (mode === 'file') video.pause(); },
+  toggle() { this.paused() ? this.play() : this.pause(); },
+  seek(T) {
+    T = Math.max(0, Math.min(Math.max(0, this.duration() - 0.05), T));
+    if (mode === 'yt') { ytReady && yt.seekTo(T, true); return; }
+    if (mode !== 'file' || !clips.length) return;
+    const [k, t] = clipAt(T);
+    if (k !== cur) {
+      const play = !video.paused;
+      cur = k; pendingSeek = { t, play };
+      video.src = clips[k].url;
+    } else if (pendingSeek) pendingSeek.t = t;
+    else video.currentTime = t;
+  },
+  rate(r) { if (mode === 'yt') ytReady && yt.setPlaybackRate(r); else video.playbackRate = r; },
+};
+video.addEventListener('loadedmetadata', () => {
+  video.playbackRate = rate;
+  if (pendingSeek) { video.currentTime = pendingSeek.t; if (pendingSeek.play) video.play().catch(() => {}); pendingSeek = null; }
+});
+video.addEventListener('ended', () => { if (cur < clips.length - 1) { cur++; pendingSeek = { t: 0, play: true }; video.src = clips[cur].url; } });
+video.addEventListener('play', updatePlayBtn);
+video.addEventListener('pause', updatePlayBtn);
+
+function probe(url) {
+  return new Promise(res => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => res(isFinite(v.duration) ? v.duration : 0);
+    v.onerror = () => res(0);
+    v.src = url;
+  });
+}
+async function openFiles(files) {
+  files = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name));
+  if (!files.length) return;
+  files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  teardownYt();
+  clips.forEach(c => URL.revokeObjectURL(c.url));
+  clips = await Promise.all(files.map(async f => { const url = URL.createObjectURL(f); return { name: f.name, url, dur: await probe(url) }; }));
+  mode = 'file'; cur = 0; pendingSeek = null;
+  video.src = clips[0].url;
+  showStage();
+  $('#srcLabel').textContent = clips.map(c => c.name).join(' → ');
+  const src = { type: 'file', names: clips.map(c => c.name) };
+  if (!game.events.length || !game.source) { game.source = src; save(); }
+  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
+}
+function ytIdOf(url) { const m = String(url).match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/); return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : ''); }
+function loadYtApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  return new Promise(res => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { prev && prev(); res(); };
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  });
+}
+function teardownYt() {
+  if (yt) { try { yt.destroy(); } catch {} yt = null; ytReady = false; }
+  const box = $('#stage');
+  if (!$('#yt')) { const d = document.createElement('div'); d.id = 'yt'; d.className = 'hidden'; box.insertBefore(d, $('#shield')); }
+}
+async function openYt(url) {
+  const id = ytIdOf(url);
+  if (!id) { toast('유튜브 주소를 확인해주세요.', true); return; }
+  teardownYt();
+  video.pause(); video.removeAttribute('src'); video.load();
+  clips.forEach(c => URL.revokeObjectURL(c.url)); clips = [];
+  mode = 'yt';
+  showStage();
+  $('#srcLabel').textContent = 'YouTube · ' + id;
+  const src = { type: 'yt', id };
+  if (!game.events.length || !game.source) { game.source = src; save(); }
+  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
+  await loadYtApi();
+  yt = new YT.Player('yt', {
+    videoId: id,
+    playerVars: { controls: 0, disablekb: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+    events: {
+      onReady: () => { ytReady = true; yt.setPlaybackRate(rate); renderMarkers(); },
+      onStateChange: updatePlayBtn,
+    },
+  });
+}
+function showStage() {
+  $('#drop').classList.add('hidden');
+  ['#stage', '#transport', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
+  video.classList.toggle('hidden', mode !== 'file');
+  $('#yt') && $('#yt').classList.toggle('hidden', mode !== 'yt');
+  // 유튜브 화면을 누르면 키보드 포커스가 영상 안으로 들어가 단축키가 안 먹어서, 투명 막으로 덮어요.
+  $('#shield').classList.toggle('hidden', mode !== 'yt');
+  renderMarkers();
+}
+let rate = 1;
+function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ 재생' : '❚❚ 정지'; }
+
+// ---------- 입력 ----------
+let selected = null;      // {team, name}
+let astPending = null;    // {team, scorer, t, timer}
+let undoStack = [];
+let nextId = () => (game.events.reduce((m, e) => Math.max(m, e.id), 0) + 1);
+
+function record(k, who = selected) {
+  if (!who) { toast('먼저 선수를 고르세요.', true); return; }
+  const t = Math.max(0, player.time() - (+opts.lag || 0));
+  const e = { id: nextId(), t: Math.round(t * 10) / 10, team: who.team, player: who.name, k };
+  game.events.push(e);
+  game.events.sort((a, b) => a.t - b.t || a.id - b.id);
+  undoStack.push(e.id);
+  if (k !== 'ast') clearAst();
+  toast(`${who.name} · ${STAT[k].short}`);
+  if (opts.askAst && (k === 'p2' || k === 'p3')) askAssist(who, e.t);
+  if (!opts.keepSel && who === selected) selected = null;
+  save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
+}
+function askAssist(who, t) {
+  const mates = game.teams[who.team].roster.filter(n => n !== who.name);
+  if (!mates.length) return;
+  astPending = { team: who.team, t };
+  $('#astBar').innerHTML = `<span>어시스트?</span>${mates.map(n => `<button data-ast="${esc(n)}">${esc(n)}</button>`).join('')}<button data-ast="">없음 <kbd>Esc</kbd></button>`;
+  $('#astBar').classList.remove('hidden');
+}
+function clearAst() { astPending = null; $('#astBar').classList.add('hidden'); }
+$('#astBar').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-ast]'); if (!b || !astPending) return;
+  const name = b.dataset.ast, p = astPending;
+  clearAst();
+  if (!name) return;
+  const e = { id: nextId(), t: p.t, team: p.team, player: name, k: 'ast' };
+  game.events.push(e); game.events.sort((a, b) => a.t - b.t || a.id - b.id);
+  undoStack.push(e.id);
+  toast(`${name} · 어시스트`);
+  save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
+});
+function undo() {
+  const id = undoStack.pop() ?? (game.events.length ? game.events.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
+  if (id == null) return;
+  const e = game.events.find(x => x.id === id);
+  if (!e) return undo();
+  removeEvent(id);
+  toast(`되돌림: ${e.player} · ${STAT[e.k].short}`);
+}
+function removeEvent(id) {
+  game.events = game.events.filter(e => e.id !== id);
+  clearAst();
+  save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
+}
+let toastTimer = null;
+function toast(msg, err) {
+  const el = $('#toast'); el.textContent = msg; el.classList.toggle('err', !!err);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.textContent = ''; }, 3500);
+}
+
+// ---------- 화면 ----------
+function renderEntry() {
+  const lines = [0, 1].map(boxOf);
+  [0, 1].forEach(ti => {
+    const t = game.teams[ti], el = ti ? $('#teamB') : $('#teamA');
+    const byName = Object.fromEntries(lines[ti].map(l => [l.name, l]));
+    const names = [...t.roster, ...lines[ti].filter(l => !t.roster.includes(l.name)).map(l => l.name)];
+    el.innerHTML = `<h3><span>${esc(t.name)}</span><span>${scoreOf(ti)}</span></h3>` +
+      (names.length ? names.map(n => {
+        const l = byName[n], sel = selected && selected.team === ti && selected.name === n;
+        const line = [`${l.pts}점`, l.reb && `${l.reb}리`, l.ast && `${l.ast}어`, l.stl && `${l.stl}스`, l.blk && `${l.blk}블`, l.to && `${l.to}턴`, l.pf && `${l.pf}파울`].filter(Boolean).join(' ');
+        return `<button class="pl ${sel ? 'sel' : ''} ${l.pf >= 5 ? 'pf5' : l.pf >= 4 ? 'pf3' : ''}" data-team="${ti}" data-name="${esc(n)}"><span class="n">${esc(n)}</span><span class="s">${line}</span></button>`;
+      }).join('') : `<div class="empty">오른쪽 [경기 설정]에서 로스터를 넣거나<br>아래에 이름을 추가하세요.</div>`) +
+      `<div class="add"><input type="text" placeholder="선수·게스트 추가" data-add="${ti}"><button class="mini" data-addbtn="${ti}">+</button></div>`;
+  });
+  const s = selected;
+  $('#who').innerHTML = s ? `<b class="${s.team ? 'b' : 'a'}">${esc(s.name)}</b> <span class="muted">· ${esc(game.teams[s.team].name)}</span>` : '<span class="muted">선수를 먼저 고르세요</span>';
+  $('#sbA').textContent = game.teams[0].name; $('#sbB').textContent = game.teams[1].name;
+  $('#sbScore').textContent = `${scoreOf(0)} : ${scoreOf(1)}`;
+  $('#evCount').textContent = game.events.length || '';
+}
+$('#statPad').innerHTML = STATS.map(s => `<button class="${s.cls || ''}" data-k="${s.k}">${s.label} <kbd>${s.key}</kbd></button>`).join('');
+$('#statPad').addEventListener('click', ev => { const b = ev.target.closest('[data-k]'); if (b) record(b.dataset.k); });
+
+function onTeamClick(ev) {
+  const b = ev.target.closest('.pl');
+  if (b) {
+    const ti = +b.dataset.team, name = b.dataset.name;
+    selected = selected && selected.team === ti && selected.name === name ? null : { team: ti, name };
+    renderEntry(); return;
+  }
+  const add = ev.target.closest('[data-addbtn]');
+  if (add) addPlayer(+add.dataset.addbtn);
+}
+function addPlayer(ti) {
+  const inp = document.querySelector(`[data-add="${ti}"]`), name = inp.value.trim();
+  if (!name) return;
+  if (!game.teams[ti].roster.includes(name)) game.teams[ti].roster.push(name);
+  selected = { team: ti, name };
+  save(); renderAll();
+}
+['#teamA', '#teamB'].forEach(s => {
+  $(s).addEventListener('click', onTeamClick);
+  $(s).addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset.add !== undefined) addPlayer(+ev.target.dataset.add); });
+});
+
+function renderLog() {
+  const f = $('#logFilter').value;
+  const opts2 = [['', '전체 선수'], ...[0, 1].flatMap(ti => boxOf(ti).filter(l => l.n).map(l => [ti + ':' + l.name, `${game.teams[ti].name} · ${l.name}`]))];
+  $('#logFilter').innerHTML = opts2.map(([v, l]) => `<option value="${esc(v)}" ${v === f ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  const list = game.events.filter(e => !f || f === e.team + ':' + e.player);
+  $('#log').innerHTML = list.length ? list.map(e => `<div class="ev" data-id="${e.id}" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${e.id}" title="지우기">✕</button></div>`).join('')
+    : '<section class="hint">아직 기록이 없어요.</section>';
+  lastNow = null;
+}
+$('#logFilter').addEventListener('change', renderLog);
+$('#log').addEventListener('click', ev => {
+  const del = ev.target.closest('[data-del]');
+  if (del) { removeEvent(+del.dataset.del); return; }
+  const row = ev.target.closest('.ev');
+  if (row) player.seek(+row.dataset.t - 3);
+});
+
+function boxTable(ti) {
+  const lines = boxOf(ti), tot = totalOf(lines);
+  const cell = (l, k) => /p$/.test(k) && k !== 'pts' ? pct(l[k]) : l[k];
+  return `<table><thead><tr><th title="출전">출전</th><th>선수</th>${OUT.map(o => `<th>${o[1]}</th>`).join('')}</tr></thead><tbody>` +
+    lines.map(l => `<tr class="${l.played ? '' : 'dnp'}"><td><input type="checkbox" data-play="${ti}" data-name="${esc(l.name)}" ${l.played ? 'checked' : ''}></td><td>${esc(l.name)}</td>${OUT.map(o => `<td class="${o[0] === 'pts' ? 'pts' : ''}">${cell(l, o[0])}</td>`).join('')}</tr>`).join('') +
+    `<tr class="tot"><td></td><td>TEAM</td>${OUT.map(o => `<td>${cell(tot, o[0])}</td>`).join('')}</tr></tbody></table>`;
+}
+function renderBox() {
+  $('#boxTitleA').innerHTML = `<span style="color:var(--ta)">${esc(game.teams[0].name)} · ${scoreOf(0)}점</span>`;
+  $('#boxTitleB').innerHTML = `<span style="color:var(--tb)">${esc(game.teams[1].name)} · ${scoreOf(1)}점</span>`;
+  $('#boxA').innerHTML = boxTable(0);
+  $('#boxB').innerHTML = boxTable(1);
+}
+$('#pane-box').addEventListener('change', ev => {
+  const c = ev.target.closest('[data-play]'); if (!c) return;
+  game.played[c.dataset.play + ':' + c.dataset.name] = c.checked;
+  save(); renderBox();
+});
+
+function renderMarkers() {
+  const D = player.duration() || Math.max(60, ...game.events.map(e => e.t + 10));
+  let h = game.events.map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${(e.t / D * 100).toFixed(3)}%"></div>`).join('');
+  if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${(offset(i + 1) / D * 100).toFixed(3)}%"></div>`).join('');
+  $('#markers').innerHTML = h;
+}
+$('#timeline').addEventListener('click', ev => {
+  const r = $('#timeline').getBoundingClientRect();
+  player.seek((ev.clientX - r.left) / r.width * player.duration());
+});
+
+function renderSetup() {
+  $('#title').value = game.title || '';
+  [0, 1].forEach(ti => { $('#t' + ti + 'name').value = game.teams[ti].name; $('#t' + ti + 'roster').value = game.teams[ti].roster.join('\n'); });
+  $('#lag').value = opts.lag; $('#skip').value = opts.skip;
+  $('#askAst').checked = opts.askAst; $('#keepSel').checked = opts.keepSel;
+  if ($('#syncWeek').options.length) $('#syncWeek').value = game.week || 1;
+}
+function renderGameSel() {
+  const idx = gameIndex();
+  if (!idx.some(g => g.id === game.id)) idx.unshift({ id: game.id, title: gameTitle(), updated: game.updated });
+  $('#gameSel').innerHTML = idx.map(g => {
+    const d = new Date(g.updated);
+    return `<option value="${g.id}" ${g.id === game.id ? 'selected' : ''}>${esc(g.id === game.id ? gameTitle() : g.title)} · ${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}</option>`;
+  }).join('');
+}
+function renderAll() { renderSetup(); renderGameSel(); renderEntry(); renderLog(); renderBox(); renderMarkers(); }
+
+// 설정 입력
+$('#title').addEventListener('input', () => { game.title = $('#title').value; save(); });
+[0, 1].forEach(ti => {
+  $('#t' + ti + 'name').addEventListener('input', ev => { game.teams[ti].name = ev.target.value; save(); renderEntry(); renderBox(); });
+  // 'change'(칸을 벗어날 때)에 다시 그리면 선수 버튼을 누르는 순간 버튼이 바뀌어 클릭이 씹혀서, 입력하는 대로 반영해요.
+  $('#t' + ti + 'roster').addEventListener('input', ev => {
+    game.teams[ti].roster = [...new Set(ev.target.value.split(/[\n,]/).map(s => s.trim()).filter(Boolean))];
+    save(); renderEntry(); renderBox();
+  });
+});
+$('#btnSwap').addEventListener('click', () => {
+  game.teams.reverse();
+  game.events.forEach(e => e.team = 1 - e.team);
+  game.played = Object.fromEntries(Object.entries(game.played).map(([k, v]) => [(1 - +k[0]) + k.slice(1), v]));
+  if (selected) selected = { ...selected, team: 1 - selected.team };
+  clearAst(); save(); renderAll();
+});
+function saveOpts() { lsSet(OPT_KEY, opts); }
+$('#lag').addEventListener('change', ev => { opts.lag = Math.max(0, +ev.target.value || 0); saveOpts(); });
+$('#skip').addEventListener('change', ev => { opts.skip = Math.max(1, +ev.target.value || 5); saveOpts(); });
+$('#askAst').addEventListener('change', ev => { opts.askAst = ev.target.checked; saveOpts(); if (!opts.askAst) clearAst(); });
+$('#keepSel').addEventListener('change', ev => { opts.keepSel = ev.target.checked; saveOpts(); });
+$('#gameSel').addEventListener('change', ev => loadGame(ev.target.value));
+$('#btnNew').addEventListener('click', () => {
+  game = newGame(); game.played = {}; undoStack = []; selected = null; clearAst();
+  if (mode === 'yt') game.source = { type: 'yt', id: ytIdOf($('#ytUrl').value) || null };
+  else if (mode === 'file') game.source = { type: 'file', names: clips.map(c => c.name) };
+  save(); renderAll(); toast('새 경기를 시작했어요.');
+});
+
+// ---------- 리그 시트 읽기 ----------
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.map(r => r.map(v => v.trim()));
+}
+async function fetchSheet(sheet, range) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const t = await res.text();
+  if (/^\s*</.test(t)) throw new Error('시트가 공개되어 있지 않아요');
+  return parseCSV(t);
+}
+let league = null;   // {rosters, weeks: [{no, date, matchups: [[a, b, label]]}]}
+$('#btnSheet').addEventListener('click', async () => {
+  const msg = $('#sheetMsg'); msg.textContent = '읽는 중…';
+  try {
+    const lists = await fetchSheet('LISTS', 'A1:F44');
+    const cell = (g, r, c) => (g[r] || [])[c] || '';
+    const rosters = {};
+    [3, 4, 5].forEach((c, i) => {
+      const t = cell(lists, 2, c) || cell(lists, 1 + i, 1);
+      if (!t) return;
+      rosters[t] = [];
+      for (let r = 3; r < 44; r++) { const n = cell(lists, r, c); if (n && !/guest|게스트/i.test(n)) rosters[t].push(n); }
+    });
+    const grids = await Promise.all(Array.from({ length: 12 }, (_, i) => fetchSheet('Week ' + pad2(i + 1), 'A1:U64').catch(() => null)));
+    const weeks = grids.map((g, i) => {
+      if (!g) return null;
+      const m = (cell(g, 0, 20) || (g.find(r => /\d{4}\D+\d{1,2}\D+\d{1,2}/.test(r[20] || '')) || [])[20] || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+      const matchups = [];
+      g.forEach((row, r) => { if (/MATCH\s*$/i.test(row[0] || '')) { const a = cell(g, r + 2, 0), b = cell(g, r + 2, 20); if (a && b) matchups.push([a, b, row[0].replace(/\s*MATCH/i, '').trim()]); } });
+      return matchups.length ? { no: i + 1, date: m ? `${+m[2]}/${+m[3]}` : '', matchups } : null;
+    }).filter(Boolean);
+    if (!Object.keys(rosters).length) throw new Error('팀을 못 찾았어요');
+    league = { rosters, weeks };
+    $('#weekSel').innerHTML = weeks.map(w => `<option value="${w.no}">Week ${pad2(w.no)}${w.date ? ' · ' + w.date : ''}</option>`).join('');
+    renderMatchSel();
+    $('#sheetPick').classList.remove('hidden'); $('#btnApplyMatch').classList.remove('hidden');
+    msg.textContent = `팀 ${Object.keys(rosters).length}개, ${weeks.length}주 일정`;
+  } catch (e) {
+    msg.textContent = '못 읽었어요: ' + e.message;
+  }
+});
+function renderMatchSel() {
+  const w = league.weeks.find(x => x.no === +$('#weekSel').value);
+  $('#matchSel').innerHTML = (w ? w.matchups : []).map((m, i) => `<option value="${i}">${esc(m[2])} · ${esc(m[0])} vs ${esc(m[1])}</option>`).join('');
+}
+$('#weekSel').addEventListener('change', renderMatchSel);
+$('#btnApplyMatch').addEventListener('click', () => {
+  const w = league.weeks.find(x => x.no === +$('#weekSel').value); if (!w) return;
+  const m = w.matchups[+$('#matchSel').value]; if (!m) return;
+  if (game.events.length && !confirm('기록이 있는 경기예요. 팀과 로스터만 바꿀까요? (기록은 그대로 남아요)')) return;
+  game.teams = [{ name: m[0], roster: [...(league.rosters[m[0]] || [])] }, { name: m[1], roster: [...(league.rosters[m[1]] || [])] }];
+  game.title = `Week ${pad2(w.no)} ${m[2]}`;
+  game.week = w.no;
+  selected = null; clearAst();
+  save(); renderAll(); toast('팀과 로스터를 가져왔어요.');
+});
+
+// ---------- 내보내기 ----------
+function sheetRows(ti) {
+  return boxOf(ti).filter(l => l.played).map(l => [l.name, ...OUT.map(([k]) => /p$/.test(k) && k !== 'pts' ? pctRaw(l[k]) : l[k])].join('\t')).join('\n');
+}
+async function copy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`${what} 복사했어요. 시트에 붙여넣으세요.`); }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove();
+    toast(ok ? `${what} 복사했어요.` : '복사하지 못했어요.', !ok);
+  }
+}
+$('#copyA').addEventListener('click', () => { const t = sheetRows(0); t ? copy(t, game.teams[0].name + ' 기록') : toast('출전 체크된 선수가 없어요.', true); });
+$('#copyB').addEventListener('click', () => { const t = sheetRows(1); t ? copy(t, game.teams[1].name + ' 기록') : toast('출전 체크된 선수가 없어요.', true); });
+$('#copyScore').addEventListener('click', () => copy(`${game.teams[0].name}  ${scoreOf(0)} : ${scoreOf(1)}  ${game.teams[1].name}`, '점수 줄'));
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const fileBase = () => gameTitle().replace(/[\\/:*?"<>|]/g, '_');
+$('#btnCsv').addEventListener('click', () => {
+  const q = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const rows = [['TEAM', 'PLAYER', ...OUT.map(o => o[1])]];
+  [0, 1].forEach(ti => boxOf(ti).filter(l => l.played).forEach(l => rows.push([game.teams[ti].name, l.name, ...OUT.map(([k]) => /p$/.test(k) && k !== 'pts' ? pct(l[k]) : l[k])])));
+  download(fileBase() + '.csv', '﻿' + rows.map(r => r.map(q).join(',')).join('\n'), 'text/csv');
+});
+$('#btnSaveJson').addEventListener('click', () => download(fileBase() + '.boxscore.json', JSON.stringify(game, null, 1), 'application/json'));
+$('#btnLoadJson').addEventListener('click', () => $('#jsonInput').click());
+$('#jsonInput').addEventListener('change', async ev => {
+  const f = ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  try {
+    const g = JSON.parse(await f.text());
+    if (!g || !Array.isArray(g.events) || !Array.isArray(g.teams)) throw new Error();
+    game = { ...newGame(), ...g, played: g.played || {} };
+    undoStack = []; selected = null; clearAst();
+    save(); renderAll(); toast('기록 파일을 불러왔어요.');
+  } catch { toast('기록 파일이 아니에요.', true); }
+});
+$('#btnClear').addEventListener('click', () => {
+  if (!game.events.length || !confirm('이 경기의 기록을 모두 지울까요?')) return;
+  game.events = []; game.played = {}; undoStack = []; clearAst();
+  save(); renderAll();
+});
+
+// ---------- 구글 시트 연동 (Apps Script 웹 앱) ----------
+const SYNC_KEY = 'mm-box:sync';
+const sync = Object.assign({ url: '', key: '' }, lsGet(SYNC_KEY));
+$('#syncUrl').value = sync.url; $('#syncKey').value = sync.key;
+if (!sync.url) $('#syncSetup').open = true;
+$('#syncUrl').addEventListener('change', ev => { sync.url = ev.target.value.trim(); lsSet(SYNC_KEY, sync); });
+$('#syncKey').addEventListener('change', ev => { sync.key = ev.target.value.trim(); lsSet(SYNC_KEY, sync); });
+$('#syncWeek').innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">Week ${pad2(i + 1)}</option>`).join('');
+$('#syncWeek').addEventListener('change', ev => { game.week = +ev.target.value; save(); });
+function syncRows(ti) {
+  return boxOf(ti).filter(l => l.played).map(l => [l.name, ...OUT.map(([k]) => /p$/.test(k) && k !== 'pts' ? (l[k] === null ? '' : Math.round(l[k] * 10000) / 10000) : l[k])]);
+}
+async function callSheet(dryRun) {
+  const msg = $('#syncMsg');
+  if (!sync.url || !sync.key) { $('#syncSetup').open = true; msg.textContent = '연동 설정에 웹 앱 URL과 비밀번호를 넣어주세요.'; return null; }
+  msg.textContent = dryRun ? '확인하는 중…' : '시트에 넣는 중…';
+  try {
+    // text/plain으로 보내야 브라우저가 사전 요청(CORS preflight)을 안 해서 Apps Script가 받을 수 있어요.
+    const res = await fetch(sync.url, { method: 'POST', body: JSON.stringify({ key: sync.key, week: game.week || +$('#syncWeek').value, teams: game.teams.map(t => t.name), rows: [syncRows(0), syncRows(1)], dryRun }) });
+    const r = await res.json();
+    msg.textContent = (r.ok ? '✓ ' : '✕ ') + r.msg;
+    msg.style.color = r.ok ? 'var(--accent)' : 'var(--danger)';
+    return r;
+  } catch (e) {
+    msg.textContent = '✕ 연결하지 못했어요. URL과 배포 설정(액세스: 모든 사용자)을 확인해주세요.';
+    msg.style.color = 'var(--danger)';
+    return null;
+  }
+}
+$('#btnSyncTest').addEventListener('click', () => callSheet(true));
+$('#btnSync').addEventListener('click', async () => {
+  if (!game.events.length) { toast('보낼 기록이 없어요.', true); return; }
+  const wk = game.week || +$('#syncWeek').value;
+  if (!confirm(`Week ${pad2(wk)}의 '${game.teams[0].name} vs ${game.teams[1].name}' 경기 선수 칸을 이 기록으로 덮어쓸까요?`)) return;
+  const btn = $('#btnSync'); btn.disabled = true;
+  await callSheet(false);
+  btn.disabled = false;
+});
+
+// ---------- 영상 조작 ----------
+$('#btnOpen').addEventListener('click', () => $('#fileInput').click());
+$('#fileInput').addEventListener('change', ev => { openFiles(ev.target.files); ev.target.value = ''; });
+$('#btnYt').addEventListener('click', () => openYt($('#ytUrl').value));
+$('#ytUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') openYt($('#ytUrl').value); });
+const drop = $('#drop');
+drop.addEventListener('click', () => $('#fileInput').click());
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+document.addEventListener('drop', ev => {
+  const txt = ev.dataTransfer.getData('text/plain');
+  if (ev.dataTransfer.files.length) openFiles(ev.dataTransfer.files);
+  else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
+});
+$('#btnPlay').addEventListener('click', () => player.toggle());
+$('#shield').addEventListener('click', () => player.toggle());
+$('#btnBack').addEventListener('click', () => player.seek(player.time() - opts.skip));
+$('#btnFwd').addEventListener('click', () => player.seek(player.time() + opts.skip));
+$('#speed').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-r]'); if (!b) return;
+  rate = +b.dataset.r; player.rate(rate);
+  $$('#speed button').forEach(x => x.classList.toggle('on', x === b));
+});
+$('#tabs').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-tab]'); if (!b) return;
+  $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $$('.pane').forEach(p => p.classList.toggle('hidden', p.id !== 'pane-' + b.dataset.tab));
+});
+
+document.addEventListener('keydown', ev => {
+  if (ev.target.closest('input, textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (ev.key === ' ') { ev.preventDefault(); player.toggle(); return; }
+  if (ev.key === 'ArrowLeft') { ev.preventDefault(); player.seek(player.time() - (ev.shiftKey ? 1 : opts.skip)); return; }
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
+  if (ev.key === 'Escape') { if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
+  const k = KEYMAP[ev.key.toLowerCase()];
+  if (k) { ev.preventDefault(); record(k); }
+});
+
+// 재생 위치 표시
+let lastNow = null;
+function tick() {
+  if (mode) {
+    const t = player.time(), D = player.duration();
+    $('#timeLabel').textContent = `${fmt(t)} / ${fmt(D)}`;
+    $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
+    if ($('#logFollow').checked && !$('#pane-log').classList.contains('hidden')) {
+      const rows = $$('#log .ev');
+      let now = null;
+      for (const r of rows) { if (+r.dataset.t <= t) now = r; else break; }
+      if (now !== lastNow) {
+        lastNow && lastNow.classList.remove('now');
+        if (now) { now.classList.add('now'); if (!player.paused()) now.scrollIntoView({ block: 'nearest' }); }
+        lastNow = now;
+      }
+    }
+  }
+  requestAnimationFrame(tick);
+}
+setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
+
+loadGame(lsGet('mm-box:last'));
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
