@@ -41,6 +41,8 @@ function doPost(e) {
 
 // req: { week: 3, teams: ['팀A', '팀B'], rows: [[...19칸], ...] x2, dryRun }
 function writeGame(req) {
+  if (!Array.isArray(req.teams) || req.teams.length !== 2 || !Array.isArray(req.rows) || req.rows.length !== 2 || !req.rows.every(Array.isArray) || !(req.week >= 1))
+    return { ok: false, msg: '요청 형식이 잘못됐어요. 박스스코어 페이지를 새로고침한 뒤 다시 보내주세요.' };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tab = 'Week ' + ('0' + req.week).slice(-2);
   const sh = ss.getSheetByName(tab);
@@ -82,6 +84,8 @@ function writeGame(req) {
     const formulas = range.getFormulas();
     const values = range.getValues();
     // 수식이 있는 칸(PTS, REB, % 등)은 그대로 두고, 나머지 칸만 새 기록으로 덮어써요.
+    // 이름 칸이 수식이면 이름은 그대로 두고 숫자만 바뀌어 다른 선수 기록이 되니까, 쓰지 않고 알려줘요.
+    if (formulas.some(row => row[0])) return { ok: false, msg: `${tab} ${colA[start]} 블록의 선수 이름 칸에 수식이 있어요. 시트에서 그 칸을 비워주세요.` };
     for (let r = 0; r < slots; r++) {
       for (let c = 0; c < WIDTH; c++) {
         if (formulas[r][c]) continue;
