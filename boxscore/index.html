@@ -6,7 +6,7 @@
 <title>Momentum 박스스코어 입력</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+KR:wght@200;300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0f1115;
@@ -37,44 +37,69 @@
   .muted { color: var(--muted); }
   .hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
 
-  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  body { display: flex; flex-direction: column; }
+  /* 맨 위 바: 왼쪽 제목 · 가운데 점수 · 오른쪽 입력 방식과 영상 열기 */
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); flex: none; }
+  header .hl, header .hr { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  header .hr { justify-content: flex-end; }
+  header button { white-space: nowrap; flex: none; }
+  header .yt-in { flex: 0 1 280px; min-width: 130px; }
+  header .yt-in input { width: 100%; min-width: 0; }
+  /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
+  @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
+  @media (max-width: 1350px) { header #btnUndo kbd, header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
   header .yt-in { display: flex; gap: 6px; }
-  header .yt-in input { width: 260px; }
 
-  .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; height: calc(100% - 53px); }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
   .main { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   .side { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  @media (max-width: 700px) { .stagerow { flex-wrap: wrap; } .vcol { flex-direction: row; flex-wrap: wrap; width: 100%; order: 2; } .vcol button { width: auto; } .vcol .vsep { display: none; } }
   @media (max-width: 1000px) {
     .app { grid-template-columns: 1fr; height: auto; }
     .main { overflow: visible; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
-    header .yt-in input { width: 180px; }
+    header { display: flex; flex-wrap: wrap; }
+    header .hl { flex: 1; }
+    header .scorebar { order: 3; width: 100%; }
+    header .hr { flex-wrap: wrap; }
+
   }
 
   .drop { border: 2px dashed var(--line); border-radius: 12px; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 24px; }
   .drop.over { border-color: var(--accent); color: var(--text); }
   .drop strong { color: var(--text); font-size: 16px; }
 
-  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; width: 100%; max-height: 52vh; aspect-ratio: 16 / 9; margin: 0 auto; flex: none; }
+  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; width: 640px; height: 360px; flex: none; }
   .stage video, .stage #yt, .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border: 0; }
   .stage .shield { position: absolute; inset: 0; cursor: pointer; }
+  .stage #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
-  .transport { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: none; }
-  .transport .time { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); margin-left: 4px; }
-  .transport .sp { flex: 1; }
+  .notice { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: rgba(242,224,0,.1); border: 1px solid rgba(242,224,0,.45); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; flex: none; }
+  .notice b { color: var(--text); }
+  /* 영상 좌우 세로 버튼 */
+  .stagerow { display: flex; justify-content: center; align-items: flex-start; gap: 10px; flex: none; }
+  .vcol { display: flex; flex-direction: column; gap: 6px; width: 96px; flex: none; }
+  .vcol button { width: 100%; white-space: nowrap; padding: 7px 4px; }
+  .vcol .time { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4; }
+  .vcol .q { font-weight: 900; font-size: 18px; text-align: center; }
+  .vcol .vsep { height: 1px; background: var(--line); margin: 2px 0; }
   .speed button.on { border-color: var(--accent); color: var(--accent); }
   .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
   .timeline .mk { position: absolute; width: 2px; height: 9px; pointer-events: none; opacity: .85; }
   .timeline .mk.a { top: 3px; background: var(--ta); }
   .timeline .mk.b { bottom: 3px; background: var(--tb); }
   .timeline .cb { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; opacity: .4; pointer-events: none; }
+  .timeline .mk.q { top: 0; bottom: 0; height: auto; width: 1px; background: #fff; opacity: .7; }
+  .timeline .trim { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.08); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); pointer-events: none; }
+  .timeline .cut { position: absolute; top: 0; bottom: 0; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(255,90,90,.45) 0 4px, rgba(255,90,90,.15) 4px 8px); border-left: 1px solid var(--danger); border-right: 1px solid var(--danger); }
+  .timeline .cut.pending { border-right: 0; background: rgba(255,90,90,.18); }
   .timeline .head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); pointer-events: none; }
 
   .scorebar { display: flex; align-items: center; justify-content: center; gap: 14px; font-weight: 700; flex: none; }
-  .scorebar .nm { font-size: 15px; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scorebar .nm { font-size: 15px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .scorebar .nm.a { color: var(--ta); } .scorebar .nm.b { color: var(--tb); }
   .scorebar .sc { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; }
 
@@ -120,8 +145,10 @@
   .pad .grid button.foul { color: var(--warn); }
   .pad .ast { border: 1px dashed var(--accent); border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; }
   .pad .ast button { padding: 3px 8px; font-size: 12px; }
-  .toast { font-size: 12px; min-height: 18px; color: var(--muted); }
-  .modebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: none; }
+  /* 입력 알림: 화면 아래쪽에 잠깐 떠요 (영상 위 점수판을 가리지 않게) */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 14px; pointer-events: none; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .toast:empty { display: none; }
+  .modebar { display: flex; align-items: center; gap: 8px; flex: none; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; padding: 5px 14px; background: var(--panel); color: var(--muted); }
   .seg button + button { border-left: 1px solid var(--line); }
@@ -179,6 +206,34 @@
   .log .ev .x:hover { color: var(--danger); }
   .log .ev.now { background: rgba(143,240,224,.07); }
 
+  .log .ev.qrow { color: var(--muted); font-style: italic; }
+  /* 영상 편집 탭 */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: end; }
+  .team-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .team-row.head { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .team-row.head span:nth-child(n+2) { text-align: center; }
+  input[type=color] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+  .styles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .styles button { padding: 4px; font-size: 11px; white-space: nowrap; display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
+  .styles button.on { border-color: var(--accent); color: var(--accent); }
+  .styles canvas { width: 100%; aspect-ratio: 16 / 7; border-radius: 5px; display: block; }
+  .clips { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow: auto; }
+  .clip { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .clip.cur { border-color: var(--accent); }
+  .clip .n { color: var(--muted); font-weight: 700; }
+  .clip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clip .d { color: var(--muted); font-family: ui-monospace, monospace; }
+  .clip button { padding: 1px 6px; font-size: 11px; }
+  .team-in { display: flex; gap: 6px; }
+  .cuts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .cut-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-family: ui-monospace, monospace; padding: 2px 4px 2px 8px; border: 1px solid rgba(255,90,90,.5); border-radius: 5px; cursor: pointer; }
+  .cut-chip button { padding: 0 5px; font-size: 11px; }
+  details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 2px 0 6px; }
+  .progress { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .msg { font-size: 12px; margin-top: 8px; line-height: 1.5; }
+  .msg.err { color: var(--danger); }
+
   .box { overflow-x: auto; margin-bottom: 6px; }
   .box table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .box th, .box td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--line); }
@@ -192,15 +247,27 @@
 </head>
 <body>
 <header>
-  <h1>MOMENTUM <span>BOX SCORE</span></h1>
-  <div class="src" id="srcLabel"></div>
-  <div class="yt-in">
-    <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
-    <button id="btnYt">열기</button>
+  <div class="hl">
+    <h1>MOMENTUM <span>BOX SCORE</span></h1>
+    <div class="src" id="srcLabel"></div>
   </div>
-  <button id="btnOpen">영상 파일 열기</button>
-  <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
+  <div class="scorebar">
+    <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
+  </div>
+  <div class="hr">
+    <div class="modebar">
+      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
+      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+    </div>
+    <div class="yt-in">
+      <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
+      <button id="btnYt">열기</button>
+    </div>
+    <button id="btnOpen">영상 파일 열기</button>
+    <input type="file" id="fileInput" accept="video/*" multiple class="hidden">
+  </div>
 </header>
+<div class="toast" id="toast"></div>
 
 <div class="app">
   <div class="main">
@@ -209,35 +276,39 @@
       <div>쿼터별로 나뉜 영상 여러 개를 한 번에 열면 이어서 한 경기로 봐요.</div>
       <div class="hint">영상 없이도 아래에서 바로 기록할 수 있어요 (시간은 0:00으로 남아요).</div>
     </div>
-    <div class="stage hidden" id="stage">
-      <video id="video" playsinline preload="auto" class="hidden"></video>
-      <div id="yt" class="hidden"></div>
-      <div class="shield hidden" id="shield" title="클릭: 재생/일시정지"></div>
+    <div class="notice hidden" id="ytNotice" role="alert">
+      <span>⚠ <b>유튜브 영상은 점수판 미리보기만 돼요.</b> 점수판 입힌 영상 내보내기는 안 돼요. 내보내려면 [영상 파일 열기]로 원본 파일을 열어 주세요. 기록은 그대로 이어져요.</span>
+      <button class="mini" id="ytNoticeClose" title="닫기">✕</button>
     </div>
-    <div class="transport hidden" id="transport">
-      <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
-      <button id="btnBack" title="5초 뒤로 (←)">−5초</button>
-      <button id="btnFwd" title="5초 앞으로 (→)">+5초</button>
-      <span class="time" id="timeLabel">0:00 / 0:00</span>
-      <span class="sp"></span>
-      <span class="speed" id="speed">
-        <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button>
-      </span>
+    <div class="stagerow hidden" id="stageRow">
+      <div class="vcol" id="ctlLeft">
+        <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
+        <button id="btnBack" title="뒤로 (←)">−5초</button>
+        <button id="btnFwd" title="앞으로 (→)">+5초</button>
+        <span class="time" id="timeLabel">0:00<br>/ 0:00</span>
+        <span class="vsep"></span>
+        <span class="q" id="curQuarter" title="현재 쿼터">1ST</span>
+        <button id="btnNextQ" title="현재 위치부터 다음 쿼터 (N)">다음 쿼터 <kbd>N</kbd></button>
+      </div>
+      <div class="stage" id="stage">
+        <video id="video" playsinline preload="auto" class="hidden"></video>
+        <div id="yt" class="hidden"></div>
+        <canvas id="overlay"></canvas>
+        <div class="shield hidden" id="shield" title="클릭: 재생/일시정지"></div>
+      </div>
+      <div class="vcol speed" id="speed">
+        <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button><button data-r="3">3×</button>
+        <span class="vsep"></span>
+        <button id="btnCutIn" title="잘라낼 구간 시작을 현재 위치로 ([ 키)">✂ 시작 <kbd>[</kbd></button>
+        <button id="btnCutOut" title="잘라낼 구간 끝을 현재 위치로 (] 키)">✂ 끝 <kbd>]</kbd></button>
+      </div>
     </div>
     <div class="timeline hidden" id="timeline" title="클릭해서 이동">
+      <div class="trim" id="trimBox"></div>
       <div id="markers"></div>
       <div class="head" id="playhead"></div>
     </div>
 
-    <div class="scorebar">
-      <span class="nm a" id="sbA"></span><span class="sc" id="sbScore">0 : 0</span><span class="nm b" id="sbB"></span>
-    </div>
-
-    <div class="modebar">
-      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
-      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
-      <span class="toast" id="toast"></span>
-    </div>
 
     <div class="entry" id="pickEntry">
       <div class="team a" id="teamA"></div>
@@ -257,6 +328,7 @@
       <button data-tab="setup" class="on">경기 설정</button>
       <button data-tab="log">기록 <span id="evCount"></span></button>
       <button data-tab="box">박스스코어</button>
+      <button data-tab="video">영상 편집</button>
     </div>
 
     <div class="pane" id="pane-setup">
@@ -375,6 +447,90 @@
         <input type="file" id="jsonInput" accept="application/json,.json" class="hidden">
       </section>
     </div>
+    <div class="pane hidden" id="pane-video">
+      <section>
+        <h2>영상 <span id="clipCount"></span> <button id="btnAddClip" class="mini">+ 영상 추가</button></h2>
+        <div class="clips" id="clips"></div>
+        <div class="hint" id="clipHint">영상 파일을 열면 여기에 나와요. 쿼터별 영상은 ▲▼로 순서를 바꿀 수 있어요.</div>
+        <label class="check" style="margin-top:6px"><input type="checkbox" id="autoQ"> 다음 영상으로 넘어가면 자동으로 다음 쿼터</label>
+      </section>
+      <section>
+        <h2>점수판 <label class="check" style="font-weight:400"><input type="checkbox" id="sbShow"> 영상에 보이기</label></h2>
+        <div class="hint" style="margin-bottom:8px">선수 기록의 1·2·3점 성공이 팀 점수로, 파울이 팀파울로 자동으로 들어가요.</div>
+        <div class="team-row head"><span>팀</span><span>바탕</span><span>글씨</span></div>
+        <div class="team-row"><span id="sbName0" style="color:var(--ta)"></span><input type="color" id="sbColor0" title="바탕색 (유니폼 색)"><input type="color" id="sbText0" title="팀 이름 글씨색"></div>
+        <div class="team-row"><span id="sbName1" style="color:var(--tb)"></span><input type="color" id="sbColor1" title="바탕색 (유니폼 색)"><input type="color" id="sbText1" title="팀 이름 글씨색"></div>
+        <div class="grid3" style="margin-bottom:8px">
+          <div class="field"><label>매치 표시</label><input type="text" id="sbMatch" placeholder="A vs B"></div>
+          <div class="field"><label>시작 쿼터</label><select id="sbStartQ"><option value="1">1Q</option><option value="2">2Q</option><option value="3">3Q</option><option value="4">4Q</option></select></div>
+          <div class="field"><label>팀파울 칸</label><input type="number" id="sbFoulSlots" min="1" max="10"></div>
+        </div>
+        <div class="styles" id="styles"></div>
+        <div class="grid3">
+          <div class="field"><label>위치</label>
+            <select id="sbPos"><option value="tr">오른쪽 위</option><option value="tl">왼쪽 위</option><option value="tc">가운데 위</option><option value="br">오른쪽 아래</option><option value="bl">왼쪽 아래</option><option value="bc">가운데 아래</option></select>
+          </div>
+          <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="sbSize" min="15" max="55" step="1"></div>
+          <label class="check" style="margin-bottom:8px" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="sbFlash"> 득점 강조</label>
+        </div>
+      </section>
+      <section>
+        <h2>길이 편집</h2>
+        <div class="grid2">
+          <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
+          <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
+        </div>
+        <div class="row" style="justify-content:space-between;font-size:12px;color:var(--muted)">
+          <span>잘라낼 구간 <span id="cutCount"></span></span>
+          <label class="check" style="font-size:12px"><input type="checkbox" id="skipCuts"> 재생할 때 건너뛰기</label>
+        </div>
+        <div class="cuts" id="cuts"></div>
+      </section>
+      <section>
+        <h2>내보내기</h2>
+        <div class="grid2">
+          <div class="field"><label>형식</label>
+            <select id="format" title="YouTube: 1920×1080 · H.264 · 30fps · AAC 스테레오">
+              <option value="youtube">YouTube 1080p 30fps</option>
+              <option value="youtube4k">YouTube 4K 30fps</option>
+              <option value="light">가볍게 720p 30fps</option>
+              <option value="original">원본 해상도·프레임</option>
+              <option value="custom">사용자 지정</option>
+            </select>
+          </div>
+          <div class="field"><label>화질</label>
+            <select id="quality" title="원본과 같게: 불러온 영상의 비트레이트에 맞춰 내보내요">
+              <option value="source">원본과 같게</option>
+              <option value="high">높음</option>
+              <option value="very_high">매우 높음</option>
+              <option value="medium">보통</option>
+              <option value="custom">직접 입력 (Mbps)</option>
+            </select>
+          </div>
+        </div>
+        <details class="adv" id="adv">
+          <summary>세부 설정</summary>
+          <div class="grid3">
+            <div class="field"><label>해상도</label><select id="xRes"><option value="orig">원본</option><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K (2160p)</option></select></div>
+            <div class="field"><label>프레임</label><select id="xFps"><option value="0">원본</option><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="50">50</option><option value="60">60</option></select></div>
+            <div class="field"><label>영상 코덱</label><select id="xCodec"><option value="avc">H.264</option><option value="hevc">H.265 (HEVC)</option><option value="av1">AV1</option></select></div>
+            <div class="field"><label>영상 Mbps</label><input type="number" id="xMbps" min="1" max="150" step="0.5" title="화질을 '직접 입력'으로 고르면 적용돼요"></div>
+            <div class="field"><label>오디오 음질</label><select id="xAbr"><option value="128">128 kbps</option><option value="192">192 kbps</option><option value="256">256 kbps</option><option value="320">320 kbps</option></select></div>
+            <div class="field"><label>오디오 채널</label><select id="xAch"><option value="2">스테레오</option><option value="1">모노</option><option value="0">원본</option></select></div>
+          </div>
+        </details>
+        <button id="btnExport" class="primary" style="margin-top:6px;width:100%">점수판 입힌 영상 내보내기</button>
+        <div id="exportBox" class="hidden" style="margin-top:10px">
+          <div class="progress"><i id="exportBar"></i></div>
+          <div class="grid2" style="margin-top:6px;align-items:center">
+            <span class="hint" id="exportLabel"></span>
+            <button id="btnCancel">취소</button>
+          </div>
+        </div>
+        <div class="msg" id="exportMsg"></div>
+        <div class="hint" style="margin-top:6px">크롬·엣지 권장. 영상 파일로 연 경우에만 내보낼 수 있어요 (유튜브 영상은 미리보기만 돼요). 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요.</div>
+      </section>
+    </div>
   </aside>
 </div>
 
@@ -383,7 +539,20 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad2 = n => String(n).padStart(2, '0');
-const fmt = t => { t = Math.max(0, t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t % 60); return (h ? h + ':' + pad2(m) : m) + ':' + pad2(s); };
+function fmt(t, precise) {
+  if (!isFinite(t)) t = 0;
+  t = Math.max(0, t);
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+  const ss = precise ? sec.toFixed(1).padStart(4, '0') : String(Math.floor(sec)).padStart(2, '0');
+  return h ? `${h}:${pad2(m)}:${ss}` : `${m}:${ss}`;
+}
+function parseTime(str) {
+  str = String(str || '').trim();
+  if (!str) return null;
+  const parts = str.split(':').map(Number);
+  if (parts.some(isNaN)) return null;
+  return parts.reduce((acc, p) => acc * 60 + p, 0);
+}
 const SHEET_ID = '1_ufPBGuOO4if6MAWgTZ9FQ75Nec1hnUYVWx-ZUkoUak';   // index.html의 CONFIG.league.sheetId와 같은 시트
 
 // ---------- 기록 항목 ----------
@@ -414,14 +583,27 @@ function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { 
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'pick' }, lsGet(OPT_KEY));
+// 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
+const SB_LAST = 'mm-box:sb-last';
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ'];
+function defaultSb() {
+  return Object.assign({
+    colors: [{ color: '#111111', text: '#ffffff' }, { color: '#7a0a0a', text: '#ffffff' }],
+    match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true,
+    quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
+  }, lsGet(SB_LAST) || {});
+}
 function newGame() {
-  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], played: {}, source: null, updated: Date.now() };
+  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], quarters: [], played: {}, source: null, sb: defaultSb(), updated: Date.now() };
 }
 function gameIndex() { return lsGet('mm-box:index') || []; }
 let game = null;
 let saveTimer = null;
 function save() {
   game.updated = Date.now();
+  touch();
+  lsSet(SB_LAST, Object.fromEntries(SB_CARRY.map(k => [k, game.sb[k]])));
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     lsSet('mm-box:g:' + game.id, game);
@@ -437,6 +619,10 @@ function loadGame(id) {
   const g = id && lsGet('mm-box:g:' + id);
   game = g || newGame();
   game.played = game.played || {};
+  game.quarters = game.quarters || [];
+  game.sb = Object.assign(defaultSb(), { trimStart: null, trimEnd: null, cuts: [] }, game.sb || {});
+  cutStart = null;
+  touch();
   undoStack = [];
   selected = null; astPending = null;
   renderAll();
@@ -475,7 +661,7 @@ const pctRaw = v => v === null ? '' : String(Math.round(v * 10000) / 10000);
 // ---------- 영상 (파일 여러 개 또는 유튜브) ----------
 const video = $('#video');
 let mode = null;          // 'file' | 'yt'
-let clips = [];           // {name, url, dur}
+let clips = [];           // {file, name, key, url, dur} — 재생 순서대로
 let cur = 0;
 let yt = null, ytReady = false;
 function offset(k) { let o = 0; for (let i = 0; i < k; i++) o += clips[i].dur; return o; }
@@ -523,6 +709,7 @@ const player = {
 video.addEventListener('loadedmetadata', () => {
   video.playbackRate = rate;
   if (pendingSeek) { video.currentTime = pendingSeek.t; if (pendingSeek.play) video.play().catch(() => {}); pendingSeek = null; }
+  fitStage(); renderClips(); lastBoardKey = '';
 });
 video.addEventListener('ended', () => { if (cur < clips.length - 1) { cur++; pendingSeek = { t: 0, play: true }; video.src = clips[cur].url; } });
 video.addEventListener('play', updatePlayBtn);
@@ -532,22 +719,37 @@ function probe(url) {
   return new Promise(res => {
     const v = document.createElement('video');
     v.preload = 'metadata';
-    v.onloadedmetadata = () => res(isFinite(v.duration) ? v.duration : 0);
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration)) return res(v.duration);
+      // 길이 정보가 없는 녹화본(일부 WebM)은 끝으로 넘겨야 길이를 알려줘요.
+      v.ontimeupdate = () => { if (isFinite(v.duration)) { v.ontimeupdate = null; res(v.duration); } };
+      v.currentTime = 1e9;
+    };
     v.onerror = () => res(0);
     v.src = url;
   });
 }
-async function openFiles(files) {
+const clipKey = f => `${f.name}:${f.size}`;
+async function openFiles(files, append) {
   files = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name));
   if (!files.length) return;
   files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  const load = async list => Promise.all(list.map(async f => { const url = URL.createObjectURL(f); return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }));
+  if (append && mode === 'file' && clips.length) {
+    // 뒤에 이어 붙이면 앞 영상들의 시간은 그대로라 기록을 옮길 필요가 없어요.
+    clips.push(...await load(files.filter(f => !clips.some(c => c.key === clipKey(f)))));
+    game.source = { type: 'file', names: clips.map(c => c.name) };
+    save(); renderClips(); renderMarkers(); updateSrcLabel();
+    return;
+  }
   teardownYt();
   clips.forEach(c => URL.revokeObjectURL(c.url));
-  clips = await Promise.all(files.map(async f => { const url = URL.createObjectURL(f); return { name: f.name, url, dur: await probe(url) }; }));
+  clips = await load(files);
   mode = 'file'; cur = 0; pendingSeek = null;
   video.src = clips[0].url;
   showStage();
-  $('#srcLabel').textContent = clips.map(c => c.name).join(' → ');
+  updateSrcLabel();
+  renderClips();
   const src = { type: 'file', names: clips.map(c => c.name) };
   if (!game.events.length || !game.source) { game.source = src; save(); }
   else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
@@ -564,7 +766,7 @@ function loadYtApi() {
 function teardownYt() {
   if (yt) { try { yt.destroy(); } catch {} yt = null; ytReady = false; }
   const box = $('#stage');
-  if (!$('#yt')) { const d = document.createElement('div'); d.id = 'yt'; d.className = 'hidden'; box.insertBefore(d, $('#shield')); }
+  if (!$('#yt')) { const d = document.createElement('div'); d.id = 'yt'; d.className = 'hidden'; box.insertBefore(d, $('#overlay')); }
 }
 async function openYt(url) {
   const id = ytIdOf(url);
@@ -573,8 +775,10 @@ async function openYt(url) {
   video.pause(); video.removeAttribute('src'); video.load();
   clips.forEach(c => URL.revokeObjectURL(c.url)); clips = [];
   mode = 'yt';
+  renderClips();
   showStage();
   $('#srcLabel').textContent = 'YouTube · ' + id;
+  toast('유튜브 영상은 점수판 미리보기만 되고 내보내기는 안 돼요.', true);
   const src = { type: 'yt', id };
   if (!game.events.length || !game.source) { game.source = src; save(); }
   else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
@@ -583,20 +787,26 @@ async function openYt(url) {
     videoId: id,
     playerVars: { controls: 0, disablekb: 1, rel: 0, modestbranding: 1, playsinline: 1 },
     events: {
-      onReady: () => { ytReady = true; yt.setPlaybackRate(rate); renderMarkers(); },
+      onReady: () => { ytReady = true; yt.setPlaybackRate(rate); renderMarkers(); lastBoardKey = ''; },
       onStateChange: updatePlayBtn,
     },
   });
 }
 function showStage() {
   $('#drop').classList.add('hidden');
-  ['#stage', '#transport', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
+  ['#stageRow', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
   video.classList.toggle('hidden', mode !== 'file');
   $('#yt') && $('#yt').classList.toggle('hidden', mode !== 'yt');
   // 유튜브 화면을 누르면 키보드 포커스가 영상 안으로 들어가 단축키가 안 먹어서, 투명 막으로 덮어요.
   $('#shield').classList.toggle('hidden', mode !== 'yt');
+  $('#ytNotice').classList.toggle('hidden', mode !== 'yt');
+  const ex = $('#btnExport');
+  ex.disabled = mode === 'yt';
+  ex.textContent = mode === 'yt' ? '유튜브 영상은 내보낼 수 없어요' : '점수판 입힌 영상 내보내기';
   renderMarkers();
+  fitStage();
 }
+function updateSrcLabel() { $('#srcLabel').textContent = clips.length === 1 ? clips[0].name : `${clips.length}개 영상 · ${fmt(offset(clips.length))}`; }
 let rate = 1;
 function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ 재생' : '❚❚ 정지'; }
 
@@ -604,7 +814,7 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
 let undoStack = [];
-let nextId = () => (game.events.reduce((m, e) => Math.max(m, e.id), 0) + 1);
+let nextId = () => ([...game.events, ...game.quarters].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
   if (!who) { toast('먼저 선수를 고르세요.', true); return; }
@@ -639,8 +849,11 @@ $('#astBar').addEventListener('click', ev => {
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 });
 function undo() {
-  const id = undoStack.pop() ?? (game.events.length ? game.events.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
+  const all = [...game.events, ...game.quarters];
+  const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
   if (id == null) return;
+  const q = game.quarters.find(x => x.id === id);
+  if (q) { removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
   const e = game.events.find(x => x.id === id);
   if (!e) return undo();
   removeEvent(id);
@@ -852,8 +1065,12 @@ function renderLog() {
   const f = $('#logFilter').value;
   const opts2 = [['', '전체 선수'], ...[0, 1].flatMap(ti => boxOf(ti).filter(l => l.n).map(l => [ti + ':' + l.name, `${game.teams[ti].name} · ${l.name}`]))];
   $('#logFilter').innerHTML = opts2.map(([v, l]) => `<option value="${esc(v)}" ${v === f ? 'selected' : ''}>${esc(l)}</option>`).join('');
-  const list = game.events.filter(e => !f || f === e.team + ':' + e.player);
-  $('#log').innerHTML = list.length ? list.map(e => `<div class="ev" data-id="${e.id}" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${e.id}" title="지우기">✕</button></div>`).join('')
+  const list = [...game.events.filter(e => !f || f === e.team + ':' + e.player), ...(f ? [] : game.quarters.map(q => ({ ...q, q: true })))]
+    .sort((a, b) => a.t - b.t || a.id - b.id);
+  let qn = +game.sb.startQ || 1;
+  $('#log').innerHTML = list.length ? list.map(e => e.q
+    ? `<div class="ev qrow" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span>다음 쿼터 → ${quarterLabel(++qn)}</span><button class="x" data-delq="${e.id}" title="지우기">✕</button></div>`
+    : `<div class="ev" data-id="${e.id}" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${e.id}" title="지우기">✕</button></div>`).join('')
     : '<section class="hint">아직 기록이 없어요.</section>';
   lastNow = null;
 }
@@ -861,6 +1078,8 @@ $('#logFilter').addEventListener('change', renderLog);
 $('#log').addEventListener('click', ev => {
   const del = ev.target.closest('[data-del]');
   if (del) { removeEvent(+del.dataset.del); return; }
+  const delq = ev.target.closest('[data-delq]');
+  if (delq) { removeQuarter(+delq.dataset.delq); return; }
   const row = ev.target.closest('.ev');
   if (row) player.seek(+row.dataset.t - 3);
 });
@@ -886,9 +1105,17 @@ $('#pane-box').addEventListener('change', ev => {
 
 function renderMarkers() {
   const D = player.duration() || Math.max(60, ...game.events.map(e => e.t + 10));
-  let h = game.events.map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${(e.t / D * 100).toFixed(3)}%"></div>`).join('');
-  if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${(offset(i + 1) / D * 100).toFixed(3)}%"></div>`).join('');
+  const pc = t => (t / D * 100).toFixed(3) + '%';
+  let h = game.sb.cuts.map(c => `<div class="cut" style="left:${pc(c.s)};width:${pc(c.e - c.s)}"></div>`).join('')
+    + (cutStart != null ? `<div class="cut pending" style="left:${pc(cutStart)};width:0.4%"></div>` : '');
+  h += game.events.map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${pc(e.t)}"></div>`).join('');
+  h += game.quarters.map(q => `<div class="mk q" style="left:${pc(q.t)}" title="다음 쿼터"></div>`).join('');
+  if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${pc(offset(i + 1))}"></div>`).join('');
   $('#markers').innerHTML = h;
+  const sb = game.sb, box = $('#trimBox');
+  box.style.display = sb.trimStart != null || sb.trimEnd != null ? '' : 'none';
+  const a = sb.trimStart ?? 0, z = sb.trimEnd ?? D;
+  box.style.left = pc(a); box.style.width = pc(Math.max(0, z - a));
 }
 $('#timeline').addEventListener('click', ev => {
   const r = $('#timeline').getBoundingClientRect();
@@ -911,15 +1138,16 @@ function renderGameSel() {
     return `<option value="${g.id}" ${g.id === game.id ? 'selected' : ''}>${esc(g.id === game.id ? gameTitle() : g.title)} · ${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}</option>`;
   }).join('');
 }
-function renderAll() { renderSetup(); renderGameSel(); renderEntry(); renderLog(); renderBox(); renderMarkers(); }
+function renderAll() { renderSetup(); renderGameSel(); renderEntry(); renderLog(); renderBox(); renderMarkers(); renderVideoPane(); }
 
 // 설정 입력
 $('#title').addEventListener('input', () => { game.title = $('#title').value; save(); });
 [0, 1].forEach(ti => {
-  $('#t' + ti + 'name').addEventListener('input', ev => { game.teams[ti].name = ev.target.value; save(); renderEntry(); renderBox(); });
+  $('#t' + ti + 'name').addEventListener('input', ev => { game.teams[ti].name = ev.target.value; save(); renderEntry(); renderBox(); renderVideoPane(); });
 });
 $('#btnSwap').addEventListener('click', () => {
   game.teams.reverse();
+  game.sb.colors.reverse();
   game.events.forEach(e => e.team = 1 - e.team);
   game.played = Object.fromEntries(Object.entries(game.played).map(([k, v]) => [(1 - +k[0]) + k.slice(1), v]));
   if (selected) selected = { ...selected, team: 1 - selected.team };
@@ -1095,12 +1323,14 @@ $('#btnSync').addEventListener('click', async () => {
 });
 
 // ---------- 영상 조작 ----------
-$('#btnOpen').addEventListener('click', () => $('#fileInput').click());
-$('#fileInput').addEventListener('change', ev => { openFiles(ev.target.files); ev.target.value = ''; });
+let addMode = false;
+$('#btnOpen').addEventListener('click', () => { addMode = false; $('#fileInput').click(); });
+$('#btnAddClip').addEventListener('click', () => { addMode = true; $('#fileInput').click(); });
+$('#fileInput').addEventListener('change', ev => { openFiles(ev.target.files, addMode); addMode = false; ev.target.value = ''; });
 $('#btnYt').addEventListener('click', () => openYt($('#ytUrl').value));
 $('#ytUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') openYt($('#ytUrl').value); });
 const drop = $('#drop');
-drop.addEventListener('click', () => $('#fileInput').click());
+drop.addEventListener('click', () => { addMode = false; $('#fileInput').click(); });
 // 로스터 순서 끌기는 영상 끌어놓기와 상관없으니 건너뛰어요.
 const isRosterDrag = ev => ev.dataTransfer && [...ev.dataTransfer.types].includes('text/x-roster');
 ['dragenter', 'dragover'].forEach(t => document.addEventListener(t, ev => { if (isRosterDrag(ev)) return; ev.preventDefault(); drop.classList.add('over'); }));
@@ -1111,6 +1341,7 @@ document.addEventListener('drop', ev => {
   if (ev.dataTransfer.files.length) openFiles(ev.dataTransfer.files);
   else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
 });
+$('#ytNoticeClose').addEventListener('click', () => { $('#ytNotice').classList.add('hidden'); fitStage(); });
 $('#btnPlay').addEventListener('click', () => player.toggle());
 $('#shield').addEventListener('click', () => player.toggle());
 $('#btnBack').addEventListener('click', () => player.seek(player.time() - opts.skip));
@@ -1133,17 +1364,907 @@ document.addEventListener('keydown', ev => {
   if (ev.key === ' ') { ev.preventDefault(); player.toggle(); return; }
   if (ev.key === 'ArrowLeft') { ev.preventDefault(); player.seek(player.time() - (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
-  if (ev.key === 'Escape') { if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
+  if (ev.key === 'Escape') { if (cutStart != null) { cutStart = null; renderCuts(); renderMarkers(); } else if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
+  if (ev.code === 'KeyN') { ev.preventDefault(); addQuarter(); return; }
+  if (ev.code === 'BracketLeft') { ev.preventDefault(); markCutIn(); return; }
+  if (ev.code === 'BracketRight') { ev.preventDefault(); markCutOut(); return; }
   const k = KEYMAP[ev.key.toLowerCase()];
   if (k) { ev.preventDefault(); record(k); }
 });
 
+
+// =====================================================================
+// 점수판 · 영상 편집 (스코어보드 에디터에서 가져옴)
+// 점수판 기록은 따로 누르지 않고 선수 기록에서 만들어요: 1·2·3점 성공 → 팀 점수, 파울 → 팀파울.
+// 쿼터는 [다음 쿼터]로 표시하고, 영상이 여러 개면 다음 영상 시작에서 자동으로 넘어가요.
+// =====================================================================
+const MEDIABUNNY_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.60.0/dist/bundles/mediabunny.min.mjs';
+const overlay = $('#overlay');
+const octx = overlay.getContext('2d');
+let cfg = {};              // 그리기·내보내기가 읽는 설정: game.sb + 팀 이름
+let rev = 0, sortedCache = null;
+function touch() {
+  rev++; sortedCache = null;
+  cfg = { ...game.sb, teams: [0, 1].map(i => ({ name: game.teams[i].name, color: game.sb.colors[i].color, text: game.sb.colors[i].text })) };
+  cfg.match = game.sb.match || `${game.teams[0].name} vs ${game.teams[1].name}`;
+}
+function total() { return offset(clips.length); }
+function autoEvents() {
+  if (!game.sb.autoQ || mode !== 'file') return [];
+  return clips.slice(1).map((c, i) => ({ id: -(i + 1), t: offset(i + 1), kind: 'q', team: 0, v: 1, auto: true }));
+}
+function sbEvents() {
+  const out = [];
+  for (const e of game.events) {
+    const pts = STAT[e.k].fx.pts;
+    if (pts) out.push({ id: e.id, t: e.t, kind: 'pts', team: e.team, v: pts });
+    else if (e.k === 'pf') out.push({ id: e.id, t: e.t, kind: 'foul', team: e.team, v: 1 });
+  }
+  game.quarters.forEach(q => out.push({ id: q.id, t: q.t, kind: 'q', team: 0, v: 1 }));
+  return out;
+}
+function sorted() { return sortedCache ??= [...sbEvents(), ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
+function stateAt(t) {
+  const st = { t, q: +cfg.startQ || 1, score: [0, 0], fouls: [0, 0], last: [null, null] };
+  for (const e of sorted()) {
+    if (e.t > t) break;
+    applyEvent(st, e);
+  }
+  return st;
+}
+function applyEvent(st, e) {
+  if (e.kind === 'pts') {
+    st.score[e.team] = Math.max(0, st.score[e.team] + e.v);
+    if (st.last) st.last[e.team] = e.v > 0 ? { t: e.t, v: e.v } : null;
+  }
+  else if (e.kind === 'foul') st.fouls[e.team] = Math.max(0, st.fouls[e.team] + e.v);
+  else if (e.kind === 'q') { st.q += 1; st.fouls = [0, 0]; }
+}
+function quarterLabel(q) {
+  if (q <= 4) return ['', '1ST', '2ND', '3RD', '4TH'][q];
+  const n = q - 4;
+  return n === 1 ? 'OT' : 'OT' + n;
+}
+function addQuarter() {
+  const t = Math.round(Math.max(0, player.time() - (+opts.lag || 0)) * 10) / 10;
+  const q = { id: nextId(), t };
+  game.quarters.push(q);
+  undoStack.push(q.id);
+  save();
+  toast(`다음 쿼터 → ${quarterLabel(stateAt(t).q)}`);
+  renderMarkers(); renderLog();
+}
+function removeQuarter(id) {
+  game.quarters = game.quarters.filter(q => q.id !== id);
+  save(); renderMarkers(); renderLog();
+}
+$('#btnNextQ').addEventListener('click', ev => { addQuarter(); ev.currentTarget.blur(); });
+
+// ---------- 잘라낼 구간 ----------
+let cutStart = null;       // '['로 시작만 찍어둔 위치
+function normCuts(list) {
+  const out = [];
+  for (const c of [...list].filter(c => c.e - c.s > 0.05).sort((a, b) => a.s - b.s)) {
+    const last = out[out.length - 1];
+    if (last && c.s <= last.e) last.e = Math.max(last.e, c.e); else out.push({ s: c.s, e: c.e });
+  }
+  return out;
+}
+function cutsChanged() { save(); renderCuts(); renderMarkers(); }
+function addCut(a, b) { game.sb.cuts = normCuts([...game.sb.cuts, { s: Math.min(a, b), e: Math.max(a, b) }]); cutStart = null; cutsChanged(); }
+function cutAt(T) { return game.sb.cuts.find(c => T >= c.s && T < c.e); }
+// 내보낼 구간: [S, E]에서 잘라낸 구간을 뺀 것
+function keepRanges(S, E) {
+  const out = [];
+  let t = S;
+  for (const c of cfg.cuts) {
+    if (c.e <= t || c.s >= E) continue;
+    if (c.s > t) out.push([t, c.s]);
+    t = Math.max(t, c.e);
+  }
+  if (E > t) out.push([t, E]);
+  return out.filter(([a, b]) => b - a > 0.05);
+}
+function renderCuts() {
+  const cuts = game.sb.cuts;
+  $('#cutCount').textContent = cuts.length ? `(${cuts.length}개 · ${fmt(cuts.reduce((n, c) => n + c.e - c.s, 0))})` : '';
+  $('#cuts').innerHTML = cuts.length
+    ? cuts.map((c, i) => `<span class="cut-chip" data-i="${i}" title="클릭: 구간 시작으로 이동">${fmt(c.s)}–${fmt(c.e)}<button data-act="rm" title="잘라내기 취소">✕</button></span>`).join('')
+    : `<span class="hint">${cutStart != null ? `${fmt(cutStart)}부터 자르는 중… 끝 위치에서 ] 를 누르세요` : '영상 오른쪽 [✂ 시작] [✂ 끝] 버튼이나 [ ] 키로 잘라낼 부분을 지정하세요 (작전타임, 쉬는 시간 등)'}</span>`;
+}
+$('#cuts').addEventListener('click', ev => {
+  const chip = ev.target.closest('.cut-chip');
+  if (!chip) return;
+  const i = +chip.dataset.i;
+  if (ev.target.closest('[data-act="rm"]')) { game.sb.cuts.splice(i, 1); cutsChanged(); }
+  else player.seek(game.sb.cuts[i].s);
+});
+function markCutIn() {
+  if (!mode) return;
+  cutStart = player.time();
+  renderCuts(); renderMarkers();
+  toast(`✂ ${fmt(cutStart)}부터 잘라내기 · 끝에서 ] 를 누르세요`);
+}
+function markCutOut() {
+  if (!mode) return;
+  const T = player.time();
+  if (cutStart == null) {
+    // ']'만 누르면 앞 구간 끝(또는 처음)부터 여기까지 잘라요.
+    const prev = game.sb.cuts.filter(c => c.e <= T).pop();
+    cutStart = prev ? prev.e : 0;
+  }
+  if (Math.abs(T - cutStart) < 0.1) return;
+  const a = cutStart;
+  addCut(a, T);
+  toast(`✂ ${fmt(Math.min(a, T))}–${fmt(Math.max(a, T))} 잘라냄`);
+}
+$('#btnCutIn').addEventListener('click', ev => { markCutIn(); ev.currentTarget.blur(); });
+$('#btnCutOut').addEventListener('click', ev => { markCutOut(); ev.currentTarget.blur(); });
+
+// ---------- 영상 목록 (순서 바꾸기·빼기) ----------
+// 영상 순서를 바꾸면 각 기록·쿼터·잘라낸 구간이 자기 영상 안의 같은 순간을 따라가요.
+function editClips(fn) {
+  const T = player.time(), [k0, t0] = clipAt(T), key0 = clips[k0]?.key;
+  const loc = t => { const [k, lt] = clipAt(t); return { key: clips[k]?.key, t: lt }; };
+  const evs = game.events.map(e => ({ e, ...loc(e.t) }));
+  const qs = game.quarters.map(q => ({ e: q, ...loc(q.t) }));
+  const oldCuts = game.sb.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
+  fn();
+  const idx = key => clips.findIndex(c => c.key === key);
+  const back = list => list.filter(x => idx(x.key) >= 0).map(x => ({ ...x.e, t: offset(idx(x.key)) + x.t }));
+  game.events = back(evs).sort((a, b) => a.t - b.t || a.id - b.id);
+  game.quarters = back(qs);
+  game.sb.cuts = normCuts(oldCuts.filter(c => {
+    const ks = idx(c.s.key), ke = idx(c.e.key);
+    return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
+  }).map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
+  cutStart = null; undoStack = [];
+  game.source = { type: 'file', names: clips.map(c => c.name) };
+  const k = idx(key0);
+  cur = -1;
+  if (clips.length) player.seek(k >= 0 ? offset(k) + t0 : 0);
+  save(); renderAll(); updateSrcLabel();
+}
+function renderClips() {
+  $('#clipCount').textContent = clips.length > 1 ? `(${clips.length}개 · ${fmt(total())})` : '';
+  $('#clipHint').classList.toggle('hidden', clips.length > 0);
+  $('#btnAddClip').disabled = mode !== 'file';
+  $('#clips').innerHTML = clips.map((c, i) => `<div class="clip ${i === cur ? 'cur' : ''}" data-i="${i}" title="${esc(c.name)}">
+    <span class="n">${i + 1}</span><span class="nm">${esc(c.name)}</span><span class="d">${fmt(c.dur)}</span>
+    <span><button data-act="up" title="위로" ${i ? '' : 'disabled'}>▲</button><button data-act="down" title="아래로" ${i < clips.length - 1 ? '' : 'disabled'}>▼</button><button data-act="rm" title="빼기" ${clips.length > 1 ? '' : 'disabled'}>✕</button></span>
+  </div>`).join('');
+}
+$('#clips').addEventListener('click', ev => {
+  const row = ev.target.closest('.clip'); if (!row) return;
+  const i = +row.dataset.i, act = ev.target.closest('button')?.dataset.act;
+  if (act === 'up' && i > 0) editClips(() => clips.splice(i - 1, 0, clips.splice(i, 1)[0]));
+  else if (act === 'down' && i < clips.length - 1) editClips(() => clips.splice(i + 1, 0, clips.splice(i, 1)[0]));
+  else if (act === 'rm') {
+    if (clips.length === 1) return;
+    const n = game.events.filter(e => clipAt(e.t)[0] === i).length;
+    if (n && !confirm(`이 영상에 있는 기록 ${n}개도 함께 지워져요. 뺄까요?`)) return;
+    editClips(() => { URL.revokeObjectURL(clips[i].url); clips.splice(i, 1); });
+  } else if (!act) player.seek(offset(i));
+});
+
+// ---------- 영상 크기: 가운데 칸 너비와 화면 높이에 맞춰 비율 유지 ----------
+function fitStage() {
+  const row = $('#stageRow');
+  if (row.classList.contains('hidden')) return;
+  const main = $('.main'), cs = getComputedStyle(main);
+  const narrow = window.innerWidth <= 700;
+  const cols = narrow ? 0 : [...row.querySelectorAll('.vcol')].reduce((w, c) => w + c.offsetWidth + 10, 0);
+  const availW = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - cols;
+  const maxH = Math.max(180, window.innerHeight * 0.52);
+  const ar = mode === 'file' && video.videoWidth ? video.videoWidth / video.videoHeight : 16 / 9;
+  let w = availW, h = w / ar;
+  if (h > maxH) { h = maxH; w = h * ar; }
+  const st = $('#stage'), W = Math.floor(w) + 'px', H = Math.floor(h) + 'px';
+  if (st.style.width !== W || st.style.height !== H) { st.style.width = W; st.style.height = H; lastBoardKey = ''; }
+}
+window.addEventListener('resize', fitStage);
+new ResizeObserver(fitStage).observe($('.main'));
+
+// ---------- 점수판 그리기 ----------
+const FONT = "'Noto Sans KR', system-ui, sans-serif";
+const NUM = "'Barlow Condensed', 'Noto Sans KR', sans-serif";
+const STYLES = {
+  // width: reference units that span `size`% of the frame; wide/flat styles use fewer so they render larger.
+  bar: { label: 'ESPN 바', draw: drawBar, width: 440 },
+  stack: { label: 'FIBA·KBL', draw: drawStack, width: 400 },
+  glass: { label: '글래스', draw: drawGlass, width: 450 },
+  classic: { label: '기존 모멘텀', draw: drawClassic, width: 525 },
+};
+function drawBoard(ctx, W, H, st) {
+  const style = STYLES[cfg.style] || STYLES.bar;
+  const u = (W * cfg.size / 100) / style.width;
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  style.draw(ctx, W, H, st, u);
+  ctx.restore();
+}
+// Top-left corner of a w×h board for the chosen position.
+function place(W, H, w, h) {
+  const m = W * 0.014;
+  const p = cfg.pos;
+  const x = p.endsWith('l') ? m : p.endsWith('r') ? W - w - m : (W - w) / 2;
+  const y = p.startsWith('t') ? m : H - h - m * 1.4;
+  return [x, y];
+}
+// 0..1 highlight strength right after a team scores.
+function flash(st, i) {
+  const l = st.last[i];
+  if (!cfg.flash || !l) return 0;
+  const dt = st.t - l.t;
+  return dt >= 0 && dt < 2 ? 1 - dt / 2 : 0;
+}
+function lum(hex) {
+  const n = parseInt(String(hex).slice(1), 16);
+  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function ink(hex) { return lum(hex) > 0.45 ? '#0b0d12' : '#ffffff'; }
+// Team name colour: user-chosen, or auto contrast for records saved before the option existed.
+function teamInk(i) { return cfg.teams[i].text || ink(cfg.teams[i].color); }
+function shade(hex, amt) {
+  const n = parseInt(String(hex).slice(1), 16);
+  const f = c => Math.max(0, Math.min(255, Math.round(amt < 0 ? c * (1 + amt) : c + (255 - c) * amt)));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+function foulCount() { return Math.max(1, Number(cfg.foulSlots) || 5); }
+function isBonus(st, i) { return st.fouls[i] >= foulCount(); }
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function fitText(ctx, text, weight, size, maxW, family = FONT) {
+  let fs = size;
+  ctx.font = `${weight} ${fs}px ${family}`;
+  while (fs > 6 && ctx.measureText(text).width > maxW) {
+    fs *= 0.94;
+    ctx.font = `${weight} ${fs}px ${family}`;
+  }
+}
+function scoreBadge(ctx, st, i, x, y, u, align, size = 18) {
+  const a = flash(st, i);
+  if (!a || !st.last[i]) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, a * 1.6);
+  ctx.font = `700 ${size * u}px ${NUM}`;
+  const txt = `+${st.last[i].v}`;
+  const tw = ctx.measureText(txt).width + size * 0.6 * u;
+  const bx = align === 'right' ? x - tw : x;
+  ctx.fillStyle = '#f7d54a';
+  rr(ctx, bx, y - size * 0.6 * u, tw, size * 1.2 * u, 4 * u); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, bx + tw / 2, y + 1 * u);
+  ctx.restore();
+}
+function foulDots(ctx, st, i, x, y, w, u, { on = '#f7d54a', off = 'rgba(255,255,255,.22)', h = 5 } = {}) {
+  const n = foulCount(), gap = 3 * u;
+  const seg = (w - gap * (n - 1)) / n;
+  for (let k = 0; k < n; k++) {
+    ctx.fillStyle = k < st.fouls[i] ? on : off;
+    rr(ctx, x + k * (seg + gap), y, seg, h * u, h * u / 2); ctx.fill();
+  }
+}
+
+// ESPN-style horizontal bar: team blocks in team colour, big condensed numbers, period box on the right.
+function drawBar(ctx, W, H, st, u) {
+  const teamW = 250, perW = 108, h = 66, foulH = 14;
+  const w = (teamW * 2 + perW) * u, bh = (h + foulH) * u;
+  const [x, y] = place(W, H, w, bh);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 16 * u; ctx.shadowOffsetY = 4 * u;
+  ctx.fillStyle = '#0c0e13';
+  rr(ctx, x, y, w, bh, 7 * u); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.save(); rr(ctx, x, y, w, bh, 7 * u); ctx.clip();
+  for (let i = 0; i < 2; i++) {
+    const c = cfg.teams[i].color, tx = x + i * teamW * u;
+    const g = ctx.createLinearGradient(0, y, 0, y + h * u);
+    g.addColorStop(0, shade(c, 0.12)); g.addColorStop(1, shade(c, -0.18));
+    ctx.fillStyle = g;
+    ctx.fillRect(tx, y, teamW * u, h * u);
+    // score panel
+    const sw = 92 * u, sx = tx + teamW * u - sw;
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.fillRect(sx, y, sw, h * u);
+    const a = flash(st, i);
+    if (a) { ctx.fillStyle = `rgba(255,255,255,${0.35 * a})`; ctx.fillRect(sx, y, sw, h * u); }
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${56 * u}px ${NUM}`;
+    ctx.fillText(String(st.score[i]), sx + sw / 2, y + h * u / 2 + 3 * u);
+    ctx.fillStyle = teamInk(i);
+    ctx.textAlign = 'left';
+    fitText(ctx, cfg.teams[i].name, 700, 28 * u, teamW * u - sw - 26 * u);
+    ctx.fillText(cfg.teams[i].name, tx + 16 * u, y + h * u / 2 + 1 * u);
+    // foul strip
+    const fy = y + h * u;
+    ctx.fillStyle = '#15181f';
+    ctx.fillRect(tx, fy, teamW * u, foulH * u);
+    if (isBonus(st, i)) {
+      ctx.fillStyle = '#f7d54a';
+      ctx.font = `700 ${13 * u}px ${NUM}`;
+      ctx.textAlign = 'left';
+      ctx.fillText('BONUS', tx + 16 * u, fy + foulH * u / 2 + 1 * u);
+    }
+    foulDots(ctx, st, i, tx + 70 * u, fy + (foulH - 5) * u / 2, teamW * u - 86 * u, u);
+    if (i === 0) { ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(tx + teamW * u - 1 * u, y, 1 * u, bh); }
+    scoreBadge(ctx, st, i, sx + sw - 4 * u, y + 11 * u, u, 'right', 15);
+  }
+  // period box
+  const px = x + teamW * 2 * u;
+  ctx.fillStyle = '#0c0e13';
+  ctx.fillRect(px, y, perW * u, bh);
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${34 * u}px ${NUM}`;
+  ctx.fillText(quarterLabel(st.q), px + perW * u / 2, y + 30 * u);
+  ctx.fillStyle = '#8b93a1';
+  fitText(ctx, cfg.match || '', 600, 15 * u, perW * u - 14 * u, NUM);
+  ctx.fillText(cfg.match || '', px + perW * u / 2, y + 60 * u);
+  ctx.restore();
+}
+
+// FIBA / KBL style vertical stack: header with match + quarter, one row per team.
+function drawStack(ctx, W, H, st, u) {
+  const w = 400 * u, head = 34 * u, row = 56 * u, gap = 3 * u;
+  const bh = head + row * 2 + gap * 2;
+  const [x, y] = place(W, H, w, bh);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 14 * u; ctx.shadowOffsetY = 3 * u;
+  ctx.fillStyle = '#0d1016';
+  rr(ctx, x, y, w, bh, 6 * u); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.save(); rr(ctx, x, y, w, bh, 6 * u); ctx.clip();
+  // header
+  const hg = ctx.createLinearGradient(x, 0, x + w, 0);
+  hg.addColorStop(0, '#1b2130'); hg.addColorStop(1, '#10141d');
+  ctx.fillStyle = hg; ctx.fillRect(x, y, w, head);
+  ctx.fillStyle = '#c9ced8';
+  ctx.textAlign = 'left';
+  fitText(ctx, cfg.match || '', 600, 18 * u, w * 0.6, NUM);
+  ctx.fillText(cfg.match || '', x + 14 * u, y + head / 2 + 1 * u);
+  const qw = 70 * u;
+  ctx.fillStyle = '#f7d54a';
+  ctx.fillRect(x + w - qw, y, qw, head);
+  ctx.fillStyle = '#111';
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${22 * u}px ${NUM}`;
+  ctx.fillText(quarterLabel(st.q), x + w - qw / 2, y + head / 2 + 1 * u);
+  for (let i = 0; i < 2; i++) {
+    const c = cfg.teams[i].color, ry = y + head + gap + i * (row + gap);
+    const g = ctx.createLinearGradient(0, ry, 0, ry + row);
+    g.addColorStop(0, shade(c, 0.08)); g.addColorStop(1, shade(c, -0.15));
+    ctx.fillStyle = g; ctx.fillRect(x, ry, w, row);
+    const sw = 84 * u, sx = x + w - sw;
+    const a = flash(st, i);
+    ctx.fillStyle = '#12151c'; ctx.fillRect(sx, ry, sw, row);
+    if (a) { ctx.fillStyle = `rgba(247,213,74,${0.25 + 0.5 * a})`; ctx.fillRect(sx, ry, sw, row); }
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${48 * u}px ${NUM}`;
+    ctx.fillText(String(st.score[i]), sx + sw / 2, ry + row / 2 + 3 * u);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = teamInk(i);
+    fitText(ctx, cfg.teams[i].name, 700, 26 * u, w - sw - 130 * u);
+    ctx.fillText(cfg.teams[i].name, x + 16 * u, ry + row / 2 + 1 * u);
+    const fw = 90 * u, fx = sx - fw - 14 * u;
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    rr(ctx, fx - 6 * u, ry + row / 2 - 4 * u, fw + 12 * u, 20 * u, 4 * u); ctx.fill();
+    if (isBonus(st, i)) {
+      ctx.fillStyle = '#f7d54a';
+      ctx.font = `700 ${12 * u}px ${NUM}`;
+      ctx.textAlign = 'right';
+      ctx.fillText('BONUS', sx - 14 * u, ry + row / 2 - 10 * u);
+    }
+    foulDots(ctx, st, i, fx, ry + row / 2 + 4 * u, fw, u, { h: 6 });
+    scoreBadge(ctx, st, i, sx + sw - 4 * u, ry + 11 * u, u, 'right', 14);
+  }
+  ctx.restore();
+}
+
+// Rounded translucent pill: names outside, scores inside, period in the middle.
+function drawGlass(ctx, W, H, st, u) {
+  const w = 640 * u, h = 64 * u;
+  const [x, y] = place(W, H, w, h + 14 * u);
+  ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 20 * u; ctx.shadowOffsetY = 6 * u;
+  ctx.fillStyle = 'rgba(12,14,20,.78)';
+  rr(ctx, x, y, w, h, h / 2); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1.2 * u;
+  rr(ctx, x, y, w, h, h / 2); ctx.stroke();
+  const cx = x + w / 2, cw = 96 * u, sw = 78 * u;
+  // centre period chip
+  ctx.fillStyle = '#8ff0e0';
+  rr(ctx, cx - cw / 2, y + 10 * u, cw, h - 20 * u, (h - 20 * u) / 2); ctx.fill();
+  ctx.fillStyle = '#0b1a17';
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${28 * u}px ${NUM}`;
+  ctx.fillText(quarterLabel(st.q), cx, y + h / 2 + 2 * u);
+  for (let i = 0; i < 2; i++) {
+    const c = cfg.teams[i].color, dir = i === 0 ? -1 : 1;
+    const scx = cx + dir * (cw / 2 + sw / 2 + 4 * u);
+    const a = flash(st, i);
+    if (a) {
+      ctx.fillStyle = `rgba(143,240,224,${0.3 * a})`;
+      rr(ctx, scx - sw / 2, y + 6 * u, sw, h - 12 * u, 10 * u); ctx.fill();
+    }
+    ctx.fillStyle = '#fff';
+    ctx.font = `700 ${50 * u}px ${NUM}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(String(st.score[i]), scx, y + h / 2 + 3 * u);
+    // name + colour chip
+    const nameEdge = scx + dir * (sw / 2 + 10 * u);
+    const outer = i === 0 ? x + 28 * u : x + w - 28 * u;
+    const avail = Math.abs(nameEdge - outer) - 22 * u;
+    ctx.textAlign = i === 0 ? 'left' : 'right';
+    fitText(ctx, cfg.teams[i].name, 700, 26 * u, avail);
+    ctx.fillStyle = '#fff';
+    const tx = i === 0 ? outer + 18 * u : outer - 18 * u;
+    ctx.fillText(cfg.teams[i].name, tx, y + h / 2 + 1 * u);
+    ctx.fillStyle = c;
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1 * u;
+    const chipX = i === 0 ? outer : outer - 10 * u;
+    rr(ctx, chipX, y + h / 2 - 12 * u, 10 * u, 24 * u, 3 * u); ctx.fill(); ctx.stroke();
+    // fouls under the pill
+    const fw = 150 * u;
+    const fx = i === 0 ? cx - cw / 2 - fw - 20 * u : cx + cw / 2 + 20 * u;
+    foulDots(ctx, st, i, fx, y + h + 6 * u, fw, u, { off: 'rgba(0,0,0,.45)' });
+    if (isBonus(st, i)) {
+      ctx.fillStyle = '#f7d54a';
+      ctx.font = `700 ${14 * u}px ${NUM}`;
+      ctx.textAlign = i === 0 ? 'right' : 'left';
+      ctx.fillText('BONUS', i === 0 ? fx - 6 * u : fx + fw + 6 * u, y + h + 9 * u);
+    }
+    scoreBadge(ctx, st, i, scx + 14 * u, y - 2 * u, u);
+  }
+}
+
+// Original Momentum board (525 px wide reference on a 2000 px frame).
+function drawClassic(ctx, W, H, st, s) {
+  const pad = 5 * s;
+  const w = 525 * s;
+  const h1 = 50 * s, h2 = 82 * s, h3 = 22 * s;
+  const h = pad + h1 + h2 + pad * 0.6 + h3 + pad;
+  const [x, y] = place(W, H, w, h);
+
+  ctx.fillStyle = 'rgba(24,24,24,0.94)';
+  ctx.fillRect(x, y, w, h);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${40 * s}px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(quarterLabel(st.q), x + pad * 1.6, y + pad + h1 / 2 + 2 * s);
+  ctx.textAlign = 'right';
+  fitText(ctx, cfg.match || '', 900, 40 * s, w * 0.55);
+  ctx.fillText(cfg.match || '', x + w - pad * 1.6, y + pad + h1 / 2 + 2 * s);
+
+  const bw = (w - pad * 3) / 2;
+  const by = y + pad + h1;
+  for (let i = 0; i < 2; i++) {
+    const bx = x + pad + i * (bw + pad);
+    ctx.fillStyle = cfg.teams[i].color;
+    ctx.fillRect(bx, by, bw, h2);
+    const a = flash(st, i);
+    if (a) { ctx.fillStyle = `rgba(255,255,255,${0.25 * a})`; ctx.fillRect(bx, by, bw, h2); }
+
+    const score = String(st.score[i]);
+    ctx.font = `200 ${70 * s}px ${FONT}`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8ff0e0';
+    const sw = ctx.measureText(score).width;
+    ctx.fillText(score, bx + bw - 4 * s, by + h2 / 2 + 3 * s);
+
+    ctx.fillStyle = teamInk(i);
+    ctx.textAlign = 'left';
+    fitText(ctx, cfg.teams[i].name, 400, 42 * s, bw - sw - 12 * s);
+    ctx.fillText(cfg.teams[i].name, bx + 4 * s, by + h2 / 2 + 2 * s);
+
+    const n = foulCount();
+    const fy = by + h2 + pad * 0.6;
+    const gap = 4 * s;
+    const segW = (bw - gap * (n - 1)) / n;
+    for (let k = 0; k < n; k++) {
+      ctx.fillStyle = k < st.fouls[i] ? '#f2e000' : '#474747';
+      ctx.fillRect(bx + k * (segW + gap), fy, segW, h3);
+    }
+  }
+}
+
+
+// ---------- 미리보기 ----------
+// 화면 크기에 맞춘 캔버스에, 보이는 내용이 바뀔 때만 다시 그려요 (영상 재생을 방해하지 않게).
+let lastBoardKey = '', lastQ = '';
+function renderOverlay(st) {
+  const stage = $('#stage');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(stage.clientWidth * dpr), h = Math.round(stage.clientHeight * dpr);
+  if (!w || !h) return;
+  const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
+  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}`;
+  if (key === lastBoardKey) return;
+  lastBoardKey = key;
+  if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
+  octx.clearRect(0, 0, w, h);
+  if (cfg.show) drawBoard(octx, w, h, st);
+}
+function renderLive() {
+  const st = stateAt(player.time());
+  const q = quarterLabel(st.q);
+  if (q !== lastQ) { lastQ = q; $('#curQuarter').textContent = q; }
+  renderOverlay(st);
+}
+document.fonts.addEventListener('loadingdone', () => { lastBoardKey = ''; });
+
+// ---------- 영상 편집 탭 설정 ----------
+function renderVideoPane() {
+  const sb = game.sb;
+  [0, 1].forEach(i => {
+    $('#sbName' + i).textContent = game.teams[i].name;
+    $('#sbColor' + i).value = sb.colors[i].color;
+    $('#sbText' + i).value = sb.colors[i].text;
+  });
+  $('#sbShow').checked = sb.show !== false;
+  $('#sbMatch').value = sb.match || ''; $('#sbMatch').placeholder = `${game.teams[0].name} vs ${game.teams[1].name}`;
+  $('#sbStartQ').value = sb.startQ; $('#sbFoulSlots').value = sb.foulSlots;
+  $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash;
+  $('#sbSize').value = sb.size; $('#sizeVal').textContent = sb.size;
+  $('#autoQ').checked = sb.autoQ !== false; $('#skipCuts').checked = sb.skipCuts !== false;
+  $('#trimStart').value = sb.trimStart != null ? fmt(sb.trimStart, true) : '';
+  $('#trimEnd').value = sb.trimEnd != null ? fmt(sb.trimEnd, true) : '';
+  $('#quality').value = sb.quality; $('#format').value = sb.format || 'youtube';
+  $('#xRes').value = sb.res; $('#xFps').value = String(sb.fps); $('#xCodec').value = sb.vcodec;
+  $('#xMbps').value = sb.mbps; $('#xAbr').value = String(sb.abr); $('#xAch').value = String(sb.ach);
+  $('#xMbps').disabled = sb.quality !== 'custom';
+  renderStyles(); renderCuts(); renderClips();
+}
+function readVideoPane() {
+  const sb = game.sb;
+  [0, 1].forEach(i => { sb.colors[i] = { color: $('#sbColor' + i).value, text: $('#sbText' + i).value }; });
+  sb.show = $('#sbShow').checked;
+  sb.match = $('#sbMatch').value;
+  sb.startQ = +$('#sbStartQ').value;
+  sb.foulSlots = Math.min(10, Math.max(1, +$('#sbFoulSlots').value || 5));
+  sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked;
+  sb.size = +$('#sbSize').value; $('#sizeVal').textContent = sb.size;
+  sb.autoQ = $('#autoQ').checked; sb.skipCuts = $('#skipCuts').checked;
+  sb.trimStart = parseTime($('#trimStart').value); sb.trimEnd = parseTime($('#trimEnd').value);
+  sb.quality = $('#quality').value;
+  sb.res = $('#xRes').value; sb.fps = +$('#xFps').value; sb.vcodec = $('#xCodec').value;
+  sb.mbps = Math.min(150, Math.max(1, +$('#xMbps').value || 12));
+  sb.abr = +$('#xAbr').value; sb.ach = +$('#xAch').value;
+  $('#xMbps').disabled = sb.quality !== 'custom';
+  save(); renderMarkers(); renderLog();
+}
+$$('#pane-video input, #pane-video select').forEach(el => {
+  if (el.id === 'format') return;
+  el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
+    // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
+    if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
+    readVideoPane();
+    if (el.id === 'sbColor0' || el.id === 'sbColor1' || el.id === 'sbText0' || el.id === 'sbText1') renderStyles();
+  });
+});
+const EXPORT_PRESETS = {
+  youtube: { res: '1080', fps: 30, vcodec: 'avc', abr: 192, ach: 2 },
+  youtube4k: { res: '2160', fps: 30, vcodec: 'avc', abr: 192, ach: 2 },
+  light: { res: '720', fps: 30, vcodec: 'avc', abr: 128, ach: 2 },
+  original: { res: 'orig', fps: 0, vcodec: 'avc', abr: 192, ach: 0 },
+};
+$('#format').addEventListener('input', () => {
+  game.sb.format = $('#format').value;
+  Object.assign(game.sb, EXPORT_PRESETS[game.sb.format] || {});
+  if (game.sb.format === 'custom') $('#adv').open = true;
+  save(); renderVideoPane();
+});
+$('#btnTrimStart').addEventListener('click', () => { game.sb.trimStart = player.time(); save(); renderVideoPane(); renderMarkers(); });
+$('#btnTrimEnd').addEventListener('click', () => { game.sb.trimEnd = player.time(); save(); renderVideoPane(); renderMarkers(); });
+function baseName() { return (clips[0]?.name.replace(/\.[^.]+$/, '') || 'game') + (clips.length > 1 ? `-외${clips.length - 1}개` : ''); }
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+// ---------- export ----------
+// Clips are decoded one after another, the scoreboard is drawn on each frame, and everything is
+// re-encoded into a single MP4. Audio is resampled to the first clip's format so clips join cleanly.
+let exporting = null;
+$('#btnCancel').onclick = () => { if (exporting) exporting.canceled = true; };
+$('#btnExport').onclick = async () => {
+  if (mode !== 'file' || !clips.length) { showMsg(mode === 'yt' ? '유튜브 영상은 내보낼 수 없어요. 원본 영상 파일을 열어 주세요.' : '먼저 영상 파일을 열어 주세요.', true); return; }
+  const outName = baseName() + '-scoreboard.mp4';
+
+  // Ask for the save location first, while we still hold the click's user activation.
+  let writable = null;
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: outName, types: [{ description: 'MP4 영상', accept: { 'video/mp4': ['.mp4'] } }] });
+      writable = await handle.createWritable();
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      writable = null;
+    }
+  }
+
+  video.pause();
+  $('#btnExport').disabled = true;
+  $('#exportBox').classList.remove('hidden');
+  setProgress(0, '준비 중…');
+  showMsg('');
+  const job = exporting = { canceled: false };
+  const started = performance.now();
+  let output = null;
+  try {
+    const MB = await import(MEDIABUNNY_URL);
+    await Promise.all([
+      document.fonts.load(`900 40px ${FONT}`, 'A1'),
+      document.fonts.load(`700 40px ${NUM}`, '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+'),
+      document.fonts.load(`700 40px ${FONT}`, cfg.teams.map(t => t.name).join('') || '가'),
+      document.fonts.load(`400 40px ${FONT}`, cfg.teams.map(t => t.name).join('') || '가'),
+      document.fonts.load(`200 40px ${FONT}`, '0123456789'),
+    ]);
+
+    // Game-timeline range to export, and the clips it touches.
+    const S = Math.max(0, cfg.trimStart ?? 0), E = Math.min(total(), cfg.trimEnd ?? total());
+    if (E - S < 0.1) throw new Error('내보낼 구간이 너무 짧아요. 시작/끝을 확인해 주세요.');
+    const parts = [];
+    for (const [a, z] of keepRanges(S, E)) {
+      clips.forEach((c, k) => {
+        const o = offset(k), from = Math.max(a, o) - o, to = Math.min(z, o + c.dur) - o;
+        if (to - from > 0.01) parts.push({ c, k, o, from, to });
+      });
+    }
+    if (!parts.length) throw new Error('잘라낸 구간을 빼고 나면 내보낼 부분이 없어요.');
+
+    // One decoder input per clip, shared by every part cut from it.
+    const inputs = new Map();
+    const openClip = k => {
+      if (!inputs.has(k)) inputs.set(k, (async () => {
+        const c = clips[k];
+        const input = new MB.Input({ source: new MB.BlobSource(c.file), formats: MB.ALL_FORMATS });
+        const vt = await input.getPrimaryVideoTrack();
+        if (!vt) throw new Error(`${c.file.name}: 영상 트랙을 찾지 못했어요.`);
+        if (!(await vt.canDecode())) throw new Error(`${c.file.name}: 이 브라우저에서 열 수 없는 영상 형식이에요.`);
+        const at = await input.getPrimaryAudioTrack();
+        return { input, vt, at: at && (await at.canDecode()) ? at : null, t0: await vt.getFirstTimestamp() };
+      })());
+      return inputs.get(k);
+    };
+    const opened = await Promise.all(parts.map(async part => ({ ...part, ...(await openClip(part.k)) })));
+
+    // 'youtube' matches the video team's Resolve preset: 1920×1080 (1080×1920 for portrait),
+    // H.264, constant 30 fps, AAC stereo 48 kHz. 'original' keeps the first clip's size and timing.
+    // Presets only fill these settings in (see EXPORT_PRESETS); the export reads the settings.
+    const first = opened[0].vt;
+    const portrait = first.displayHeight > first.displayWidth;
+    let W = first.displayWidth & ~1, H = first.displayHeight & ~1;
+    if (cfg.res !== 'orig') {
+      const short = Number(cfg.res), long = Math.round(short * 16 / 9 / 2) * 2;
+      [W, H] = portrait ? [short, long] : [long, short];
+    }
+    const FPS = Number(cfg.fps) || 0;
+    const notes = [];
+    const CODEC_NAME = { avc: 'H.264', hevc: 'H.265', av1: 'AV1', vp9: 'VP9' };
+    const wanted = cfg.vcodec || 'avc';
+    const codec = await MB.getFirstEncodableVideoCodec([wanted, ...['avc', 'hevc', 'vp9', 'av1'].filter(c => c !== wanted)], { width: W, height: H });
+    if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
+    if (codec !== wanted) notes.push(`${CODEC_NAME[wanted]} 인코더가 없어 ${CODEC_NAME[codec] || codec}로 저장`);
+    const quality = cfg.quality === 'custom'
+      ? Math.round(cfg.mbps * 1e6)
+      : cfg.quality === 'source'
+      ? await sourceBitrate(opened, codec, W * H)
+      : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
+
+    const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
+    output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const videoSource = new MB.CanvasSource(canvas, { codec, bitrate: quality });
+    output.addVideoTrack(videoSource);
+
+    let audioSource = null, audioFormat = null;
+    const firstAudio = opened.find(o => o.at)?.at;
+    if (firstAudio) {
+      const keep = !cfg.ach;
+      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : cfg.ach;
+      const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
+      if (acodec && acodec !== 'aac') notes.push(`AAC 인코더가 없어 ${acodec.toUpperCase()} 오디오로 저장`);
+      if (acodec) {
+        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: (Number(cfg.abr) || 192) * 1000 });
+        audioFormat = { sampleRate, numberOfChannels };
+        output.addAudioTrack(audioSource);
+      }
+    }
+    await output.start();
+    const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
+
+    const span = parts.reduce((n, p) => n + p.to - p.from, 0);
+    let base = 0, done = 0, lastV = -1, lastA = 0, nextF = 0;
+    const report = t => {
+      const p = Math.min(1, (done + t) / span);
+      const el = (performance.now() - started) / 1000;
+      const eta = p > 0.02 ? el / p - el : null;
+      setProgress(p, `${Math.round(p * 100)}%` + (clips.length > 1 ? ` · 영상 ${curClip}/${clips.length}` : '') + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
+    };
+    let curClip = 1;
+    for (const part of opened) {
+      curClip = part.k + 1;
+      const { vt, at, t0, o, from, to } = part;
+      const len = to - from;
+      const videoJob = (async () => {
+        for await (const sample of new MB.VideoSampleSink(vt).samples(t0 + from, t0 + to)) {
+          if (job.canceled) { sample.close(); throw new Error('canceled'); }
+          const local = sample.timestamp - t0;
+          // Scale to the output size, letterboxing if the aspect ratio differs.
+          const sc = Math.min(W / sample.displayWidth, H / sample.displayHeight);
+          const dw = sample.displayWidth * sc, dh = sample.displayHeight * sc;
+          const paint = gameT => {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+            sample.draw(ctx, (W - dw) / 2, (H - dh) / 2, dw, dh);
+            drawBoard(ctx, W, H, stateAt(gameT));
+          };
+          const ts = Math.max(base + local - from, lastV + 0.001);
+          try {
+            if (FPS) {
+              // Constant frame rate: emit every 1/FPS slot this source frame covers (phones record
+              // variable frame rate), repeating or skipping source frames as needed.
+              const end = ts + (sample.duration || 1 / FPS);
+              while (nextF / FPS < end - 1e-6) {
+                const ft = nextF / FPS;
+                paint(o + from + (ft - base));
+                await videoSource.add(ft, 1 / FPS);
+                nextF++;
+              }
+            } else {
+              paint(o + local);
+              await videoSource.add(ts, sample.duration);
+            }
+          } finally {
+            sample.close();
+          }
+          lastV = ts;
+          report(Math.max(0, local - from));
+        }
+      })();
+      const audioJob = (async () => {
+        if (!at || !audioSource) return;
+        const conform = makeResampler(MB, audioFormat.sampleRate, audioFormat.numberOfChannels);
+        for await (const raw of new MB.AudioSampleSink(at).samples(t0 + from, t0 + to)) {
+          if (job.canceled) { raw.close(); throw new Error('canceled'); }
+          const s = conform(raw);
+          if (s !== raw) raw.close();
+          if (!s) continue;
+          const ts = base + (s.timestamp - t0) - from;
+          if (ts < lastA - 0.02) { s.close(); continue; }
+          s.setTimestamp(Math.max(ts, lastA));
+          lastA = s.timestamp + s.duration;
+          await audioSource.add(s);
+          s.close();
+        }
+      })();
+      await Promise.all([videoJob, audioJob]);
+      done += len;
+      base = Math.max(base + len, lastV + 0.001, lastA, FPS ? nextF / FPS : 0);
+    }
+    for (const p of inputs.values()) (await p).input.dispose?.();
+    await output.finalize();
+
+    if (!writable) downloadBlob(new Blob([target.buffer], { type: 'video/mp4' }), outName);
+    setProgress(1, '완료');
+    showMsg(`내보내기 완료 (${fmt((performance.now() - started) / 1000)} 걸림${brNote})${notes.length ? ` · 참고: ${notes.join(', ')}` : ''}. ${writable ? '저장한 위치에서 파일을 확인하세요.' : '다운로드 폴더를 확인하세요.'}`);
+  } catch (err) {
+    try { if (output && output.state !== 'finalized') await output.cancel(); } catch {}
+    if (job.canceled) showMsg('내보내기를 취소했어요.');
+    else { console.error(err); showMsg('내보내기에 실패했어요: ' + (err?.message || err), true); }
+    try { await writable?.abort(); } catch {}
+  } finally {
+    exporting = null;
+    $('#btnExport').disabled = false;
+    setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
+  }
+};
+// Clips from different phones/apps can have different sample rates (e.g. 44.1 vs 48 kHz) or
+// channel counts, but one audio track needs constant parameters. Converts each clip's samples to
+// the output format with linear interpolation, carrying state across chunks so there are no clicks.
+function makeResampler(MB, rate, ch) {
+  let prev = null, frac = 0;
+  return s => {
+    const n = s.numberOfFrames, sch = s.numberOfChannels, sr = s.sampleRate;
+    if (sr === rate && sch === ch) return s;
+    const src = [];
+    for (let c = 0; c < sch; c++) {
+      const a = new Float32Array(n);
+      s.copyTo(a, { planeIndex: c, format: 'f32-planar' });
+      src.push(a);
+    }
+    // Source channel mix for output channel c: mono→stereo duplicates, stereo→mono averages.
+    const mix = (i, c) => {
+      const at = (sc) => (i < 0 ? (prev ? prev[sc] : src[sc][0]) : src[sc][Math.min(i, n - 1)]);
+      if (ch === 1 && sch > 1) { let v = 0; for (let sc = 0; sc < sch; sc++) v += at(sc); return v / sch; }
+      return at(Math.min(c, sch - 1));
+    };
+    const step = sr / rate;
+    const outLen = n - 1 - frac >= 0 ? Math.floor((n - 1 - frac) / step) + 1 : 0;
+    const out = new Float32Array(outLen * ch);
+    for (let k = 0; k < outLen; k++) {
+      const p = frac + k * step, i = Math.floor(p), f = p - i;
+      for (let c = 0; c < ch; c++) out[c * outLen + k] = mix(i, c) * (1 - f) + mix(i + 1, c) * f;
+    }
+    const ts = s.timestamp + frac / sr;
+    frac += outLen * step - n;
+    prev = src.map(a => a[n - 1]);
+    if (!outLen) return null;
+    return new MB.AudioSample({ data: out, format: 'f32-planar', numberOfChannels: ch, sampleRate: rate, timestamp: ts });
+  };
+}
+// Bitrate matching the source clips (the highest among them), adjusted for codec efficiency
+// so e.g. an HEVC original re-encoded as H.264 gets proportionally more bits.
+const CODEC_EFF = { avc: 1, hevc: 0.6, vp9: 0.6, av1: 0.4, vp8: 1.2 };
+async function sourceBitrate(opened, outCodec, outPixels) {
+  let best = 0;
+  for (const o of opened) {
+    let br = 0;
+    try { br = (await o.vt.computePacketStats(900)).averageBitrate; } catch {}
+    if (!br) br = o.c.file.size * 8 / o.c.dur * 0.93;   // fallback: whole file minus ~audio share
+    br *= (CODEC_EFF[outCodec] || 1) / (CODEC_EFF[o.vt.codec] || 1);
+    // Downscaling (e.g. 4K → 1080p) needs proportionally fewer bits; never scale up.
+    br *= Math.min(1, (outPixels / (o.vt.displayWidth * o.vt.displayHeight)) ** 0.95);
+    best = Math.max(best, br);
+  }
+  return Math.round(Math.min(100e6, Math.max(2e6, best || 8e6)));
+}
+function setProgress(p, label) { $('#exportBar').style.width = `${Math.round(p * 100)}%`; $('#exportLabel').textContent = label; }
+function showMsg(text, err) { const m = $('#exportMsg'); m.textContent = text; m.classList.toggle('err', !!err); }
+
+// ---------- style picker ----------
+// Size (%) that makes each style fill ~90% of its thumbnail.
+const THUMB_SIZE = { bar: 90 * 440 / 608, stack: 62, glass: 90 * 450 / 640, classic: 72 };
+function renderStyles() {
+  const box = $('#styles');
+  if (!box.children.length) {
+    box.innerHTML = Object.entries(STYLES).map(([k, v]) => `<button data-style="${k}"><canvas width="640" height="280"></canvas>${v.label}</button>`).join('');
+    box.onclick = e => {
+      const b = e.target.closest('[data-style]');
+      if (!b) return;
+      game.sb.style = b.dataset.style;
+      save(); renderStyles();
+    };
+  }
+  const demo = { t: 10, q: 3, score: [52, 48], fouls: [2, 5], last: [{ t: 9.6, v: 3 }, null] };
+  const saved = { pos: cfg.pos, size: cfg.size, style: cfg.style };
+  box.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.style === cfg.style);
+    const c = b.querySelector('canvas'), x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, c.height);
+    g.addColorStop(0, '#c9b49a'); g.addColorStop(1, '#8a6d4c');
+    x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+    Object.assign(cfg, { style: b.dataset.style, pos: 'tc', size: THUMB_SIZE[b.dataset.style] });
+    drawBoard(x, c.width, c.height, demo);
+    Object.assign(cfg, saved);
+  });
+}
+document.fonts.ready.then(() => renderStyles());
+// Redraw once web fonts arrive so the preview doesn't keep a fallback-font frame.
+document.fonts.addEventListener('loadingdone', () => { lastBoardKey = ''; });
+
+document.fonts.ready.then(() => renderStyles());
+
 // 재생 위치 표시
-let lastNow = null;
+let lastNow = null, lastTimeLabel = '';
 function tick() {
   if (mode) {
+    if (game.sb.skipCuts && !player.paused() && !pendingSeek) {
+      const c = cutAt(player.time());
+      if (c) player.seek(c.e);
+    }
+    renderLive();
     const t = player.time(), D = player.duration();
-    $('#timeLabel').textContent = `${fmt(t)} / ${fmt(D)}`;
+    const tl = `${fmt(t)}<br>/ ${fmt(D)}`;
+    if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').innerHTML = tl; }
     $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
     if ($('#logFollow').checked && !$('#pane-log').classList.contains('hidden')) {
       const rows = $$('#log .ev');
