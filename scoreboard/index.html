@@ -165,6 +165,9 @@
   .clip button { padding: 1px 6px; font-size: 11px; }
   .timeline .mk.bound { top: 0; bottom: 0; width: 2px; background: #6f7a8c; }
   .events tr.auto td { color: var(--muted); font-style: italic; }
+  details.adv { margin-top: 8px; }
+  details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 2px 0 6px; }
+  details.adv .grid3 { row-gap: 6px; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -300,7 +303,10 @@
         <div class="field"><label>형식</label>
           <select id="format" title="YouTube: 1920×1080 · H.264 · 30fps · AAC 스테레오 (DaVinci Resolve YouTube 프리셋과 같음)">
             <option value="youtube">YouTube 1080p 30fps</option>
+            <option value="youtube4k">YouTube 4K 30fps</option>
+            <option value="light">가볍게 720p 30fps</option>
             <option value="original">원본 해상도·프레임</option>
+            <option value="custom">사용자 지정</option>
           </select>
         </div>
         <div class="field"><label>화질</label>
@@ -309,9 +315,31 @@
             <option value="high">높음</option>
             <option value="very_high">매우 높음</option>
             <option value="medium">보통</option>
+            <option value="custom">직접 입력 (Mbps)</option>
           </select>
         </div>
       </div>
+      <details class="adv" id="adv">
+        <summary>세부 설정</summary>
+        <div class="grid3">
+          <div class="field"><label>해상도</label>
+            <select id="xRes"><option value="orig">원본</option><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K (2160p)</option></select>
+          </div>
+          <div class="field"><label>프레임</label>
+            <select id="xFps"><option value="0">원본</option><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="50">50</option><option value="60">60</option></select>
+          </div>
+          <div class="field"><label>영상 코덱</label>
+            <select id="xCodec"><option value="avc">H.264</option><option value="hevc">H.265 (HEVC)</option><option value="av1">AV1</option></select>
+          </div>
+          <div class="field"><label>영상 Mbps</label><input type="number" id="xMbps" min="1" max="150" step="0.5" title="화질을 '직접 입력'으로 고르면 적용돼요"></div>
+          <div class="field"><label>오디오 음질</label>
+            <select id="xAbr"><option value="128">128 kbps</option><option value="192">192 kbps</option><option value="256">256 kbps</option><option value="320">320 kbps</option></select>
+          </div>
+          <div class="field"><label>오디오 채널</label>
+            <select id="xAch"><option value="2">스테레오</option><option value="1">모노</option><option value="0">원본</option></select>
+          </div>
+        </div>
+      </details>
       <button id="btnExport" class="primary" style="margin-top:10px;width:100%">점수판 입힌 영상 내보내기</button>
       <div id="exportBox" class="hidden" style="margin-top:10px">
         <div class="progress"><i id="exportBar"></i></div>
@@ -346,6 +374,7 @@ const DEFAULT_CFG = {
   trimEnd: null,
   quality: 'source',
   format: 'youtube',
+  res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   qv: 2,               // settings version; v1 saves predate the 'source' quality option
   autoQ: true,
 };
@@ -365,11 +394,14 @@ const octx = overlay.getContext('2d');
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function save() {
-  lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality, format: cfg.format, qv: 2 });
+  lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality, format: cfg.format, res: cfg.res, fps: cfg.fps, vcodec: cfg.vcodec, mbps: cfg.mbps, abr: cfg.abr, ach: cfg.ach, qv: 2 });
   if (storeKey) lsSet(storeKey, { cfg, events, order: clips.map(c => c.key) });
 }
 const last = lsGet('mm-sb:last-cfg');
 if (last) { Object.assign(cfg, last); if (!last.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
+// Settings saved before the detailed export options existed: derive them from the old format.
+function migrateExport(saved) { if (saved && !saved.res && saved.format === 'original') Object.assign(cfg, { res: 'orig', fps: 0, ach: 0 }); }
+migrateExport(last);
 
 // ---------- game logic ----------
 // ---------- multi-clip timeline ----------
@@ -935,6 +967,7 @@ async function openFiles(list, append) {
     if (saved?.order) clips.sort((x, y) => saved.order.indexOf(x.key) - saved.order.indexOf(y.key));
     events = saved?.events || [];
     if (saved?.cfg) { Object.assign(cfg, saved.cfg); if (!saved.cfg.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
+    migrateExport(saved?.cfg);
     nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
     undoStack = [];
     cur = 0;
@@ -1090,6 +1123,9 @@ function syncForm() {
   $('#trimEnd').value = cfg.trimEnd != null ? fmt(cfg.trimEnd, true) : '';
   $('#quality').value = cfg.quality;
   $('#format').value = cfg.format || 'youtube';
+  $('#xRes').value = cfg.res; $('#xFps').value = String(cfg.fps); $('#xCodec').value = cfg.vcodec;
+  $('#xMbps').value = cfg.mbps; $('#xAbr').value = String(cfg.abr); $('#xAch').value = String(cfg.ach);
+  $('#xMbps').disabled = cfg.quality !== 'custom';
 }
 function readForm() {
   for (const i of [0, 1]) cfg.teams[i] = { name: $(`#t${i}name`).value, color: $(`#t${i}color`).value, text: $(`#t${i}text`).value };
@@ -1104,12 +1140,33 @@ function readForm() {
   cfg.trimStart = parseTime($('#trimStart').value);
   cfg.trimEnd = parseTime($('#trimEnd').value);
   cfg.quality = $('#quality').value;
-  cfg.format = $('#format').value;
+  cfg.res = $('#xRes').value; cfg.fps = Number($('#xFps').value); cfg.vcodec = $('#xCodec').value;
+  cfg.mbps = Math.min(150, Math.max(1, Number($('#xMbps').value) || 12));
+  cfg.abr = Number($('#xAbr').value); cfg.ach = Number($('#xAch').value);
+  $('#xMbps').disabled = cfg.quality !== 'custom';
   changed();
 }
 $$('.side input, .side select').forEach(el => {
-  if (el.id === 'jsonInput') return;
-  el.addEventListener(el.type === 'text' ? 'change' : 'input', readForm);
+  if (el.id === 'jsonInput' || el.id === 'format') return;
+  el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
+    // Touching a detailed export setting turns the preset into "custom".
+    if (el.closest('#adv') && el.id !== 'xMbps') cfg.format = $('#format').value = 'custom';
+    readForm();
+  });
+});
+// Export presets fill in the detailed settings.
+const EXPORT_PRESETS = {
+  youtube: { res: '1080', fps: 30, vcodec: 'avc', abr: 192, ach: 2 },
+  youtube4k: { res: '2160', fps: 30, vcodec: 'avc', abr: 192, ach: 2 },
+  light: { res: '720', fps: 30, vcodec: 'avc', abr: 128, ach: 2 },
+  original: { res: 'orig', fps: 0, vcodec: 'avc', abr: 192, ach: 0 },
+};
+$('#format').addEventListener('input', () => {
+  cfg.format = $('#format').value;
+  Object.assign(cfg, EXPORT_PRESETS[cfg.format] || {});
+  if (cfg.format === 'custom') $('#adv').open = true;
+  syncForm();
+  readForm();
 });
 $('#btnSwap').onclick = () => {
   cfg.teams.reverse();
@@ -1210,17 +1267,24 @@ $('#btnExport').onclick = async () => {
 
     // 'youtube' matches the video team's Resolve preset: 1920×1080 (1080×1920 for portrait),
     // H.264, constant 30 fps, AAC stereo 48 kHz. 'original' keeps the first clip's size and timing.
-    const yt = cfg.format !== 'original';
+    // Presets only fill these settings in (see EXPORT_PRESETS); the export reads the settings.
     const first = opened[0].vt;
     const portrait = first.displayHeight > first.displayWidth;
-    const W = yt ? (portrait ? 1080 : 1920) : first.displayWidth & ~1;
-    const H = yt ? (portrait ? 1920 : 1080) : first.displayHeight & ~1;
-    const FPS = yt ? 30 : 0;
+    let W = first.displayWidth & ~1, H = first.displayHeight & ~1;
+    if (cfg.res !== 'orig') {
+      const short = Number(cfg.res), long = Math.round(short * 16 / 9 / 2) * 2;
+      [W, H] = portrait ? [short, long] : [long, short];
+    }
+    const FPS = Number(cfg.fps) || 0;
     const notes = [];
-    const codec = await MB.getFirstEncodableVideoCodec(yt ? ['avc', 'hevc', 'vp9'] : ['avc', 'hevc', 'vp9', 'av1'], { width: W, height: H });
+    const CODEC_NAME = { avc: 'H.264', hevc: 'H.265', av1: 'AV1', vp9: 'VP9' };
+    const wanted = cfg.vcodec || 'avc';
+    const codec = await MB.getFirstEncodableVideoCodec([wanted, ...['avc', 'hevc', 'vp9', 'av1'].filter(c => c !== wanted)], { width: W, height: H });
     if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
-    if (yt && codec !== 'avc') notes.push(`H.264 인코더가 없어 ${codec.toUpperCase()}로 저장`);
-    const quality = cfg.quality === 'source'
+    if (codec !== wanted) notes.push(`${CODEC_NAME[wanted]} 인코더가 없어 ${CODEC_NAME[codec] || codec}로 저장`);
+    const quality = cfg.quality === 'custom'
+      ? Math.round(cfg.mbps * 1e6)
+      : cfg.quality === 'source'
       ? await sourceBitrate(opened, codec, W * H)
       : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
 
@@ -1235,17 +1299,18 @@ $('#btnExport').onclick = async () => {
     let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
     if (firstAudio) {
-      const sampleRate = yt ? 48000 : firstAudio.sampleRate, numberOfChannels = yt ? 2 : firstAudio.numberOfChannels;
+      const keep = !cfg.ach;
+      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : cfg.ach;
       const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
-      if (yt && acodec && acodec !== 'aac') notes.push(`AAC 인코더가 없어 ${acodec.toUpperCase()} 오디오로 저장`);
+      if (acodec && acodec !== 'aac') notes.push(`AAC 인코더가 없어 ${acodec.toUpperCase()} 오디오로 저장`);
       if (acodec) {
-        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: MB.QUALITY_HIGH });
+        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: (Number(cfg.abr) || 192) * 1000 });
         audioFormat = { sampleRate, numberOfChannels };
         output.addAudioTrack(audioSource);
       }
     }
     await output.start();
-    const brNote = `${yt ? ` · ${W}×${H} ${FPS}fps` : ''}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
+    const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
 
     const span = E - S;
     let base = 0, done = 0, lastV = -1, lastA = 0, nextF = 0;
