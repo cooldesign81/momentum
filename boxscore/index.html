@@ -56,7 +56,7 @@
   .app { display: grid; grid-template-columns: minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
   .main { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   .side { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
-  @media (max-width: 700px) { .stagerow { flex-wrap: wrap; } .vcol { flex-direction: row; flex-wrap: wrap; width: 100%; order: 2; } .vcol button { width: auto; } .vcol .vsep { display: none; } }
+  @media (max-width: 700px) { .stagerow { flex-wrap: wrap; } .vcol { flex-direction: row; flex-wrap: wrap; align-items: center !important; width: 100%; order: 2; } .vcol button { opacity: .9; } .vcol .vsep { display: none; } .vcol .time { margin-top: 0; } }
   @media (max-width: 1000px) {
     .app { grid-template-columns: 1fr; height: auto; }
     .main { overflow: visible; }
@@ -80,12 +80,19 @@
   .notice { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: rgba(242,224,0,.1); border: 1px solid rgba(242,224,0,.45); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; flex: none; }
   .notice b { color: var(--text); }
   /* 영상 좌우 세로 버튼 */
-  .stagerow { display: flex; justify-content: center; align-items: flex-start; gap: 10px; flex: none; }
-  .vcol { display: flex; flex-direction: column; gap: 6px; width: 96px; flex: none; }
-  .vcol button { width: 100%; white-space: nowrap; padding: 7px 4px; }
-  .vcol .time { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4; }
-  .vcol .q { font-weight: 900; font-size: 18px; text-align: center; }
-  .vcol .vsep { height: 1px; background: var(--line); margin: 2px 0; }
+  /* 영상에 딱 붙인 옅은 버튼 — 영상 볼 때 거슬리지 않게 작고 흐리게, 마우스를 올리면 또렷하게 */
+  .stagerow { display: flex; justify-content: center; align-items: stretch; gap: 4px; flex: none; }
+  .vcol { display: flex; flex-direction: column; gap: 2px; width: 84px; flex: none; }
+  #ctlLeft { align-items: flex-end; text-align: right; }
+  .vcol.speed { align-items: flex-start; }
+  .vcol button { background: transparent; border: 1px solid transparent; color: var(--muted); font-size: 11px; font-weight: 400; padding: 3px 6px; border-radius: 5px; white-space: nowrap; opacity: .5; transition: opacity .15s, color .15s; }
+  .vcol button:hover, .vcol button:focus-visible { opacity: 1; color: var(--text); border-color: var(--line); background: var(--panel); }
+  .vcol button.on { opacity: .85; color: var(--accent); border-color: transparent; }
+  .vcol button.on:hover { border-color: var(--line); }
+  .vcol kbd { font-size: 9px; min-width: 0; padding: 0 3px; border-bottom-width: 1px; opacity: .8; }
+  .vcol .q { font-size: 12px; font-weight: 700; color: var(--muted); opacity: .7; padding: 4px 6px 0; }
+  .vcol .vsep { height: 6px; }
+  .vcol .time { margin-top: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); opacity: .75; white-space: nowrap; padding: 0 6px 2px; font-variant-numeric: tabular-nums; }
   .speed button.on { border-color: var(--accent); color: var(--accent); }
   .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
   .timeline .mk { position: absolute; width: 2px; height: 9px; pointer-events: none; opacity: .85; }
@@ -256,7 +263,7 @@
   </div>
   <div class="hr">
     <div class="modebar">
-      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="pick">선수 선택</button><button data-mode="grid">표</button></span>
+      <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="grid">표</button><button data-mode="pick">선수 선택</button></span>
       <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
     </div>
     <div class="yt-in">
@@ -285,10 +292,10 @@
         <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
         <button id="btnBack" title="뒤로 (←)">−5초</button>
         <button id="btnFwd" title="앞으로 (→)">+5초</button>
-        <span class="time" id="timeLabel">0:00<br>/ 0:00</span>
         <span class="vsep"></span>
         <span class="q" id="curQuarter" title="현재 쿼터">1ST</span>
         <button id="btnNextQ" title="현재 위치부터 다음 쿼터 (N)">다음 쿼터 <kbd>N</kbd></button>
+        <span class="time" id="timeLabel">0:00 / 0:00</span>
       </div>
       <div class="stage" id="stage">
         <video id="video" playsinline preload="auto" class="hidden"></video>
@@ -582,7 +589,7 @@ const KEYMAP = Object.fromEntries(STATS.map(s => [s.key.toLowerCase(), s.k]));
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 const OPT_KEY = 'mm-box:opts';
-const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'pick' }, lsGet(OPT_KEY));
+const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
 const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ'];
@@ -1341,6 +1348,7 @@ document.addEventListener('drop', ev => {
   if (ev.dataTransfer.files.length) openFiles(ev.dataTransfer.files);
   else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
 });
+$('#btnUndo').addEventListener('click', ev => { undo(); ev.currentTarget.blur(); });
 $('#ytNoticeClose').addEventListener('click', () => { $('#ytNotice').classList.add('hidden'); fitStage(); });
 $('#btnPlay').addEventListener('click', () => player.toggle());
 $('#shield').addEventListener('click', () => player.toggle());
@@ -1553,7 +1561,8 @@ function fitStage() {
   if (row.classList.contains('hidden')) return;
   const main = $('.main'), cs = getComputedStyle(main);
   const narrow = window.innerWidth <= 700;
-  const cols = narrow ? 0 : [...row.querySelectorAll('.vcol')].reduce((w, c) => w + c.offsetWidth + 10, 0);
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  const cols = narrow ? 0 : [...row.querySelectorAll('.vcol')].reduce((w, c) => w + c.offsetWidth + gap, 0);
   const availW = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - cols;
   const maxH = Math.max(180, window.innerHeight * 0.52);
   const ar = mode === 'file' && video.videoWidth ? video.videoWidth / video.videoHeight : 16 / 9;
@@ -2263,8 +2272,8 @@ function tick() {
     }
     renderLive();
     const t = player.time(), D = player.duration();
-    const tl = `${fmt(t)}<br>/ ${fmt(D)}`;
-    if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').innerHTML = tl; }
+    const tl = `${fmt(t)} / ${fmt(D)}`;
+    if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').textContent = tl; }
     $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
     if ($('#logFollow').checked && !$('#pane-log').classList.contains('hidden')) {
       const rows = $$('#log .ev');
