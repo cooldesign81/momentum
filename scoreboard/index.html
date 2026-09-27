@@ -120,16 +120,24 @@
   .pad .fl i { flex: 1; height: 6px; background: #3a3f48; border-radius: 1px; }
   .pad .fl i.on { background: var(--warn); }
 
-  section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; letter-spacing: .3px; }
+  section { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  section h2 { display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 700; letter-spacing: .3px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field label { font-size: 12px; color: var(--muted); }
   .team-in { display: flex; gap: 6px; }
+  .team-row { display: grid; grid-template-columns: 42px 1fr 36px 36px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .team-row.head { margin-bottom: 2px; font-size: 11px; color: var(--muted); }
+  .team-row.head span:nth-child(n+3) { text-align: center; }
+  .side-lbl { font-size: 12px; color: var(--muted); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: end; }
+  .grid4 { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+  .grid4 input, .grid4 select { padding: 6px; }
+  button.mini { padding: 3px 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
   .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
   .keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 12px; color: var(--muted); align-items: center; }
 
-  .events { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .events { max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
   .events table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .events td { padding: 5px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   .events tr:hover td { background: var(--panel-2); }
@@ -143,11 +151,11 @@
   .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
   .msg { font-size: 12px; margin-top: 8px; line-height: 1.5; }
   .msg.err { color: var(--danger); }
-  .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-  .styles button { padding: 6px; display: flex; flex-direction: column; gap: 5px; align-items: stretch; font-size: 12px; }
+  .styles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .styles button { padding: 4px; font-size: 11px !important; white-space: nowrap; display: flex; flex-direction: column; gap: 5px; align-items: stretch; font-size: 12px; }
   .styles button.on { border-color: var(--accent); color: var(--accent); }
   .styles canvas { width: 100%; aspect-ratio: 16 / 7; border-radius: 5px; display: block; }
-  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 6px; padding-bottom: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -227,80 +235,59 @@
 
   <aside class="side">
     <section>
-      <h2>경기 정보</h2>
-      <div class="field" style="margin-bottom:8px">
-        <label>왼쪽 팀</label>
-        <div class="team-in"><input type="text" id="t0name"><input type="color" id="t0color"></div>
-      </div>
-      <div class="field" style="margin-bottom:8px">
-        <label>오른쪽 팀</label>
-        <div class="team-in"><input type="text" id="t1name"><input type="color" id="t1color"></div>
-      </div>
-      <div class="grid2">
-        <div class="field"><label>매치 표시 (오른쪽 위)</label><input type="text" id="matchLabel" placeholder="A vs B"></div>
+      <h2>경기 정보 <button id="btnSwap" class="mini" title="왼쪽/오른쪽 팀 바꾸기">⇄ 좌우 바꾸기</button></h2>
+      <div class="team-row head"><span></span><span>팀 이름</span><span>바탕</span><span>글씨</span></div>
+      <div class="team-row"><span class="side-lbl">왼쪽</span><input type="text" id="t0name"><input type="color" id="t0color" title="바탕색 (유니폼 색)"><input type="color" id="t0text" title="팀 이름 글씨색"></div>
+      <div class="team-row"><span class="side-lbl">오른쪽</span><input type="text" id="t1name"><input type="color" id="t1color" title="바탕색 (유니폼 색)"><input type="color" id="t1text" title="팀 이름 글씨색"></div>
+      <div class="grid4">
+        <div class="field"><label>매치 표시</label><input type="text" id="matchLabel" placeholder="A vs B"></div>
         <div class="field"><label>시작 쿼터</label>
-          <select id="startQ"><option value="1">1쿼터</option><option value="2">2쿼터</option><option value="3">3쿼터</option><option value="4">4쿼터</option></select>
+          <select id="startQ"><option value="1">1Q</option><option value="2">2Q</option><option value="3">3Q</option><option value="4">4Q</option></select>
         </div>
+        <div class="field"><label>팀파울 칸</label><input type="number" id="foulSlots" min="1" max="10"></div>
+        <div class="field"><label title="버튼을 늦게 누르는 만큼 앞당겨 기록">보정(초)</label><input type="number" id="lag" step="0.5" min="0" title="버튼을 늦게 누르는 만큼 앞당겨 기록 (예: 1 → 누른 시점보다 1초 앞)"></div>
       </div>
-      <div class="grid2" style="margin-top:8px">
-        <div class="field"><label>팀파울 칸 수</label><input type="number" id="foulSlots" min="1" max="10"></div>
-        <div class="field"><label>기록 시점 보정 (초)</label><input type="number" id="lag" step="0.5" min="0" title="버튼을 늦게 누르는 만큼 앞당겨 기록 (예: 1 → 누른 시점보다 1초 앞)"></div>
-      </div>
-      <button id="btnSwap" style="margin-top:10px;width:100%">왼쪽/오른쪽 팀 바꾸기</button>
     </section>
 
     <section>
       <h2>점수판 모양</h2>
       <div class="styles" id="styles"></div>
-      <div class="grid2">
+      <div class="grid3">
         <div class="field"><label>위치</label>
           <select id="pos"><option value="tr">오른쪽 위</option><option value="tl">왼쪽 위</option><option value="tc">가운데 위</option><option value="br">오른쪽 아래</option><option value="bl">왼쪽 아래</option><option value="bc">가운데 아래</option></select>
         </div>
-        <div class="field"><label>크기 (<span id="sizeVal"></span>%)</label><input type="range" id="size" min="15" max="55" step="1"></div>
-      </div>
-      <label class="check"><input type="checkbox" id="flash"> 득점 순간 강조 효과 (+2 배지, 2초)</label>
-    </section>
-
-    <section>
-      <h2>단축키</h2>
-      <div class="keys">
-        <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span><span>왼쪽 팀 +1 / +2 / +3</span>
-        <span><kbd>4</kbd></span><span>왼쪽 팀 파울</span>
-        <span><kbd>7</kbd> <kbd>8</kbd> <kbd>9</kbd></span><span>오른쪽 팀 +1 / +2 / +3</span>
-        <span><kbd>0</kbd></span><span>오른쪽 팀 파울</span>
-        <span><kbd>N</kbd></span><span>다음 쿼터 (팀파울 초기화)</span>
-        <span><kbd>Space</kbd></span><span>재생 / 일시정지</span>
-        <span><kbd>←</kbd> <kbd>→</kbd></span><span>5초 이동 (Shift: 1초)</span>
-        <span><kbd>Ctrl+Z</kbd></span><span>마지막 기록 취소</span>
+        <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="size" min="15" max="55" step="1"></div>
+        <label class="check" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="flash"> 득점 강조</label>
       </div>
     </section>
 
     <section>
       <h2>기록 목록 <span id="evCount"></span></h2>
       <div class="events" id="events"></div>
-      <div class="hint" style="margin-top:6px">시간을 직접 고치거나, 영상을 원하는 위치로 옮긴 뒤 <b>⌖</b>를 누르면 그 시점으로 옮겨져요. 행을 클릭하면 해당 장면으로 이동해요.</div>
-      <div class="grid2" style="margin-top:10px">
-        <button id="btnSaveJson">기록 파일 저장</button>
-        <button id="btnLoadJson">기록 파일 불러오기</button>
+      <div class="hint" style="margin-top:4px">행 클릭: 장면 이동 · 시간 직접 수정 · <b>⌖</b>: 현재 위치로 옮기기</div>
+      <div class="hint">단축키: <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 5초 (Shift 1초) · 점수 버튼의 키</div>
+      <div class="grid3" style="margin-top:8px">
+        <button id="btnSaveJson">기록 저장</button>
+        <button id="btnLoadJson">불러오기</button>
+        <button id="btnClear" style="color:var(--danger)">모두 지우기</button>
       </div>
       <input type="file" id="jsonInput" accept="application/json,.json" class="hidden">
-      <button id="btnClear" style="margin-top:8px;width:100%;color:var(--danger)">기록 모두 지우기</button>
     </section>
 
     <section>
       <h2>내보내기</h2>
-      <div class="grid2">
+      <div class="grid3">
         <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
         <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
+        <div class="field"><label>화질</label>
+          <select id="quality" title="높음: 유튜브 업로드 권장">
+            <option value="high">높음</option>
+            <option value="very_high">매우 높음</option>
+            <option value="medium">보통</option>
+          </select>
+        </div>
       </div>
-      <div class="field" style="margin-top:8px"><label>화질</label>
-        <select id="quality">
-          <option value="high">높음 (유튜브 업로드 권장)</option>
-          <option value="very_high">매우 높음 (파일 큼)</option>
-          <option value="medium">보통 (파일 작음)</option>
-        </select>
-      </div>
-      <button id="btnExport" class="primary" style="margin-top:12px;width:100%">점수판 입힌 영상 내보내기</button>
+      <button id="btnExport" class="primary" style="margin-top:10px;width:100%">점수판 입힌 영상 내보내기</button>
       <div id="exportBox" class="hidden" style="margin-top:10px">
         <div class="progress"><i id="exportBar"></i></div>
         <div class="grid2" style="margin-top:6px;align-items:center">
@@ -309,7 +296,7 @@
         </div>
       </div>
       <div class="msg" id="exportMsg"></div>
-      <div class="hint" style="margin-top:8px">크롬이나 엣지에서 사용하세요. 컴퓨터의 하드웨어 인코더를 쓰기 때문에 보통 영상 길이보다 빨리 끝나요.</div>
+      <div class="hint" style="margin-top:6px">크롬·엣지 권장. 보통 영상 길이보다 빨리 끝나요.</div>
     </section>
   </aside>
 </div>
@@ -321,7 +308,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 
 // ---------- state ----------
 const DEFAULT_CFG = {
-  teams: [{ name: '홈', color: '#111111' }, { name: '원정', color: '#7a0a0a' }],
+  teams: [{ name: '홈', color: '#111111', text: '#ffffff' }, { name: '원정', color: '#7a0a0a', text: '#ffffff' }],
   match: 'A vs B',
   startQ: 1,
   foulSlots: 5,
@@ -435,6 +422,8 @@ function lum(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 function ink(hex) { return lum(hex) > 0.45 ? '#0b0d12' : '#ffffff'; }
+// Team name colour: user-chosen, or auto contrast for records saved before the option existed.
+function teamInk(i) { return cfg.teams[i].text || ink(cfg.teams[i].color); }
 function shade(hex, amt) {
   const n = parseInt(String(hex).slice(1), 16);
   const f = c => Math.max(0, Math.min(255, Math.round(amt < 0 ? c * (1 + amt) : c + (255 - c) * amt)));
@@ -502,7 +491,7 @@ function drawBar(ctx, W, H, st, u) {
     ctx.textAlign = 'center';
     ctx.font = `700 ${56 * u}px ${NUM}`;
     ctx.fillText(String(st.score[i]), sx + sw / 2, y + h * u / 2 + 3 * u);
-    ctx.fillStyle = ink(c);
+    ctx.fillStyle = teamInk(i);
     ctx.textAlign = 'left';
     fitText(ctx, cfg.teams[i].name, 700, 28 * u, teamW * u - sw - 26 * u);
     ctx.fillText(cfg.teams[i].name, tx + 16 * u, y + h * u / 2 + 1 * u);
@@ -561,24 +550,24 @@ function drawStack(ctx, W, H, st, u) {
   ctx.fillText(quarterLabel(st.q), x + w - qw / 2, y + head / 2 + 1 * u);
   for (let i = 0; i < 2; i++) {
     const c = cfg.teams[i].color, ry = y + head + gap + i * (row + gap);
-    ctx.fillStyle = '#161a22'; ctx.fillRect(x, ry, w, row);
-    ctx.fillStyle = c; ctx.fillRect(x, ry, 10 * u, row);
-    const g = ctx.createLinearGradient(x, 0, x + w * 0.7, 0);
-    g.addColorStop(0, shade(c, 0).replace('rgb', 'rgba').replace(')', ',.55)'));
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(x + 10 * u, ry, w * 0.7, row);
+    const g = ctx.createLinearGradient(0, ry, 0, ry + row);
+    g.addColorStop(0, shade(c, 0.08)); g.addColorStop(1, shade(c, -0.15));
+    ctx.fillStyle = g; ctx.fillRect(x, ry, w, row);
     const sw = 84 * u, sx = x + w - sw;
     const a = flash(st, i);
-    ctx.fillStyle = a ? `rgba(247,213,74,${0.25 + 0.5 * a})` : 'rgba(255,255,255,.06)';
-    ctx.fillRect(sx, ry, sw, row);
+    ctx.fillStyle = '#12151c'; ctx.fillRect(sx, ry, sw, row);
+    if (a) { ctx.fillStyle = `rgba(247,213,74,${0.25 + 0.5 * a})`; ctx.fillRect(sx, ry, sw, row); }
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.font = `700 ${48 * u}px ${NUM}`;
     ctx.fillText(String(st.score[i]), sx + sw / 2, ry + row / 2 + 3 * u);
     ctx.textAlign = 'left';
+    ctx.fillStyle = teamInk(i);
     fitText(ctx, cfg.teams[i].name, 700, 26 * u, w - sw - 130 * u);
-    ctx.fillText(cfg.teams[i].name, x + 24 * u, ry + row / 2 + 1 * u);
+    ctx.fillText(cfg.teams[i].name, x + 16 * u, ry + row / 2 + 1 * u);
     const fw = 90 * u, fx = sx - fw - 14 * u;
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    rr(ctx, fx - 6 * u, ry + row / 2 - 4 * u, fw + 12 * u, 20 * u, 4 * u); ctx.fill();
     if (isBonus(st, i)) {
       ctx.fillStyle = '#f7d54a';
       ctx.font = `700 ${12 * u}px ${NUM}`;
@@ -683,7 +672,7 @@ function drawClassic(ctx, W, H, st, s) {
     const sw = ctx.measureText(score).width;
     ctx.fillText(score, bx + bw - 4 * s, by + h2 / 2 + 3 * s);
 
-    ctx.fillStyle = ink(cfg.teams[i].color);
+    ctx.fillStyle = teamInk(i);
     ctx.textAlign = 'left';
     fitText(ctx, cfg.teams[i].name, 400, 42 * s, bw - sw - 12 * s);
     ctx.fillText(cfg.teams[i].name, bx + 4 * s, by + h2 / 2 + 2 * s);
@@ -763,7 +752,7 @@ function renderEvents() {
   const st = { q: cfg.startQ, score: [0, 0], fouls: [0, 0] };
   const rows = list.map(e => {
     applyEvent(st, e);
-    const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${cfg.teams[e.team].color};color:#fff">${esc(cfg.teams[e.team].name)}</span>`;
+    const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${cfg.teams[e.team].color};color:${teamInk(e.team)}">${esc(cfg.teams[e.team].name)}</span>`;
     return `<tr data-id="${e.id}">
       <td><input type="text" class="t" value="${fmt(e.t, true)}"></td>
       <td>${quarterLabel(st.q)}</td>
@@ -909,8 +898,11 @@ document.addEventListener('keydown', e => {
 
 // ---------- settings form ----------
 function syncForm() {
-  $('#t0name').value = cfg.teams[0].name; $('#t0color').value = cfg.teams[0].color;
-  $('#t1name').value = cfg.teams[1].name; $('#t1color').value = cfg.teams[1].color;
+  for (const i of [0, 1]) {
+    $(`#t${i}name`).value = cfg.teams[i].name;
+    $(`#t${i}color`).value = cfg.teams[i].color;
+    $(`#t${i}text`).value = teamInk(i);
+  }
   $('#matchLabel').value = cfg.match;
   $('#startQ').value = cfg.startQ;
   $('#foulSlots').value = cfg.foulSlots;
@@ -924,8 +916,7 @@ function syncForm() {
   $('#quality').value = cfg.quality;
 }
 function readForm() {
-  cfg.teams[0] = { name: $('#t0name').value, color: $('#t0color').value };
-  cfg.teams[1] = { name: $('#t1name').value, color: $('#t1color').value };
+  for (const i of [0, 1]) cfg.teams[i] = { name: $(`#t${i}name`).value, color: $(`#t${i}color`).value, text: $(`#t${i}text`).value };
   cfg.match = $('#matchLabel').value;
   cfg.startQ = Number($('#startQ').value);
   cfg.foulSlots = Math.min(10, Math.max(1, Number($('#foulSlots').value) || 5));
