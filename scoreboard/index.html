@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum 스코어보드 에디터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b21;
+    --panel-2: #20242c;
+    --line: #2c313b;
+    --text: #e8eaee;
+    --muted: #8b93a1;
+    --accent: #8ff0e0;
+    --warn: #f2e000;
+    --danger: #ff5a5a;
+    --home: #111111;
+    --away: #7a0a0a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+    font-size: 14px;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: #465063; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #0b1a17; border-color: var(--accent); font-weight: 700; }
+  input[type=text], input[type=number], select {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+  input[type=color] { width: 36px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+  kbd {
+    display: inline-block; min-width: 20px; padding: 1px 6px; text-align: center;
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    background: var(--bg); font-size: 12px; font-family: ui-monospace, monospace;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; }
+  header h1 span { color: var(--accent); }
+  header .sp { flex: 1; }
+  header .file { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: calc(100% - 53px); }
+  .main { padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .side { border-left: 1px solid var(--line); overflow: auto; background: var(--panel); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .side { border-left: 0; border-top: 1px solid var(--line); }
+  }
+
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px;
+    min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    color: var(--muted); text-align: center; padding: 24px;
+  }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .drop strong { color: var(--text); font-size: 16px; }
+
+  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; align-self: center; width: 100%; }
+  .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .stage canvas { pointer-events: none; }
+
+  .transport { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .transport .time { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .transport .sp { flex: 1; }
+  .speed button.on { border-color: var(--accent); color: var(--accent); }
+
+  .timeline { position: relative; height: 38px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .timeline .trim { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.08); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); pointer-events: none; }
+  .timeline .mk { position: absolute; width: 2px; pointer-events: none; }
+  .timeline .mk.h { top: 4px; height: 13px; }
+  .timeline .mk.a { bottom: 4px; height: 13px; }
+  .timeline .mk.q { top: 0; bottom: 0; background: #fff; opacity: .6; width: 1px; }
+  .timeline .mk.f { opacity: .9; }
+  .timeline .head { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); pointer-events: none; }
+
+  .pads { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pad { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .pad .top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .pad .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #555; }
+  .pad .nm { font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pad .sc { font-size: 28px; font-weight: 300; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .pad .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .pad .row button { padding: 10px 0; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .pad .row button kbd { font-weight: 400; }
+  .pad .row button.foul { color: var(--warn); }
+  .pad .fl { display: flex; gap: 3px; margin-top: 8px; }
+  .pad .fl i { flex: 1; height: 5px; background: #3a3f48; border-radius: 1px; }
+  .pad .fl i.on { background: var(--warn); }
+  .gbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .gbar .q { font-weight: 900; font-size: 18px; min-width: 52px; }
+
+  section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; letter-spacing: .3px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .team-in { display: flex; gap: 6px; }
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 12px; color: var(--muted); align-items: center; }
+
+  .events { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .events table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .events td { padding: 5px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .events tr:hover td { background: var(--panel-2); }
+  .events tr.cur td { background: rgba(143,240,224,.08); }
+  .events input.t { width: 62px; padding: 3px 5px; font-family: ui-monospace, monospace; font-size: 12px; }
+  .events button { padding: 2px 7px; font-size: 12px; }
+  .events .empty { padding: 16px; text-align: center; color: var(--muted); }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 700; }
+
+  .progress { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .msg { font-size: 12px; margin-top: 8px; line-height: 1.5; }
+  .msg.err { color: var(--danger); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MOMENTUM <span>SCOREBOARD</span> EDITOR</h1>
+  <div class="file" id="fileName"></div>
+  <div class="sp"></div>
+  <button id="btnOpen">영상 열기</button>
+  <input type="file" id="fileInput" accept="video/*" class="hidden">
+</header>
+
+<div class="app">
+  <div class="main">
+    <div class="drop" id="drop">
+      <strong>경기 영상을 여기로 끌어다 놓으세요</strong>
+      <div>또는 위의 <b>영상 열기</b> 버튼을 누르세요. 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요.</div>
+    </div>
+
+    <div id="editor" class="hidden" style="display:flex;flex-direction:column;gap:12px">
+      <div class="stage" id="stage">
+        <video id="video" playsinline preload="auto"></video>
+        <canvas id="overlay"></canvas>
+      </div>
+
+      <div class="transport">
+        <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
+        <button data-seek="-10">-10초</button>
+        <button data-seek="-5">-5초</button>
+        <button data-seek="5">+5초</button>
+        <button data-seek="10">+10초</button>
+        <span class="time" id="timeLabel">0:00 / 0:00</span>
+        <span class="sp"></span>
+        <span class="speed" id="speed">
+          <button data-rate="1" class="on">1x</button>
+          <button data-rate="1.5">1.5x</button>
+          <button data-rate="2">2x</button>
+          <button data-rate="3">3x</button>
+        </span>
+      </div>
+
+      <div class="timeline" id="timeline" title="클릭해서 이동">
+        <div class="trim" id="trimBox"></div>
+        <div id="markers"></div>
+        <div class="head" id="playhead"></div>
+      </div>
+
+      <div class="gbar">
+        <span class="q" id="curQuarter">1ST</span>
+        <button id="btnNextQ">다음 쿼터 <kbd>N</kbd></button>
+        <button id="btnUndo">되돌리기 <kbd>Ctrl+Z</kbd></button>
+        <span class="hint">영상을 보면서 득점·파울 순간에 버튼이나 단축키를 누르면 그 시점에 기록돼요. 일시정지 상태에서도 기록할 수 있어요.</span>
+      </div>
+
+      <div class="pads">
+        <div class="pad" data-team="0">
+          <div class="top"><span class="sw"></span><span class="nm"></span><span class="sc">0</span></div>
+          <div class="row">
+            <button data-add="pts" data-v="1">+1 <kbd>1</kbd></button>
+            <button data-add="pts" data-v="2">+2 <kbd>2</kbd></button>
+            <button data-add="pts" data-v="3">+3 <kbd>3</kbd></button>
+            <button data-add="foul" data-v="1" class="foul">파울 <kbd>4</kbd></button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button data-add="pts" data-v="-1">-1 <kbd>Q</kbd></button>
+            <button data-add="foul" data-v="-1" class="foul">파울-1 <kbd>R</kbd></button>
+          </div>
+          <div class="fl"></div>
+        </div>
+        <div class="pad" data-team="1">
+          <div class="top"><span class="sw"></span><span class="nm"></span><span class="sc">0</span></div>
+          <div class="row">
+            <button data-add="pts" data-v="1">+1 <kbd>7</kbd></button>
+            <button data-add="pts" data-v="2">+2 <kbd>8</kbd></button>
+            <button data-add="pts" data-v="3">+3 <kbd>9</kbd></button>
+            <button data-add="foul" data-v="1" class="foul">파울 <kbd>0</kbd></button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button data-add="pts" data-v="-1">-1 <kbd>U</kbd></button>
+            <button data-add="foul" data-v="-1" class="foul">파울-1 <kbd>P</kbd></button>
+          </div>
+          <div class="fl"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <section>
+      <h2>경기 정보</h2>
+      <div class="field" style="margin-bottom:8px">
+        <label>왼쪽 팀</label>
+        <div class="team-in"><input type="text" id="t0name"><input type="color" id="t0color"></div>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>오른쪽 팀</label>
+        <div class="team-in"><input type="text" id="t1name"><input type="color" id="t1color"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>매치 표시 (오른쪽 위)</label><input type="text" id="matchLabel" placeholder="A vs B"></div>
+        <div class="field"><label>시작 쿼터</label>
+          <select id="startQ"><option value="1">1쿼터</option><option value="2">2쿼터</option><option value="3">3쿼터</option><option value="4">4쿼터</option></select>
+        </div>
+      </div>
+      <div class="grid2" style="margin-top:8px">
+        <div class="field"><label>팀파울 칸 수</label><input type="number" id="foulSlots" min="1" max="10"></div>
+        <div class="field"><label>기록 시점 보정 (초)</label><input type="number" id="lag" step="0.5" title="버튼을 늦게 누르는 만큼 앞당겨 기록"></div>
+      </div>
+      <button id="btnSwap" style="margin-top:10px;width:100%">왼쪽/오른쪽 팀 바꾸기</button>
+    </section>
+
+    <section>
+      <h2>점수판 모양</h2>
+      <div class="grid2">
+        <div class="field"><label>위치</label>
+          <select id="pos"><option value="tr">오른쪽 위</option><option value="tl">왼쪽 위</option><option value="br">오른쪽 아래</option><option value="bl">왼쪽 아래</option></select>
+        </div>
+        <div class="field"><label>크기 (<span id="sizeVal"></span>%)</label><input type="range" id="size" min="15" max="45" step="1"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>단축키</h2>
+      <div class="keys">
+        <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span><span>왼쪽 팀 +1 / +2 / +3</span>
+        <span><kbd>4</kbd></span><span>왼쪽 팀 파울</span>
+        <span><kbd>7</kbd> <kbd>8</kbd> <kbd>9</kbd></span><span>오른쪽 팀 +1 / +2 / +3</span>
+        <span><kbd>0</kbd></span><span>오른쪽 팀 파울</span>
+        <span><kbd>N</kbd></span><span>다음 쿼터 (팀파울 초기화)</span>
+        <span><kbd>Space</kbd></span><span>재생 / 일시정지</span>
+        <span><kbd>←</kbd> <kbd>→</kbd></span><span>5초 이동 (Shift: 1초)</span>
+        <span><kbd>Ctrl+Z</kbd></span><span>마지막 기록 취소</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>기록 목록 <span id="evCount"></span></h2>
+      <div class="events" id="events"></div>
+      <div class="hint" style="margin-top:6px">시간을 직접 고치거나, 영상을 원하는 위치로 옮긴 뒤 <b>⌖</b>를 누르면 그 시점으로 옮겨져요. 행을 클릭하면 해당 장면으로 이동해요.</div>
+      <div class="grid2" style="margin-top:10px">
+        <button id="btnSaveJson">기록 파일 저장</button>
+        <button id="btnLoadJson">기록 파일 불러오기</button>
+      </div>
+      <input type="file" id="jsonInput" accept="application/json,.json" class="hidden">
+      <button id="btnClear" style="margin-top:8px;width:100%;color:var(--danger)">기록 모두 지우기</button>
+    </section>
+
+    <section>
+      <h2>내보내기</h2>
+      <div class="grid2">
+        <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
+        <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>화질</label>
+        <select id="quality">
+          <option value="high">높음 (유튜브 업로드 권장)</option>
+          <option value="very_high">매우 높음 (파일 큼)</option>
+          <option value="medium">보통 (파일 작음)</option>
+        </select>
+      </div>
+      <button id="btnExport" class="primary" style="margin-top:12px;width:100%">점수판 입힌 영상 내보내기</button>
+      <div id="exportBox" class="hidden" style="margin-top:10px">
+        <div class="progress"><i id="exportBar"></i></div>
+        <div class="grid2" style="margin-top:6px;align-items:center">
+          <span class="hint" id="exportLabel"></span>
+          <button id="btnCancel">취소</button>
+        </div>
+      </div>
+      <div class="msg" id="exportMsg"></div>
+      <div class="hint" style="margin-top:8px">크롬이나 엣지에서 사용하세요. 컴퓨터의 하드웨어 인코더를 쓰기 때문에 보통 영상 길이보다 빨리 끝나요.</div>
+    </section>
+  </aside>
+</div>
+
+<script type="module">
+const MEDIABUNNY_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.60.0/dist/bundles/mediabunny.min.mjs';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+// ---------- state ----------
+const DEFAULT_CFG = {
+  teams: [{ name: '홈', color: '#111111' }, { name: '원정', color: '#7a0a0a' }],
+  match: 'A vs B',
+  startQ: 1,
+  foulSlots: 5,
+  lag: 0,
+  pos: 'tr',
+  size: 26,
+  trimStart: null,
+  trimEnd: null,
+  quality: 'high',
+};
+let cfg = structuredClone(DEFAULT_CFG);
+let events = [];           // {id, t, kind: 'pts'|'foul'|'q', team, v}
+let undoStack = [];
+let nextId = 1;
+let file = null;
+let storeKey = null;
+
+const video = $('#video');
+const overlay = $('#overlay');
+const octx = overlay.getContext('2d');
+
+// ---------- persistence ----------
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function save() {
+  lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, pos: cfg.pos, size: cfg.size, quality: cfg.quality });
+  if (storeKey) lsSet(storeKey, { cfg, events });
+}
+const last = lsGet('mm-sb:last-cfg');
+if (last) Object.assign(cfg, last);
+
+// ---------- game logic ----------
+function sorted() { return [...events].sort((a, b) => a.t - b.t || a.id - b.id); }
+function stateAt(t) {
+  const st = { q: cfg.startQ, score: [0, 0], fouls: [0, 0] };
+  for (const e of sorted()) {
+    if (e.t > t) break;
+    applyEvent(st, e);
+  }
+  return st;
+}
+function applyEvent(st, e) {
+  if (e.kind === 'pts') st.score[e.team] = Math.max(0, st.score[e.team] + e.v);
+  else if (e.kind === 'foul') st.fouls[e.team] = Math.max(0, st.fouls[e.team] + e.v);
+  else if (e.kind === 'q') { st.q += 1; st.fouls = [0, 0]; }
+}
+function quarterLabel(q) {
+  if (q <= 4) return ['', '1ST', '2ND', '3RD', '4TH'][q];
+  const n = q - 4;
+  return n === 1 ? 'OT' : 'OT' + n;
+}
+
+function addEvent(kind, team, v) {
+  if (!file) return;
+  const t = Math.max(0, video.currentTime - (Number(cfg.lag) || 0));
+  const e = { id: nextId++, t, kind, team, v };
+  events.push(e);
+  undoStack.push(e.id);
+  changed();
+}
+function undo() {
+  while (undoStack.length) {
+    const id = undoStack.pop();
+    const i = events.findIndex(e => e.id === id);
+    if (i >= 0) { events.splice(i, 1); changed(); return; }
+  }
+}
+function changed() { save(); renderEvents(); renderMarkers(); renderLive(); }
+
+// ---------- scoreboard drawing ----------
+// Reference layout is 525 px wide on a 2000 px wide frame.
+const FONT = "'Noto Sans KR', system-ui, sans-serif";
+function drawBoard(ctx, W, H, st) {
+  const s = (W * cfg.size / 100) / 525;
+  const pad = 5 * s;
+  const w = 525 * s;
+  const h1 = 50 * s, h2 = 82 * s, h3 = 22 * s;
+  const h = pad + h1 + h2 + pad * 0.6 + h3 + pad;
+  const mx = W * 0.012, my = W * 0.012;
+  const x = cfg.pos.endsWith('r') ? W - w - mx : mx;
+  const y = cfg.pos.startsWith('t') ? my : H - h - my;
+
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(24,24,24,0.94)';
+  ctx.fillRect(x, y, w, h);
+
+  // header: quarter + match label
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${40 * s}px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(quarterLabel(st.q), x + pad * 1.6, y + pad + h1 / 2 + 2 * s);
+  ctx.textAlign = 'right';
+  fitText(ctx, cfg.match || '', 900, 40 * s, w * 0.55);
+  ctx.fillText(cfg.match || '', x + w - pad * 1.6, y + pad + h1 / 2 + 2 * s);
+
+  // team boxes
+  const bw = (w - pad * 3) / 2;
+  const by = y + pad + h1;
+  for (let i = 0; i < 2; i++) {
+    const bx = x + pad + i * (bw + pad);
+    ctx.fillStyle = cfg.teams[i].color;
+    ctx.fillRect(bx, by, bw, h2);
+
+    const score = String(st.score[i]);
+    ctx.font = `200 ${70 * s}px ${FONT}`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8ff0e0';
+    const sw = ctx.measureText(score).width;
+    ctx.fillText(score, bx + bw - 4 * s, by + h2 / 2 + 3 * s);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'left';
+    const avail = bw - sw - 12 * s;
+    fitText(ctx, cfg.teams[i].name, 400, 42 * s, avail);
+    ctx.fillText(cfg.teams[i].name, bx + 4 * s, by + h2 / 2 + 2 * s);
+
+    // team fouls
+    const n = Math.max(1, Number(cfg.foulSlots) || 5);
+    const fy = by + h2 + pad * 0.6;
+    const gap = 4 * s;
+    const segW = (bw - gap * (n - 1)) / n;
+    for (let k = 0; k < n; k++) {
+      ctx.fillStyle = k < st.fouls[i] ? '#f2e000' : '#474747';
+      ctx.fillRect(bx + k * (segW + gap), fy, segW, h3);
+    }
+  }
+  ctx.restore();
+}
+function fitText(ctx, text, weight, size, maxW) {
+  let fs = size;
+  ctx.font = `${weight} ${fs}px ${FONT}`;
+  while (fs > 6 && ctx.measureText(text).width > maxW) {
+    fs *= 0.94;
+    ctx.font = `${weight} ${fs}px ${FONT}`;
+  }
+}
+
+// ---------- preview loop ----------
+function renderOverlay() {
+  if (!video.videoWidth) return;
+  if (overlay.width !== video.videoWidth || overlay.height !== video.videoHeight) {
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+  }
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  drawBoard(octx, overlay.width, overlay.height, stateAt(video.currentTime));
+}
+let lastLiveKey = '';
+function renderLive() {
+  const st = stateAt(video.currentTime);
+  const key = JSON.stringify(st) + JSON.stringify(cfg.teams) + cfg.foulSlots;
+  if (key !== lastLiveKey) {
+    lastLiveKey = key;
+    $('#curQuarter').textContent = quarterLabel(st.q);
+    $$('.pad').forEach(p => {
+      const i = Number(p.dataset.team);
+      p.querySelector('.sw').style.background = cfg.teams[i].color;
+      p.querySelector('.nm').textContent = cfg.teams[i].name;
+      p.querySelector('.sc').textContent = st.score[i];
+      const n = Math.max(1, Number(cfg.foulSlots) || 5);
+      p.querySelector('.fl').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < st.fouls[i] ? 'on' : ''}"></i>`).join('');
+    });
+  }
+  renderOverlay();
+}
+function tick() {
+  if (file) {
+    renderLive();
+    const d = video.duration || 0;
+    $('#timeLabel').textContent = `${fmt(video.currentTime)} / ${fmt(d)}`;
+    $('#playhead').style.left = d ? `${video.currentTime / d * 100}%` : '0';
+    highlightCurrentRow();
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// ---------- time formatting ----------
+function fmt(t, precise) {
+  if (!isFinite(t)) t = 0;
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+  const ss = precise ? sec.toFixed(1).padStart(4, '0') : String(Math.floor(sec)).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+function parseTime(str) {
+  str = String(str || '').trim();
+  if (!str) return null;
+  const parts = str.split(':').map(Number);
+  if (parts.some(isNaN)) return null;
+  return parts.reduce((acc, p) => acc * 60 + p, 0);
+}
+
+// ---------- event list ----------
+const KIND_LABEL = { pts: v => (v > 0 ? `+${v}점` : `${v}점`), foul: v => (v > 0 ? '파울' : '파울 취소'), q: () => '다음 쿼터' };
+function renderEvents() {
+  const list = sorted();
+  $('#evCount').textContent = list.length ? `(${list.length})` : '';
+  if (!list.length) { $('#events').innerHTML = '<div class="empty">아직 기록이 없어요</div>'; return; }
+  const st = { q: cfg.startQ, score: [0, 0], fouls: [0, 0] };
+  const rows = list.map(e => {
+    applyEvent(st, e);
+    const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${cfg.teams[e.team].color};color:#fff">${esc(cfg.teams[e.team].name)}</span>`;
+    return `<tr data-id="${e.id}">
+      <td><input type="text" class="t" value="${fmt(e.t, true)}"></td>
+      <td>${quarterLabel(st.q)}</td>
+      <td>${team}</td>
+      <td>${KIND_LABEL[e.kind](e.v)}</td>
+      <td style="color:var(--accent)">${st.score[0]} : ${st.score[1]}</td>
+      <td style="text-align:right"><button data-act="here" title="현재 영상 위치로 옮기기">⌖</button> <button data-act="del" title="삭제">✕</button></td>
+    </tr>`;
+  });
+  $('#events').innerHTML = `<table>${rows.join('')}</table>`;
+}
+function highlightCurrentRow() {
+  const t = video.currentTime;
+  let cur = null;
+  for (const e of sorted()) { if (e.t <= t) cur = e.id; else break; }
+  $$('#events tr').forEach(tr => tr.classList.toggle('cur', Number(tr.dataset.id) === cur));
+}
+$('#events').addEventListener('click', ev => {
+  const tr = ev.target.closest('tr');
+  if (!tr) return;
+  const e = events.find(x => x.id === Number(tr.dataset.id));
+  if (!e) return;
+  const act = ev.target.closest('button')?.dataset.act;
+  if (act === 'del') { events = events.filter(x => x !== e); changed(); }
+  else if (act === 'here') { e.t = video.currentTime; changed(); }
+  else if (ev.target.tagName !== 'INPUT') video.currentTime = e.t;
+});
+$('#events').addEventListener('change', ev => {
+  if (!ev.target.matches('input.t')) return;
+  const e = events.find(x => x.id === Number(ev.target.closest('tr').dataset.id));
+  const t = parseTime(ev.target.value);
+  if (e && t != null) e.t = Math.max(0, t);
+  changed();
+});
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+// ---------- timeline ----------
+function renderMarkers() {
+  const d = video.duration;
+  if (!d) { $('#markers').innerHTML = ''; return; }
+  $('#markers').innerHTML = events.map(e => {
+    const left = `${e.t / d * 100}%`;
+    if (e.kind === 'q') return `<div class="mk q" style="left:${left}"></div>`;
+    const color = e.kind === 'foul' ? '#f2e000' : (e.team === 0 ? '#8ff0e0' : '#ff7a7a');
+    return `<div class="mk ${e.team === 0 ? 'h' : 'a'} ${e.kind === 'foul' ? 'f' : ''}" style="left:${left};background:${color}"></div>`;
+  }).join('');
+  const s = cfg.trimStart ?? 0, en = cfg.trimEnd ?? d;
+  const box = $('#trimBox');
+  box.style.display = (cfg.trimStart != null || cfg.trimEnd != null) ? '' : 'none';
+  box.style.left = `${s / d * 100}%`;
+  box.style.width = `${Math.max(0, en - s) / d * 100}%`;
+}
+$('#timeline').addEventListener('click', ev => {
+  const r = ev.currentTarget.getBoundingClientRect();
+  if (video.duration) video.currentTime = (ev.clientX - r.left) / r.width * video.duration;
+});
+
+// ---------- opening files ----------
+function openFile(f) {
+  if (!f) return;
+  file = f;
+  $('#fileName').textContent = f.name;
+  video.src = URL.createObjectURL(f);
+  storeKey = `mm-sb:${f.name}:${f.size}`;
+  const saved = lsGet(storeKey);
+  events = saved?.events || [];
+  if (saved?.cfg) Object.assign(cfg, saved.cfg);
+  nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
+  undoStack = [];
+  $('#drop').classList.add('hidden');
+  $('#editor').classList.remove('hidden');
+  $('#exportMsg').textContent = '';
+  syncForm();
+  changed();
+}
+video.addEventListener('loadedmetadata', () => {
+  $('#stage').style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+  $('#stage').style.maxWidth = `calc((100vh - 330px) * ${video.videoWidth / video.videoHeight})`;
+  renderMarkers();
+});
+video.addEventListener('play', () => { $('#btnPlay').textContent = '❚❚ 일시정지'; });
+video.addEventListener('pause', () => { $('#btnPlay').textContent = '▶ 재생'; });
+
+$('#btnOpen').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = e => openFile(e.target.files[0]);
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+document.addEventListener('drop', e => {
+  const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
+  if (f) openFile(f);
+});
+
+// ---------- controls ----------
+function togglePlay() { video.paused ? video.play() : video.pause(); }
+$('#btnPlay').onclick = togglePlay;
+$$('[data-seek]').forEach(b => b.onclick = () => { video.currentTime = Math.max(0, video.currentTime + Number(b.dataset.seek)); });
+$$('#speed button').forEach(b => b.onclick = () => {
+  video.playbackRate = Number(b.dataset.rate);
+  $$('#speed button').forEach(x => x.classList.toggle('on', x === b));
+});
+$$('.pad').forEach(p => {
+  const team = Number(p.dataset.team);
+  p.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { addEvent(b.dataset.add, team, Number(b.dataset.v)); b.blur(); });
+});
+$('#btnNextQ').onclick = e => { addEvent('q', 0, 1); e.currentTarget.blur(); };
+$('#btnUndo').onclick = e => { undo(); e.currentTarget.blur(); };
+
+const KEYMAP = {
+  Digit1: ['pts', 0, 1], Digit2: ['pts', 0, 2], Digit3: ['pts', 0, 3], Digit4: ['foul', 0, 1],
+  KeyQ: ['pts', 0, -1], KeyR: ['foul', 0, -1],
+  Digit7: ['pts', 1, 1], Digit8: ['pts', 1, 2], Digit9: ['pts', 1, 3], Digit0: ['foul', 1, 1],
+  KeyU: ['pts', 1, -1], KeyP: ['foul', 1, -1],
+  Numpad1: ['pts', 0, 1], Numpad2: ['pts', 0, 2], Numpad3: ['pts', 0, 3], Numpad4: ['foul', 0, 1],
+  Numpad7: ['pts', 1, 1], Numpad8: ['pts', 1, 2], Numpad9: ['pts', 1, 3], Numpad0: ['foul', 1, 1],
+};
+document.addEventListener('keydown', e => {
+  if (!file) return;
+  if (e.target.matches('input, select, textarea')) return;
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); return; }
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    e.preventDefault();
+    const step = (e.shiftKey ? 1 : 5) * (e.code === 'ArrowLeft' ? -1 : 1);
+    video.currentTime = Math.max(0, video.currentTime + step);
+    return;
+  }
+  if (e.code === 'KeyN') { addEvent('q', 0, 1); return; }
+  const m = KEYMAP[e.code];
+  if (m) { e.preventDefault(); addEvent(...m); }
+});
+
+// ---------- settings form ----------
+function syncForm() {
+  $('#t0name').value = cfg.teams[0].name; $('#t0color').value = cfg.teams[0].color;
+  $('#t1name').value = cfg.teams[1].name; $('#t1color').value = cfg.teams[1].color;
+  $('#matchLabel').value = cfg.match;
+  $('#startQ').value = cfg.startQ;
+  $('#foulSlots').value = cfg.foulSlots;
+  $('#lag').value = cfg.lag;
+  $('#pos').value = cfg.pos;
+  $('#size').value = cfg.size; $('#sizeVal').textContent = cfg.size;
+  $('#trimStart').value = cfg.trimStart != null ? fmt(cfg.trimStart, true) : '';
+  $('#trimEnd').value = cfg.trimEnd != null ? fmt(cfg.trimEnd, true) : '';
+  $('#quality').value = cfg.quality;
+}
+function readForm() {
+  cfg.teams[0] = { name: $('#t0name').value, color: $('#t0color').value };
+  cfg.teams[1] = { name: $('#t1name').value, color: $('#t1color').value };
+  cfg.match = $('#matchLabel').value;
+  cfg.startQ = Number($('#startQ').value);
+  cfg.foulSlots = Math.min(10, Math.max(1, Number($('#foulSlots').value) || 5));
+  cfg.lag = Number($('#lag').value) || 0;
+  cfg.pos = $('#pos').value;
+  cfg.size = Number($('#size').value); $('#sizeVal').textContent = cfg.size;
+  cfg.trimStart = parseTime($('#trimStart').value);
+  cfg.trimEnd = parseTime($('#trimEnd').value);
+  cfg.quality = $('#quality').value;
+  changed();
+}
+$$('.side input, .side select').forEach(el => {
+  if (el.id === 'jsonInput') return;
+  el.addEventListener(el.type === 'text' ? 'change' : 'input', readForm);
+});
+$('#btnSwap').onclick = () => {
+  cfg.teams.reverse();
+  events.forEach(e => { if (e.kind !== 'q') e.team = 1 - e.team; });
+  syncForm(); changed();
+};
+$('#btnTrimStart').onclick = () => { cfg.trimStart = video.currentTime; syncForm(); changed(); };
+$('#btnTrimEnd').onclick = () => { cfg.trimEnd = video.currentTime; syncForm(); changed(); };
+$('#btnClear').onclick = () => {
+  if (events.length && confirm('기록을 모두 지울까요? 되돌릴 수 없어요.')) { events = []; undoStack = []; changed(); }
+};
+$('#btnSaveJson').onclick = () => {
+  const blob = new Blob([JSON.stringify({ version: 1, video: file?.name, cfg, events }, null, 2)], { type: 'application/json' });
+  download(blob, (file?.name.replace(/\.[^.]+$/, '') || 'game') + '-scoreboard.json');
+};
+$('#btnLoadJson').onclick = () => $('#jsonInput').click();
+$('#jsonInput').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.events)) throw new Error();
+    events = data.events;
+    if (data.cfg) Object.assign(cfg, data.cfg);
+    nextId = events.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+    undoStack = [];
+    syncForm(); changed();
+  } catch { alert('기록 파일을 읽지 못했어요.'); }
+};
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+// ---------- export ----------
+let conversion = null;
+$('#btnCancel').onclick = () => conversion?.cancel();
+$('#btnExport').onclick = async () => {
+  if (!file) { showMsg('먼저 영상을 열어 주세요.', true); return; }
+  const outName = file.name.replace(/\.[^.]+$/, '') + '-scoreboard.mp4';
+
+  // Ask for the save location first, while we still hold the click's user activation.
+  let writable = null;
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: outName, types: [{ description: 'MP4 영상', accept: { 'video/mp4': ['.mp4'] } }] });
+      writable = await handle.createWritable();
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      writable = null;
+    }
+  }
+
+  video.pause();
+  $('#btnExport').disabled = true;
+  $('#exportBox').classList.remove('hidden');
+  setProgress(0, '준비 중…');
+  showMsg('');
+  const started = performance.now();
+  try {
+    const MB = await import(MEDIABUNNY_URL);
+    await Promise.all([
+      document.fonts.load(`900 40px ${FONT}`, 'A1'),
+      document.fonts.load(`400 40px ${FONT}`, cfg.teams.map(t => t.name).join('') || '가'),
+      document.fonts.load(`200 40px ${FONT}`, '0123456789'),
+    ]);
+
+    const input = new MB.Input({ source: new MB.BlobSource(file), formats: MB.ALL_FORMATS });
+    const vt = await input.getPrimaryVideoTrack();
+    if (!vt) throw new Error('영상 트랙을 찾지 못했어요.');
+    const W = vt.displayWidth & ~1, H = vt.displayHeight & ~1;
+    const codec = await MB.getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], { width: W, height: H });
+    if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
+
+    const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
+    const output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const t0 = await vt.getFirstTimestamp();
+    const quality = { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
+    // Output timestamps start at 0 at trim.start, so map them back by adding the trim offset.
+    const trimOffset = cfg.trimStart ?? 0;
+    const trim = { start: trimOffset + t0 };
+    if (cfg.trimEnd != null) trim.end = cfg.trimEnd + t0;
+
+    conversion = await MB.Conversion.init({
+      input, output,
+      trim,
+      video: {
+        codec,
+        bitrate: quality,
+        forceTranscode: true,
+        processedWidth: W,
+        processedHeight: H,
+        process: sample => {
+          sample.draw(ctx, 0, 0, W, H);
+          drawBoard(ctx, W, H, stateAt(sample.timestamp + trimOffset));
+          return canvas;
+        },
+      },
+    });
+    if (!conversion.isValid) {
+      throw new Error('이 영상 형식은 변환할 수 없어요: ' + conversion.discardedTracks.map(d => `${d.track.type} (${d.reason})`).join(', '));
+    }
+    conversion.onProgress = p => {
+      const el = (performance.now() - started) / 1000;
+      const eta = p > 0.02 ? el / p - el : null;
+      setProgress(p, `${Math.round(p * 100)}%` + (eta != null ? ` · 약 ${fmt(eta)} 남음` : ''));
+    };
+    await conversion.execute();
+
+    if (!writable) download(new Blob([target.buffer], { type: 'video/mp4' }), outName);
+    setProgress(1, '완료');
+    showMsg(`내보내기 완료 (${fmt((performance.now() - started) / 1000)} 걸림). ${writable ? '저장한 위치에서 파일을 확인하세요.' : '다운로드 폴더를 확인하세요.'}`);
+  } catch (err) {
+    if (conversion?.state === 'canceled') showMsg('내보내기를 취소했어요.');
+    else { console.error(err); showMsg('내보내기에 실패했어요: ' + (err?.message || err), true); }
+    try { await writable?.abort(); } catch {}
+  } finally {
+    conversion = null;
+    $('#btnExport').disabled = false;
+    setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
+  }
+};
+function setProgress(p, label) { $('#exportBar').style.width = `${Math.round(p * 100)}%`; $('#exportLabel').textContent = label; }
+function showMsg(text, err) { const m = $('#exportMsg'); m.textContent = text; m.classList.toggle('err', !!err); }
+
+syncForm();
+renderEvents();
+</script>
+</body>
+</html>
