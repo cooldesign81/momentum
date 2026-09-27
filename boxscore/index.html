@@ -759,6 +759,7 @@ async function openFiles(files, append) {
   files = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name));
   if (!files.length) return;
   files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  if (!(append && mode === 'file' && clips.length)) attachSource({ type: 'file', names: files.map(f => f.name) });
   const load = async list => Promise.all(list.map(async f => { const url = URL.createObjectURL(f); return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }));
   if (append && mode === 'file' && clips.length) {
     // 뒤에 이어 붙이면 앞 영상들의 시간은 그대로라 기록을 옮길 필요가 없어요.
@@ -775,9 +776,17 @@ async function openFiles(files, append) {
   showStage();
   updateSrcLabel();
   renderClips();
-  const src = { type: 'file', names: clips.map(c => c.name) };
-  if (!game.events.length || !game.source) { game.source = src; save(); }
-  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
+}
+// 기록이 있는 경기에 다른 영상을 열면, 새 경기로 기록할지 지금 경기에 이어서 기록할지 물어봐요.
+function attachSource(src) {
+  const n = game.events.length + game.quarters.length;
+  if (!n || !game.source) { game.source = src; save(); return; }
+  if (JSON.stringify(game.source) === JSON.stringify(src)) return;
+  const ok = confirm(`지금 경기 '${gameTitle()}'에 기록 ${game.events.length}개가 있어요.\n\n` +
+    `[확인] 새 경기를 만들어서 이 영상을 기록해요. 지금 경기는 목록에 그대로 저장돼요.\n` +
+    `[취소] 지금 경기에 이어서 기록해요. (같은 경기의 영상을 다시 열 때)`);
+  if (ok) { startNewGame(src); toast('새 경기를 만들었어요. 이전 경기는 [경기 설정] 목록에 있어요.'); }
+  else toast('지금 경기에 이어서 기록해요.');
 }
 function ytIdOf(url) { const m = String(url).match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/); return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : ''); }
 function loadYtApi() {
@@ -802,11 +811,9 @@ async function openYt(url) {
   mode = 'yt';
   renderClips();
   showStage();
+  attachSource({ type: 'yt', id });
   $('#srcLabel').textContent = 'YouTube · ' + id;
   toast('유튜브 영상은 점수판 미리보기만 되고 내보내기는 안 돼요.', true);
-  const src = { type: 'yt', id };
-  if (!game.events.length || !game.source) { game.source = src; save(); }
-  else if (JSON.stringify(game.source) !== JSON.stringify(src)) toast('저장된 기록과 다른 영상이에요. 새 경기라면 [+ 새 경기]를 먼저 누르세요.', true);
   await loadYtApi();
   yt = new YT.Player('yt', {
     videoId: id,
@@ -1184,12 +1191,16 @@ $('#skip').addEventListener('change', ev => { opts.skip = Math.max(1, +ev.target
 $('#askAst').addEventListener('change', ev => { opts.askAst = ev.target.checked; saveOpts(); if (!opts.askAst) clearAst(); });
 $('#keepSel').addEventListener('change', ev => { opts.keepSel = ev.target.checked; saveOpts(); });
 $('#gameSel').addEventListener('change', ev => loadGame(ev.target.value));
-$('#btnNew').addEventListener('click', () => {
+function startNewGame(src) {
   flushSave();
   game = newGame(); game.played = {}; undoStack = []; selected = null; clearAst();
-  if (mode === 'yt') game.source = { type: 'yt', id: ytIdOf($('#ytUrl').value) || null };
-  else if (mode === 'file') game.source = { type: 'file', names: clips.map(c => c.name) };
-  save(); renderAll(); toast('새 경기를 시작했어요.');
+  cutStart = null;
+  game.source = src;
+  save(); renderAll();
+}
+$('#btnNew').addEventListener('click', () => {
+  startNewGame(mode === 'yt' ? { type: 'yt', id: ytIdOf($('#ytUrl').value) || null } : mode === 'file' ? { type: 'file', names: clips.map(c => c.name) } : null);
+  toast('새 경기를 시작했어요.');
 });
 
 // ---------- 리그 시트 읽기 ----------
