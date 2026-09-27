@@ -137,11 +137,22 @@
   .gtab td.no { text-align: right; padding: 0 6px; color: var(--muted); background: var(--panel); font-variant-numeric: tabular-nums; }
   .gtab td.nm { padding: 0 8px; font-weight: 700; background: var(--panel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gtab td.nm.g { color: var(--warn); }
-  .gtab td { background: var(--bg); }
+  .gtab { --tc: var(--ta); --tc-soft: rgba(143,240,224,.15); }
+  .gtab.b { --tc: var(--tb); --tc-soft: rgba(255,184,107,.15); }
+  .gtab td { background: #12151a; }
+  /* 줄마다 번갈아 음영 */
+  .gtab tbody tr:nth-child(even) td { background: #1d2129; }
+  .gtab tbody tr:nth-child(even) td.no, .gtab tbody tr:nth-child(even) td.nm { background: #232833; }
+  /* 마우스가 있는 줄·열은 옅게, 그 칸은 진하게 */
+  .gtab tbody tr:hover td { background: var(--tc-soft); }
+  .gtab tbody tr:hover td.nm { color: var(--tc); background: var(--tc-soft); box-shadow: inset 3px 0 0 var(--tc); }
+  .gtab tbody tr:hover td.no { color: var(--tc); }
+  .gtab th.hov { background: var(--tc); color: #0b1a17 !important; }
+  .gtab td.hovcol { background: var(--tc-soft) !important; }
   .gtab td button { display: block; width: 100%; height: 36px; border: 0; border-radius: 0; background: transparent; font-size: 16px; font-weight: 300; font-variant-numeric: tabular-nums; padding: 0; }
-  .gtab td button:hover { background: var(--panel-2); }
-  .gtab td button:active, .gtab td button.hit { background: rgba(143,240,224,.28); }
-  .gtab.b td button:active, .gtab.b td button.hit { background: rgba(255,184,107,.28); }
+  .gtab td button:hover, .gtab td button:focus-visible { background: var(--tc); color: #0b1a17; font-weight: 700; outline: none; box-shadow: inset 0 0 0 2px #fff; }
+  .gtab td button:hover::after { content: '+1'; font-size: 11px; margin-left: 3px; opacity: .7; }
+  .gtab td button:active, .gtab td button.hit { background: #fff; color: #0b1a17; }
   .gtab + .gtab { margin-top: 8px; }
   .gridEntry .hint { margin-top: 6px; }
   .toast.err { color: var(--danger); }
@@ -695,6 +706,17 @@ function renderGrid() {
   }).join('') + `<div class="hint">칸을 누르면 1씩 올라가요. 잘못 눌렀으면 그 칸을 오른쪽 클릭(휴대폰은 길게 누르기)하면 1 내려가요. 코트 위 5명은 [경기 설정] 로스터 순서로 바꿔요.</div>`;
 }
 let lastHit = null;
+// 마우스가 올라간 칸의 열 제목과 같은 열 칸도 강조해요.
+function clearHover() { $$('#gridEntry .hov, #gridEntry .hovcol').forEach(x => x.classList.remove('hov', 'hovcol')); }
+$('#gridEntry').addEventListener('mouseover', ev => {
+  const td = ev.target.closest('.gtab td'); clearHover();
+  if (!td || !td.querySelector('[data-g]')) return;
+  const table = td.closest('table'), col = td.cellIndex;
+  const th = table.tHead.rows[0].cells[col - 1];   // 머리 줄은 번호·이름 칸이 하나로 합쳐져 있어요
+  th && th.classList.add('hov');
+  [...table.tBodies[0].rows].forEach(r => r.cells[col] && r.cells[col].classList.add('hovcol'));
+});
+$('#gridEntry').addEventListener('mouseleave', clearHover);
 $('#gridEntry').addEventListener('click', ev => {
   const b = ev.target.closest('[data-g]'); if (!b) return;
   lastHit = { team: +b.dataset.g, name: b.dataset.name, k: b.dataset.k };
