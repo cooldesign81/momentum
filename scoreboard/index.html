@@ -296,7 +296,8 @@
         <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
         <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
         <div class="field"><label>화질</label>
-          <select id="quality" title="높음: 유튜브 업로드 권장">
+          <select id="quality" title="원본과 같게: 불러온 영상의 비트레이트에 맞춰 내보내요">
+            <option value="source">원본과 같게</option>
             <option value="high">높음</option>
             <option value="very_high">매우 높음</option>
             <option value="medium">보통</option>
@@ -335,7 +336,8 @@ const DEFAULT_CFG = {
   flash: true,
   trimStart: null,
   trimEnd: null,
-  quality: 'high',
+  quality: 'source',
+  qv: 2,               // settings version; v1 saves predate the 'source' quality option
   autoQ: true,
 };
 let cfg = structuredClone(DEFAULT_CFG);
@@ -354,11 +356,11 @@ const octx = overlay.getContext('2d');
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function save() {
-  lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality });
+  lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality, qv: 2 });
   if (storeKey) lsSet(storeKey, { cfg, events, order: clips.map(c => c.key) });
 }
 const last = lsGet('mm-sb:last-cfg');
-if (last) Object.assign(cfg, last);
+if (last) { Object.assign(cfg, last); if (!last.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
 
 // ---------- game logic ----------
 // ---------- multi-clip timeline ----------
@@ -923,7 +925,7 @@ async function openFiles(list, append) {
     const saved = lsGet(storeKey) || (clips.length === 1 ? lsGet(`mm-sb:${clips[0].key}`) : null);
     if (saved?.order) clips.sort((x, y) => saved.order.indexOf(x.key) - saved.order.indexOf(y.key));
     events = saved?.events || [];
-    if (saved?.cfg) Object.assign(cfg, saved.cfg);
+    if (saved?.cfg) { Object.assign(cfg, saved.cfg); if (!saved.cfg.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
     nextId = events.reduce((m, e) => Math.max(m, e.id), 0) + 1;
     undoStack = [];
     cur = 0;
@@ -1199,7 +1201,9 @@ $('#btnExport').onclick = async () => {
     const W = first.displayWidth & ~1, H = first.displayHeight & ~1;
     const codec = await MB.getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], { width: W, height: H });
     if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
-    const quality = { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
+    const quality = cfg.quality === 'source'
+      ? await sourceBitrate(opened, codec)
+      : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
 
     const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
     output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
@@ -1220,6 +1224,7 @@ $('#btnExport').onclick = async () => {
       }
     }
     await output.start();
+    const brNote = typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : '';
 
     const span = E - S;
     let base = 0, done = 0, lastV = -1, lastA = 0;
@@ -1274,7 +1279,7 @@ $('#btnExport').onclick = async () => {
 
     if (!writable) download(new Blob([target.buffer], { type: 'video/mp4' }), outName);
     setProgress(1, '완료');
-    showMsg(`내보내기 완료 (${fmt((performance.now() - started) / 1000)} 걸림). ${writable ? '저장한 위치에서 파일을 확인하세요.' : '다운로드 폴더를 확인하세요.'}`);
+    showMsg(`내보내기 완료 (${fmt((performance.now() - started) / 1000)} 걸림${brNote}). ${writable ? '저장한 위치에서 파일을 확인하세요.' : '다운로드 폴더를 확인하세요.'}`);
   } catch (err) {
     try { if (output && output.state !== 'finalized') await output.cancel(); } catch {}
     if (job.canceled) showMsg('내보내기를 취소했어요.');
@@ -1286,6 +1291,20 @@ $('#btnExport').onclick = async () => {
     setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
   }
 };
+// Bitrate matching the source clips (the highest among them), adjusted for codec efficiency
+// so e.g. an HEVC original re-encoded as H.264 gets proportionally more bits.
+const CODEC_EFF = { avc: 1, hevc: 0.6, vp9: 0.6, av1: 0.4, vp8: 1.2 };
+async function sourceBitrate(opened, outCodec) {
+  let best = 0;
+  for (const o of opened) {
+    let br = 0;
+    try { br = (await o.vt.computePacketStats(900)).averageBitrate; } catch {}
+    if (!br) br = o.c.file.size * 8 / o.c.dur * 0.93;   // fallback: whole file minus ~audio share
+    br *= (CODEC_EFF[outCodec] || 1) / (CODEC_EFF[o.vt.codec] || 1);
+    best = Math.max(best, br);
+  }
+  return Math.round(Math.min(100e6, Math.max(2e6, best || 8e6)));
+}
 function setProgress(p, label) { $('#exportBar').style.width = `${Math.round(p * 100)}%`; $('#exportLabel').textContent = label; }
 function showMsg(text, err) { const m = $('#exportMsg'); m.textContent = text; m.classList.toggle('err', !!err); }
 
