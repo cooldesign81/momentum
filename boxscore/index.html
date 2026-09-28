@@ -227,7 +227,12 @@
   .log .ev.qrow { color: var(--muted); font-style: italic; }
   /* 영상 편집 탭 */
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: end; }
-  .team-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .team-row { display: grid; grid-template-columns: 1fr auto 36px 36px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  /* 유니폼 색 프리셋: 검정 · 흰색 · 빨강 */
+  .swatches { display: inline-flex; gap: 5px; }
+  .swatches button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--line); background: var(--sw); }
+  .swatches button:hover { border-color: var(--text); }
+  .swatches button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
   .team-row.head { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
   .team-row.head span:nth-child(n+2) { text-align: center; }
   input[type=color] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
@@ -493,9 +498,9 @@
       <section>
         <h2>점수판 <label class="check" style="font-weight:400"><input type="checkbox" id="sbShow"> 영상에 보이기</label></h2>
         <div class="hint" style="margin-bottom:8px">선수 기록의 1·2·3점 성공이 팀 점수로, 파울이 팀파울로 자동으로 들어가요.</div>
-        <div class="team-row head"><span>팀</span><span>바탕</span><span>글씨</span></div>
-        <div class="team-row"><span id="sbName0" style="color:var(--ta)"></span><input type="color" id="sbColor0" title="바탕색 (유니폼 색)"><input type="color" id="sbText0" title="팀 이름 글씨색"></div>
-        <div class="team-row"><span id="sbName1" style="color:var(--tb)"></span><input type="color" id="sbColor1" title="바탕색 (유니폼 색)"><input type="color" id="sbText1" title="팀 이름 글씨색"></div>
+        <div class="team-row head"><span>팀</span><span>유니폼 색</span><span>바탕</span><span>글씨</span></div>
+        <div class="team-row"><span id="sbName0" style="color:var(--ta)"></span><span class="swatches" data-team="0"></span><input type="color" id="sbColor0" title="바탕색 직접 고르기"><input type="color" id="sbText0" title="팀 이름 글씨색"></div>
+        <div class="team-row"><span id="sbName1" style="color:var(--tb)"></span><span class="swatches" data-team="1"></span><input type="color" id="sbColor1" title="바탕색 직접 고르기"><input type="color" id="sbText1" title="팀 이름 글씨색"></div>
         <div class="grid3" style="margin-bottom:8px">
           <div class="field"><label>매치 표시</label><input type="text" id="sbMatch" placeholder="A vs B"></div>
           <div class="field"><label>시작 쿼터</label><select id="sbStartQ"><option value="1">1Q</option><option value="2">2Q</option><option value="3">3Q</option><option value="4">4Q</option></select></div>
@@ -628,7 +633,7 @@ const SB_LAST = 'mm-box:sb-last';
 const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ'];
 function defaultSb() {
   return Object.assign({
-    colors: [{ color: '#111111', text: '#ffffff' }, { color: '#7a0a0a', text: '#ffffff' }],
+    colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
     trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true,
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
@@ -2037,12 +2042,24 @@ function renderLive() {
 document.fonts.addEventListener('loadingdone', () => { lastBoardKey = ''; });
 
 // ---------- 영상 편집 탭 설정 ----------
+// 유니폼 색 프리셋 (실제 쓰는 유니폼 색 그대로). 고르면 글씨색도 잘 보이는 쪽으로 같이 바꿔요.
+const SWATCHES = [['#292929', '검정', '#ffffff'], ['#fcfcfc', '흰색', '#292929'], ['#c11010', '빨강', '#ffffff']];
+$$('.swatches').forEach(box => {
+  box.innerHTML = SWATCHES.map(([c, l]) => `<button type="button" data-sw="${c}" title="${l}" aria-label="${l}" style="--sw:${c}"></button>`).join('');
+  box.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-sw]'); if (!b) return;
+    const sw = SWATCHES.find(x => x[0] === b.dataset.sw), i = +box.dataset.team;
+    game.sb.colors[i] = { color: sw[0], text: sw[2] };
+    save(); renderVideoPane();
+  });
+});
 function renderVideoPane() {
   const sb = game.sb;
   [0, 1].forEach(i => {
     $('#sbName' + i).textContent = game.teams[i].name;
     $('#sbColor' + i).value = sb.colors[i].color;
     $('#sbText' + i).value = sb.colors[i].text;
+    $$(`.swatches[data-team="${i}"] button`).forEach(b => b.classList.toggle('on', b.dataset.sw.toLowerCase() === String(sb.colors[i].color).toLowerCase()));
   });
   $('#sbShow').checked = sb.show !== false;
   $('#sbMatch').value = sb.match || ''; $('#sbMatch').placeholder = `${game.teams[0].name} vs ${game.teams[1].name}`;
@@ -2082,7 +2099,7 @@ $$('#pane-video input, #pane-video select').forEach(el => {
     // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
     if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
     readVideoPane();
-    if (el.id === 'sbColor0' || el.id === 'sbColor1' || el.id === 'sbText0' || el.id === 'sbText1') renderStyles();
+    if (/^sb(Color|Text)[01]$/.test(el.id)) renderVideoPane();   // 프리셋 표시와 모양 미리보기도 같이 갱신
   });
 });
 const EXPORT_PRESETS = {
