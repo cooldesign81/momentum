@@ -205,6 +205,7 @@ details.week .games{padding:0 14px 14px}
 .score-line .sc{font-size:3rem;line-height:1}
 .score-line .sc.lose{color:var(--muted)}
 .box-title{margin:18px 0 8px;font-size:1rem}
+td.sh small{display:block;font-size:.72rem;line-height:1.15;color:var(--muted);font-weight:500}
 
 .status{font-size:.8rem;color:var(--muted);margin-top:40px;border-top:1px solid var(--line);padding-top:14px}
 .loading{padding:60px 0;text-align:center;color:var(--muted)}
@@ -1156,7 +1157,9 @@ function openBox(id) {
   if (!g) return;
   const tbl = (team, rows) => {
     const tot = {}; KEYS.forEach(k => tot[k] = rows.reduce((s, p) => s + p[k], 0));
-    const r = p => `<td class="num"><b>${p.pts}</b></td><td class="num">${p.fgm}/${p.fga}</td><td class="num">${p.tpm}/${p.tpa}</td><td class="num">${p.ftm}/${p.fta}</td><td class="num">${p.reb}</td><td class="num">${p.oreb}</td><td class="num">${p.dreb}</td><td class="num">${p.ast}</td><td class="num">${p.stl}</td><td class="num">${p.blk}</td><td class="num">${p.to}</td><td class="num">${p.pf}</td>`;
+    // 성공/시도 아래에 성공률을 작게 (시도가 없으면 –)
+    const sh = (m, a) => `<td class="num sh">${m}/${a}<small>${a ? Math.round(m / a * 100) + '%' : '–'}</small></td>`;
+    const r = p => `<td class="num"><b>${p.pts}</b></td>${sh(p.fgm, p.fga)}${sh(p.tpm, p.tpa)}${sh(p.ftm, p.fta)}<td class="num">${p.reb}</td><td class="num">${p.oreb}</td><td class="num">${p.dreb}</td><td class="num">${p.ast}</td><td class="num">${p.stl}</td><td class="num">${p.blk}</td><td class="num">${p.to}</td><td class="num">${p.pf}</td>`;
     return `<h4 class="box-title">${teamName(g.seasonId, team)}</h4><div class="tbl-wrap"><table><thead><tr><th class="l sticky-col">선수</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th><th>리바</th><th>공리</th><th>수리</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>파울</th></tr></thead><tbody>
       ${rows.slice().sort((a, b) => b.pts - a.pts).map(p => `<tr><td class="l sticky-col">${isGuest(p.name) ? esc(p.name) : playerLink(p.name)}</td>${r(p)}</tr>`).join('')}
       <tr><td class="l sticky-col"><b>합계</b></td>${r(tot)}</tr></tbody></table></div>`;
