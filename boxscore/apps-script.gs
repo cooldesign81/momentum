@@ -16,6 +16,9 @@
 
 const NAME_COL = { a: 1, b: 21 };   // A열, U열 (1부터 셈)
 const WIDTH = 19;                   // PLAYER ~ PF
+// 시트가 수식으로 계산하는 칸(PTS, FG%, 3P%, FT%, REB)은 건드리지 않아요. 그래서 실제로 쓰는 칸은 이 조각들이에요.
+//   [시작 열(0부터), 칸 수]: 이름 / FGM FGA / 3PM 3PA / FTM FTA / AST TO STL BLK OREB DREB PF
+const WRITE_SEGMENTS = [[0, 1], [2, 2], [5, 2], [8, 2], [12, 7]];
 
 function doGet() {
   return json({ ok: true, msg: 'Momentum 박스스코어 연동이 켜져 있어요.' });
@@ -83,20 +86,19 @@ function writeGame(req) {
     const range = sh.getRange(first, NAME_COL[side], slots, WIDTH);
     const formulas = range.getFormulas();
     const values = range.getValues();
-    // 수식이 있는 칸(PTS, REB, % 등)은 그대로 두고, 나머지 칸만 새 기록으로 덮어써요.
     // 이름 칸이 수식이면 이름은 그대로 두고 숫자만 바뀌어 다른 선수 기록이 되니까, 쓰지 않고 알려줘요.
     if (formulas.some(row => row[0])) return { ok: false, msg: `${tab} ${colA[start]} 블록의 선수 이름 칸에 수식이 있어요. 시트에서 그 칸을 비워주세요.` };
     for (let r = 0; r < slots; r++) {
       for (let c = 0; c < WIDTH; c++) {
-        if (formulas[r][c]) continue;
+        if (formulas[r][c]) { values[r][c] = formulas[r][c]; continue; }   // 남아 있는 수식은 그대로
         const v = rows[r] ? rows[r][c] : '';
         values[r][c] = v === null || v === undefined ? '' : v;
       }
       if (rows[r]) written++;
     }
-    // 수식 칸은 수식을 그대로 다시 써서 보존
-    for (let r = 0; r < slots; r++) for (let c = 0; c < WIDTH; c++) if (formulas[r][c]) values[r][c] = formulas[r][c];
-    range.setValues(values);
+    // 자동 계산 칸(PTS, %, REB)은 아예 쓰지 않고, 입력 칸 조각만 써요. (ARRAYFORMULA나 서식이 깨지지 않게)
+    for (const [off, w] of WRITE_SEGMENTS)
+      sh.getRange(first, NAME_COL[side] + off, slots, w).setValues(values.map(row => row.slice(off, off + w)));
   }
   // 점수 줄(블록 두 번째 줄): 사이트가 경기 점수를 여기서 읽어요. 수식이면 시트가 알아서 계산하니 그대로 두고,
   // 손으로 쓴 글자면 새 점수로 바꿔요.
@@ -106,7 +108,7 @@ function writeGame(req) {
     const [left, right] = [sides[0][1], sides[1][1]];
     scoreCell.setValue(`${colA[start + 2]}  ${pts(left)} : ${pts(right)}  ${colU[start + 2]}`);
   }
-  return { ok: true, msg: `${tab} ${colA[start]}에 ${written}명 기록을 넣었어요.`, tab, swap };
+  return { ok: true, msg: `${tab} ${colA[start]}에 ${written}명 기록을 넣었어요. (PTS·%·REB 칸은 시트 수식 그대로)`, tab, swap };
 }
 
 function json(o) {

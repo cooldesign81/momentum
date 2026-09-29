@@ -787,7 +787,7 @@ function parseCSV(text) {
 }
 async function fetchSheet(id, sheet, range) {
   const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });   // 시트를 고친 뒤 새로고침하면 바로 새 기록이 보이게 (브라우저 캐시 안 씀)
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const t = await res.text();
   if (/^\s*</.test(t)) throw new Error('공유 안 됨');

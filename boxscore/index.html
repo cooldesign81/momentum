@@ -95,7 +95,8 @@
   .vcol kbd { font-size: 9px; min-width: 0; padding: 0 3px; border-bottom-width: 1px; opacity: .8; }
   .vcol .q { font-size: 12px; font-weight: 700; color: var(--muted); opacity: .7; padding: 4px 6px 0; }
   .vcol .vsep { height: 6px; }
-  .vcol .time { margin-top: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); opacity: .75; white-space: nowrap; padding: 0 6px 2px; font-variant-numeric: tabular-nums; }
+  /* 재생 시간: 장면을 맞출 때 계속 봐야 해서 버튼과 달리 크고 또렷하게 */
+  .vcol .time { margin-top: auto; font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600; color: var(--text); opacity: 1; white-space: nowrap; padding: 0 4px 2px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
   /* 폰: 영상 아래에 버튼을 가로로 늘어놓아요 (위의 .vcol 규칙보다 뒤에 있어야 먹혀요) */
   @media (max-width: 700px) {
     .stagerow { flex-wrap: wrap; }
@@ -308,6 +309,8 @@
         <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
         <button id="btnBack" title="뒤로 (←)">−5초</button>
         <button id="btnFwd" title="앞으로 (→)">+5초</button>
+        <button id="btnFrameBack" title="한 프레임 뒤로 (,)  ·  Shift+←는 1초">−1f <kbd>,</kbd></button>
+        <button id="btnFrameFwd" title="한 프레임 앞으로 (.)  ·  Shift+→는 1초">+1f <kbd>.</kbd></button>
         <span class="vsep"></span>
         <span class="q" id="curQuarter" title="현재 쿼터">1ST</span>
         <button id="btnNextQ" title="현재 위치부터 다음 쿼터 (N)">다음 쿼터 <kbd>N</kbd></button>
@@ -422,7 +425,7 @@
           선수를 누른 뒤 기록 키를 누르세요.<br>
           <kbd>2</kbd> 2점 성공 <kbd>W</kbd> 2점 실패 · <kbd>3</kbd> 3점 성공 <kbd>E</kbd> 3점 실패 · <kbd>1</kbd> 자유투 성공 <kbd>Q</kbd> 자유투 실패<br>
           <kbd>R</kbd> 공격 리바 <kbd>D</kbd> 수비 리바 · <kbd>A</kbd> 어시스트 <kbd>S</kbd> 스틸 <kbd>B</kbd> 블록 <kbd>T</kbd> 턴오버 <kbd>F</kbd> 파울<br>
-          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> 되돌리기
+          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 (Shift: 1초) · <kbd>,</kbd><kbd>.</kbd> 한 프레임 · <kbd>N</kbd> 다음 쿼터 · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> 되돌리기
         </div>
       </section>
       <section>
@@ -475,7 +478,7 @@
         <div class="hint">
           1. 리그 시트의 해당 주(Week) 탭에서 이 경기 블록을 찾아요.<br>
           2. 왼쪽 팀은 A열, 오른쪽 팀은 U열의 <b>PLAYER 바로 아래 칸</b>을 클릭하고 [시트용 복사] → 붙여넣기(Ctrl+V).<br>
-          3. 선수 이름부터 PF까지 19칸이 순서대로 들어가요. 체크를 끈 선수(결장)는 빠져요.<br>
+          3. 선수 이름부터 PF까지 19칸이 순서대로 들어가요. 체크를 끈 선수(결장)는 빠져요. PTS·%·REB 칸에는 숫자 대신 자동 계산 수식이 들어가서 붙여넣은 뒤에도 계속 계산돼요.<br>
           4. 점수 줄(예: <i>팀A 35 : 33 팀B</i>)은 아래 버튼으로 복사해서 블록 두 번째 줄에 넣어요.
         </div>
         <div class="btns" style="margin-top:8px">
@@ -1269,7 +1272,7 @@ function parseCSV(text) {
 }
 async function fetchSheet(sheet, range) {
   const url = `https://docs.google.com/spreadsheets/d/${sheetId()}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });   // 브라우저 캐시 때문에 예전 시트가 보이지 않게
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const t = await res.text();
   if (/^\s*</.test(t)) throw new Error('시트가 공개되어 있지 않아요');
@@ -1355,8 +1358,18 @@ $('#btnApplyMatch').addEventListener('click', () => {
 });
 
 // ---------- 내보내기 ----------
+// 시트에 붙여넣을 때 PTS·FG%·3P%·FT%·REB 칸은 숫자 대신 '같은 줄의 다른 칸을 보는 수식'으로 넣어요.
+// 붙여넣어도 그 칸이 글자로 굳지 않고 계속 자동 계산돼요. (R1C1 상대 참조라 어느 줄에 붙여도 맞아요)
+const RC = d => `INDIRECT("R[0]C[${d}]",FALSE)`;
+const SHEET_FORMULA = {
+  pts: `=2*${RC(1)}+${RC(4)}+${RC(7)}`,                       // 2×FGM + 3PM + FTM
+  fgp: `=IF(${RC(-1)}=0,"",${RC(-2)}/${RC(-1)})`,             // FGM/FGA
+  tpp: `=IF(${RC(-1)}=0,"",${RC(-2)}/${RC(-1)})`,             // 3PM/3PA
+  ftp: `=IF(${RC(-1)}=0,"",${RC(-2)}/${RC(-1)})`,             // FTM/FTA
+  reb: `=${RC(5)}+${RC(6)}`,                                  // OREB + DREB
+};
 function sheetRows(ti) {
-  return boxOf(ti).filter(l => l.played).map(l => [l.name, ...OUT.map(([k]) => /p$/.test(k) && k !== 'pts' ? pctRaw(l[k]) : l[k])].join('\t')).join('\n');
+  return boxOf(ti).filter(l => l.played).map(l => [l.name, ...OUT.map(([k]) => SHEET_FORMULA[k] || l[k])].join('\t')).join('\n');
 }
 async function copy(text, what) {
   try { await navigator.clipboard.writeText(text); toast(`${what} 복사했어요. 시트에 붙여넣으세요.`); }
@@ -1487,6 +1500,11 @@ $('#btnPlay').addEventListener('click', () => player.toggle());
 $('#shield').addEventListener('click', () => player.toggle());
 $('#btnBack').addEventListener('click', () => player.seek(player.time() - opts.skip));
 $('#btnFwd').addEventListener('click', () => player.seek(player.time() + opts.skip));
+// 프레임 단위 이동: 30fps 기준 1/30초. 멈춘 상태에서 정확한 순간을 잡을 때 써요.
+const FRAME = 1 / 30;
+const stepFrame = d => { player.pause(); player.seek(player.time() + d * FRAME); };
+$('#btnFrameBack').addEventListener('click', () => stepFrame(-1));
+$('#btnFrameFwd').addEventListener('click', () => stepFrame(1));
 $('#speed').addEventListener('click', ev => {
   const b = ev.target.closest('[data-r]'); if (!b) return;
   rate = +b.dataset.r; player.rate(rate);
@@ -1505,6 +1523,8 @@ document.addEventListener('keydown', ev => {
   if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement?.tagName === 'BUTTON') document.activeElement.blur(); player.toggle(); return; }
   if (ev.key === 'ArrowLeft') { ev.preventDefault(); player.seek(player.time() - (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
+  if (ev.code === 'Comma') { ev.preventDefault(); stepFrame(-1); return; }
+  if (ev.code === 'Period') { ev.preventDefault(); stepFrame(1); return; }
   if (ev.key === 'Escape') { if (cutStart != null) { cutStart = null; renderCuts(); renderMarkers(); } else if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
   if (ev.code === 'KeyN') { ev.preventDefault(); addQuarter(); return; }
   if (ev.code === 'BracketLeft') { ev.preventDefault(); markCutIn(); return; }
