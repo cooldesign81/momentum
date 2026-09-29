@@ -594,6 +594,38 @@ html,body{overflow-x:clip}
 @media(max-width:700px){.banner{aspect-ratio:auto;height:150px;object-position:3% center}}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .navbar{border-top:3px solid var(--accent)}
+
+/* team logos (시즌마다 관리자가 올림) */
+.tlogo{display:inline-block;object-fit:contain;flex:0 0 auto;vertical-align:middle}
+.tname{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}
+.tname .tlogo{width:1.5em;height:1.5em}
+.lg-logo-btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff}
+.lg-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pod.tc:not(.pod-1){background:linear-gradient(150deg,color-mix(in srgb,var(--tc) 42%,transparent),rgba(255,255,255,.05) 75%);border-color:color-mix(in srgb,var(--tc) 60%,transparent)}
+.pod-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pod-logo{width:84px;height:84px;margin:-6px -6px -10px 0;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
+.pod-1 .pod-logo{width:118px;height:118px;filter:drop-shadow(0 8px 16px rgba(80,40,0,.35))}
+.podium.pre .pod-logo{width:100%;height:150px;margin:6px 0 4px}
+.podium.pre .pod{text-align:center}
+.sb-row .tn{display:inline-flex;align-items:center}
+.sb-row .tn .tlogo{width:38px;height:38px;margin-right:10px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.st-table .tname .tlogo{width:26px;height:26px}
+.tb-head{align-items:center}
+.tb-head .tlogo{width:64px;height:64px}
+.team-block.tc .tb-head{border-bottom-color:var(--tc)}
+.team-block.tc .tb-rank{color:var(--tc)}
+.king-team .tname .tlogo,.facts .tname .tlogo{width:1.6em;height:1.6em}
+.score-line .tm{display:flex;flex-direction:column;align-items:center;gap:6px}
+.score-line .tm .tlogo{width:72px;height:72px}
+.logo-rows{display:grid;gap:10px;margin:4px 0 8px}
+.logo-row{display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.logo-row.over{border-color:var(--accent);background:var(--accent-soft)}
+.logo-prev{width:76px;height:76px;border-radius:12px;display:grid;place-items:center;background:repeating-conic-gradient(#0000 0 25%,rgba(128,128,128,.14) 0 50%) 0 0/14px 14px;overflow:hidden;cursor:pointer}
+.logo-prev img{width:100%;height:100%;object-fit:contain}
+.logo-prev span{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.3}
+.logo-row b{display:block;font-size:1rem;margin-bottom:6px}
+.logo-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.85rem}
+.logo-acts input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer}
 </style>
 </head>
 <body>
@@ -952,7 +984,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [] };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -966,6 +998,17 @@ const memberNames = () => usingSeed() ? Object.keys(CONFIG.players) : state.memb
 const f1 = v => v === null || v === undefined ? '–' : (Math.round(v * 10) / 10).toFixed(1);
 const pct = v => v === null || v === undefined ? '–' : (Math.round(v * 10) / 10).toFixed(1) + '%';
 const playerLink = n => `<a href="#/player/${encodeURIComponent(n)}">${esc(n)}</a>`;
+// 팀 로고: teamLogos/{시즌 id}~{팀 이름} = { season, team, img, color }. 시즌마다 관리자가 리그 탭에서 올려요.
+const logoKey = (sid, team) => `${sid}~${encodeURIComponent(team)}`;
+function logoMap() {
+  if (state._lmSrc !== state.teamLogos) { state._lm = Object.fromEntries(state.teamLogos.map(x => [x.id, x])); state._lmSrc = state.teamLogos; }
+  return state._lm;
+}
+const logoOf = (sid, team) => logoMap()[logoKey(sid, team)] || null;
+const teamColor = (sid, team) => { const c = (logoOf(sid, team) || {}).color; return /^#[0-9a-f]{6}$/i.test(c || '') ? c : ''; };
+const teamLogo = (sid, team, cls = '') => { const l = logoOf(sid, team); return l && l.img ? `<img class="tlogo ${cls}" src="${esc(l.img)}" alt="" loading="lazy">` : ''; };
+const teamName = (sid, team) => { const lg = teamLogo(sid, team); return lg ? `<span class="tname">${lg}${esc(team)}</span>` : esc(team); };
+const tcStyle = (sid, team) => { const c = teamColor(sid, team); return c ? ` style="--tc:${c}"` : ''; };
 
 const CATS = [
   { k: 'mvp', label: 'MVP 지수' }, { k: 'pts', label: '득점' }, { k: 'reb', label: '리바운드' }, { k: 'ast', label: '어시스트' },
@@ -1054,13 +1097,13 @@ function pagePlayer(name) {
   return `<a class="back" href="#/players">‹ 선수 목록</a>${can('admin') && pr.id ? ` <button class="link-btn" data-edit-member="${esc(pr.id)}" style="margin-left:12px">선수 정보 수정</button>` : ''}
   <div class="pd"><div class="ph">${pr.photo ? `<img src="${esc(pr.photo)}" alt="">` : `<span class="ini ko">${esc(name.slice(-2))}</span>`}</div>
     <div>${pr.number !== undefined ? `<span class="no en">#${esc(pr.number)}</span>` : ''}<h2 class="ko">${esc(name)}</h2>
-    <div class="facts">${latest ? `<span>${esc(latest.s.name)} ${esc(latest.p.team)}</span>` : ''}${facts.map(f => `<span>${esc(f)}</span>`).join('')}</div></div></div>
+    <div class="facts">${latest ? `<span>${esc(latest.s.name)} ${teamName(latest.s.id, latest.p.team)}</span>` : ''}${facts.map(f => `<span>${esc(f)}</span>`).join('')}</div></div></div>
   ${car ? `<div class="big4">${[['pts', '평균 득점'], ['reb', '평균 리바운드'], ['ast', '평균 어시스트'], ['mvp', 'MVP 지수']].map(([k, l]) => `<div class="card"><b class="en num">${f1(car.avg[k])}</b><span>통산 ${l}</span></div>`).join('')}</div>
   <section class="sec"><h3>시즌별 평균</h3><div class="tbl-wrap"><table><thead><tr><th class="l">시즌</th><th>경기</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>FG%</th><th>3P%</th><th>FT%</th><th>MVP</th></tr></thead>
-    <tbody>${per.map(x => row(`${esc(x.s.name)} <span class="muted">${esc(x.p.team)}</span>`, x.p)).join('')}${per.length > 1 ? row('<b>통산</b>', car) : ''}</tbody></table></div></section>
+    <tbody>${per.map(x => row(`${esc(x.s.name)} <span class="muted">${teamName(x.s.id, x.p.team)}</span>`, x.p)).join('')}${per.length > 1 ? row('<b>통산</b>', car) : ''}</tbody></table></div></section>
   <section class="sec"><div class="sec-head"><h3>경기별 기록, ${esc(logSeason.s.name)}</h3>${per.length > 1 ? `<select class="season" data-season aria-label="시즌 선택">${per.map(x => `<option value="${x.s.id}" ${x === logSeason ? 'selected' : ''}>${esc(x.s.name)}</option>`).join('')}</select>` : ''}</div>
     <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th class="l">주차</th><th class="l">상대</th><th>결과</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>야투</th><th>3점</th><th>자유투</th></tr></thead><tbody>
-    ${logSeason.p.log.map(l => `<tr><td class="l">${l.game.week}주차 <span class="muted">${esc(fmtDate(l.game.date, false))}</span></td><td class="l">${esc(l.opp)}</td><td class="wl-${l.won ? 'W' : 'L'}">${l.won ? '승' : '패'} ${l.team === l.game.teamA ? `${l.game.scoreA}:${l.game.scoreB}` : `${l.game.scoreB}:${l.game.scoreA}`}</td><td class="num"><b>${l.pts}</b></td><td class="num">${l.reb}</td><td class="num">${l.ast}</td><td class="num">${l.stl}</td><td class="num">${l.blk}</td><td class="num">${l.to}</td><td class="num">${l.fgm}/${l.fga}</td><td class="num">${l.tpm}/${l.tpa}</td><td class="num">${l.ftm}/${l.fta}</td></tr>`).join('')}
+    ${logSeason.p.log.map(l => `<tr><td class="l">${l.game.week}주차 <span class="muted">${esc(fmtDate(l.game.date, false))}</span></td><td class="l">${teamName(logSeason.s.id, l.opp)}</td><td class="wl-${l.won ? 'W' : 'L'}">${l.won ? '승' : '패'} ${l.team === l.game.teamA ? `${l.game.scoreA}:${l.game.scoreB}` : `${l.game.scoreB}:${l.game.scoreA}`}</td><td class="num"><b>${l.pts}</b></td><td class="num">${l.reb}</td><td class="num">${l.ast}</td><td class="num">${l.stl}</td><td class="num">${l.blk}</td><td class="num">${l.to}</td><td class="num">${l.fgm}/${l.fga}</td><td class="num">${l.tpm}/${l.tpa}</td><td class="num">${l.ftm}/${l.fta}</td></tr>`).join('')}
     </tbody></table></div></section>` : '<p class="empty sec">아직 경기 기록이 없어요.</p>'}`;
 }
 
@@ -1079,7 +1122,7 @@ function pageStats() {
   ${career ? `<p class="muted" style="margin-top:-6px">${state.seasons.map(x => x.name).join(', ')} 기록을 합친 통산이에요.</p>` : ''}
   <div class="chips" role="group" aria-label="기록 항목">${CATS.map(c => `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === cat.k}">${c.label}</button>`).join('')}</div>
   <section class="sec" style="margin-top:18px"><div class="tbl-wrap"><table><thead><tr><th>순위</th><th class="l">선수</th>${career ? '' : '<th class="l">팀</th>'}<th>경기</th><th>${cat.label} 평균</th></tr></thead><tbody>
-    ${top.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l">${playerLink(p.name)}</td>${career ? '' : `<td class="l muted">${esc(p.team)}</td>`}<td class="num">${p.gp}</td><td class="num"><b>${cat.pct ? pct(p.avg[cat.k]) : f1(p.avg[cat.k])}</b></td></tr>`).join('') || '<tr><td colspan="5" class="l muted">기록이 없어요.</td></tr>'}
+    ${top.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l">${playerLink(p.name)}</td>${career ? '' : `<td class="l muted">${teamName(s.id, p.team)}</td>`}<td class="num">${p.gp}</td><td class="num"><b>${cat.pct ? pct(p.avg[cat.k]) : f1(p.avg[cat.k])}</b></td></tr>`).join('') || '<tr><td colspan="5" class="l muted">기록이 없어요.</td></tr>'}
     </tbody></table></div>
     <p class="muted" style="font-size:.85rem;margin:8px 2px 0">${minNote}${cat.k === 'fgp' ? ' 야투율은 슛 10개 이상 시도한 선수만.' : ''}${cat.k === 'mvp' ? ' MVP 지수 = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버 (경기당 평균).' : ''}
     <button class="btn" data-showall style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state.showAll ? 'TOP 10만 보기' : '전체 순위 보기'}</button></p></section>
@@ -1114,7 +1157,7 @@ function openBox(id) {
   const tbl = (team, rows) => {
     const tot = {}; KEYS.forEach(k => tot[k] = rows.reduce((s, p) => s + p[k], 0));
     const r = p => `<td class="num"><b>${p.pts}</b></td><td class="num">${p.fgm}/${p.fga}</td><td class="num">${p.tpm}/${p.tpa}</td><td class="num">${p.ftm}/${p.fta}</td><td class="num">${p.reb}</td><td class="num">${p.oreb}</td><td class="num">${p.dreb}</td><td class="num">${p.ast}</td><td class="num">${p.stl}</td><td class="num">${p.blk}</td><td class="num">${p.to}</td><td class="num">${p.pf}</td>`;
-    return `<h4 class="box-title">${esc(team)}</h4><div class="tbl-wrap"><table><thead><tr><th class="l sticky-col">선수</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th><th>리바</th><th>공리</th><th>수리</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>파울</th></tr></thead><tbody>
+    return `<h4 class="box-title">${teamName(g.seasonId, team)}</h4><div class="tbl-wrap"><table><thead><tr><th class="l sticky-col">선수</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th><th>리바</th><th>공리</th><th>수리</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>파울</th></tr></thead><tbody>
       ${rows.slice().sort((a, b) => b.pts - a.pts).map(p => `<tr><td class="l sticky-col">${isGuest(p.name) ? esc(p.name) : playerLink(p.name)}</td>${r(p)}</tr>`).join('')}
       <tr><td class="l sticky-col"><b>합계</b></td>${r(tot)}</tr></tbody></table></div>`;
   };
@@ -1122,7 +1165,7 @@ function openBox(id) {
   const vm = videoForGame(g), vid = vm && vm.v;
   $('#sheet').innerHTML = `<button class="btn x" data-close>닫기</button>
     <p class="muted" style="margin:6px 0 0">${esc(s.name)} ${g.week}주차${g.date ? `, ${fmtDate(g.date)}` : ''}</p>
-    <div class="score-line"><span class="tm">${esc(g.teamA)}</span><span class="sc en num ${g.scoreA < g.scoreB ? 'lose' : ''}">${g.scoreA}</span><span class="muted">:</span><span class="sc en num ${g.scoreB < g.scoreA ? 'lose' : ''}">${g.scoreB}</span><span class="tm">${esc(g.teamB)}</span></div>
+    <div class="score-line"><span class="tm">${teamLogo(g.seasonId, g.teamA)}${esc(g.teamA)}</span><span class="sc en num ${g.scoreA < g.scoreB ? 'lose' : ''}">${g.scoreA}</span><span class="muted">:</span><span class="sc en num ${g.scoreB < g.scoreA ? 'lose' : ''}">${g.scoreB}</span><span class="tm">${teamLogo(g.seasonId, g.teamB)}${esc(g.teamB)}</span></div>
     ${vid ? `<a class="box-video" href="#/watch/v/${ytId(vid.url)}" data-close>
         <span class="bv-thumb"><img src="https://i.ytimg.com/vi/${ytId(vid.url)}/mqdefault.jpg" alt=""><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-2.5-5.4-5.4-6.2C55.8.1 34 0 34 0S12.2.1 6.9 1.6C4 2.4 2.3 4.8 1.5 7.7 0 13 0 24 0 24s0 11 1.5 16.3c.8 2.9 2.5 5.4 5.4 6.2C12.2 47.9 34 48 34 48s21.8-.1 27.1-1.6c2.9-.8 4.6-3.2 5.4-6.2C68 35 68 24 68 24s0-11-1.5-16.3z" fill="#FF0000"/><path d="M45 24 27 14v20" fill="#fff"/></svg></span></span>
         <span class="bv-text"><b>경기 영상 보기</b><small>${esc(vid.title || '')}</small>${vm.auto ? '<small class="muted">제목과 날짜로 자동 연결된 영상이에요</small>' : ''}</span></a>` : ''}
@@ -1156,7 +1199,7 @@ document.addEventListener('keydown', e => {
 /* ===================== 저장소와 비밀번호 (Firebase) ===================== */
 const FB_EXPECTED = !!FIREBASE.apiKey;
 const FB = FB_EXPECTED && typeof firebase !== 'undefined';
-const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles'];
+const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles', 'teamLogos'];
 let fdb, fauth;
 const DEMO_KEY = 'momentum-league-demo-v1';
 let demo = null;
@@ -1625,6 +1668,89 @@ async function mountAbout() {
     holder.innerHTML = ''; holder.appendChild(htmlFrame(html, '모멘텀 팀 소개', 'about-frame'));
   } catch (e) { holder.innerHTML = `<p class="empty">소개 글을 불러오지 못했어요.</p>`; }
 }
+/* ===================== 팀 로고 (시즌마다 관리자가 리그 탭에서 올림) ===================== */
+const LOGO_MAX = 400; // 가장 긴 변 (px)
+// 로고의 대표 색: 투명·흰색·검정·회색은 빼고 가장 많이 쓰인 색. 농구공 주황은 거의 모든 로고에 있어서 덜 쳐줘요.
+function dominantColor(d) {
+  const bins = Array.from({ length: 36 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = (mx - mn) / 255, l = (mx + mn) / 510;
+    if (c < .25 || l < .12 || l > .92) continue;
+    let h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+    h = (h * 60 + 360) % 360;
+    const w = c * (h >= 12 && h < 38 ? .35 : 1), k = bins[Math.floor(h / 10)];
+    k.w += w; k.r += r * w; k.g += g * w; k.b += b * w;
+  }
+  const best = bins.reduce((a, b) => b.w > a.w ? b : a);
+  if (!best.w) return '';
+  return '#' + [best.r, best.g, best.b].map(v => Math.round(v / best.w).toString(16).padStart(2, '0')).join('');
+}
+// 로고 파일 → 투명 여백을 잘라내고 줄여서 WebP(안 되는 브라우저는 PNG)로. 대표 색도 같이 뽑아요.
+async function processLogo(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  try { await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }); } finally { setTimeout(() => URL.revokeObjectURL(url), 0); }
+  const W = img.naturalWidth, H = img.naturalHeight, c0 = document.createElement('canvas');
+  c0.width = W; c0.height = H;
+  const x0 = c0.getContext('2d', { willReadFrequently: true }); x0.drawImage(img, 0, 0);
+  const px = x0.getImageData(0, 0, W, H).data;
+  let t = H, l = W, b = -1, r = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (px[(y * W + x) * 4 + 3] > 12) { if (y < t) t = y; if (y > b) b = y; if (x < l) l = x; if (x > r) r = x; }
+  if (b < 0) { t = 0; l = 0; b = H - 1; r = W - 1; }
+  const cw = r - l + 1, ch = b - t + 1, k = Math.min(1, LOGO_MAX / Math.max(cw, ch));
+  const c = document.createElement('canvas'); c.width = Math.round(cw * k); c.height = Math.round(ch * k);
+  const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(c0, l, t, cw, ch, 0, 0, c.width, c.height);
+  let data = c.toDataURL('image/webp', .9);
+  if (!data.startsWith('data:image/webp')) data = c.toDataURL('image/png');
+  return { img: data, color: dominantColor(x.getImageData(0, 0, c.width, c.height).data) };
+}
+async function saveLogo(sid, team, v) {
+  const id = logoKey(sid, team);
+  if (FB) return v ? fdb.collection('teamLogos').doc(id).set({ season: sid, team, img: v.img, color: v.color || '' }) : fdb.collection('teamLogos').doc(id).delete();
+  demo.teamLogos = (demo.teamLogos || []).filter(x => x.id !== id);
+  if (v) demo.teamLogos.push({ id, season: sid, team, img: v.img, color: v.color || '' });
+  demoSave(); demoSync();
+}
+const openTeamLogos = () => withAuth('admin', () => {
+  const s = season(), teams = s.standings.map(t => t.team);
+  const draft = teams.map(t => { const l = logoOf(s.id, t); return { team: t, img: (l && l.img) || '', color: teamColor(s.id, t), changed: false }; });
+  const row = (d, i) => `<div class="logo-row" data-i="${i}">
+      <label class="logo-prev" title="로고 고르기">${d.img ? `<img src="${esc(d.img)}" alt="">` : '<span>로고<br>고르기</span>'}<input type="file" accept="image/*" hidden data-logo-file></label>
+      <div><b>${esc(d.team)}</b><div class="logo-acts">
+        <label class="btn sm">파일 고르기<input type="file" accept="image/*" hidden data-logo-file></label>
+        ${d.img ? `<label title="팀 색 (로고에서 자동으로 골라요)" style="display:inline-flex;align-items:center;gap:6px">팀 색 <input type="color" value="${esc(d.color || '#553e96')}" data-logo-color></label>
+        <button type="button" class="link-btn danger" data-logo-rm>지우기</button>` : '<span class="muted">PNG처럼 배경이 투명한 파일이 가장 좋아요</span>'}</div></div></div>`;
+  $('#sheet').innerHTML = `<form id="mf" class="form" novalidate><h3>${esc(s.name)} 팀 로고</h3>
+    <p class="muted" style="margin:-6px 0 14px;font-size:.9rem">로고는 이 시즌에만 쓰여요. 순위표, 경기 결과, 로스터 등 리그 곳곳에 나오고, 팀 색은 로고에서 자동으로 골라 카드 색에 써요. 색이 마음에 안 들면 바꿀 수 있어요.</p>
+    <div class="logo-rows">${draft.map(row).join('')}</div><p class="err" id="merr" role="alert"></p>
+    <div class="actions"><span style="flex:1"></span><button type="button" class="btn" data-close>취소</button><button type="submit" class="btn primary" id="msave">저장</button></div></form>`;
+  $('#modal').hidden = false; $('#modal').dataset.form = '1'; document.body.style.overflow = 'hidden';
+  const form = $('#mf');
+  const repaint = i => { const el = form.querySelector(`.logo-row[data-i="${i}"]`); el.outerHTML = row(draft[i], i); };
+  const pick = async (i, file) => {
+    if (!file || !/^image\//.test(file.type)) { $('#merr').textContent = '이미지 파일을 골라주세요.'; return; }
+    if (file.size > 20 * 1048576) { $('#merr').textContent = '파일이 너무 커요. 20MB 이하로 골라주세요.'; return; }
+    try { const v = await processLogo(file); Object.assign(draft[i], v, { changed: true }); $('#merr').textContent = ''; repaint(i); }
+    catch (e) { $('#merr').textContent = '이 이미지는 읽을 수 없어요.'; }
+  };
+  const idx = el => +el.closest('.logo-row').dataset.i;
+  form.addEventListener('change', e => {
+    if (e.target.matches('[data-logo-file]')) pick(idx(e.target), e.target.files[0]);
+    else if (e.target.matches('[data-logo-color]')) { const d = draft[idx(e.target)]; d.color = e.target.value; d.changed = true; }
+  });
+  form.addEventListener('click', e => { const b = e.target.closest('[data-logo-rm]'); if (!b) return; const i = idx(b); Object.assign(draft[i], { img: '', color: '', changed: true }); repaint(i); });
+  form.addEventListener('dragover', e => { const r = e.target.closest('.logo-row'); if (!r) return; e.preventDefault(); r.classList.add('over'); });
+  form.addEventListener('dragleave', e => e.target.closest('.logo-row')?.classList.remove('over'));
+  form.addEventListener('drop', e => { const r = e.target.closest('.logo-row'); if (!r) return; e.preventDefault(); r.classList.remove('over'); pick(+r.dataset.i, e.dataTransfer.files[0]); });
+  form.onsubmit = async ev => {
+    ev.preventDefault();
+    const btn = $('#msave'); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      for (const d of draft.filter(x => x.changed)) await saveLogo(s.id, d.team, d.img ? d : null);
+      closeModal();
+    } catch (e) { $('#merr').textContent = errMsg(e); btn.disabled = false; btn.textContent = '저장'; }
+  };
+});
 const editAbout = () => withAuth('admin', () => {
   const a = aboutDoc();
   openForm({ title: 'ABOUT MOMENTUM 소개 글', saveLabel: '올리기', note: '팀 소개를 담은 HTML 파일을 올리면 홈 화면 ABOUT MOMENTUM 칸에 바로 보여요.',
@@ -1800,14 +1926,14 @@ function scoreboard(g) {
   const aw = g.scoreA > g.scoreB, bw = g.scoreB > g.scoreA, ts = topScorer(g);
   return `<button class="sb" data-game="${g.id}">
     <div class="sb-top"><span>${esc(g.label)} MATCH</span><span>${videoForGame(g) ? '<span class="sb-vid">▶ 영상</span> ' : ''}FINAL</span></div>
-    <div class="sb-row ${aw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamA)}${esc(g.teamA)}</span><span class="sc en num">${g.scoreA}</span></div>
-    <div class="sb-row ${bw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamB)}${esc(g.teamB)}</span><span class="sc en num">${g.scoreB}</span></div>
+    <div class="sb-row ${aw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamA)}${teamLogo(g.seasonId, g.teamA)}${esc(g.teamA)}</span><span class="sc en num">${g.scoreA}</span></div>
+    <div class="sb-row ${bw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamB)}${teamLogo(g.seasonId, g.teamB)}${esc(g.teamB)}</span><span class="sc en num">${g.scoreB}</span></div>
     ${ts ? `<div class="sb-foot">최다 득점 <b>${esc(ts.name)}</b> ${ts.pts}점<span class="go">박스스코어 ›</span></div>` : ''}</button>`;
 }
-function upcomingBoard(m, pl, i) {
+function upcomingBoard(m, pl, i, sid) {
   return `<div class="sb upcoming"><div class="sb-top"><span>${['AB', 'BC', 'AC'][i] || ''} MATCH</span><span>UPCOMING</span></div>
-    <div class="sb-row"><span class="tn">${uniDot(pl.date, m[0])}${esc(m[0])}</span><span class="sc en">–</span></div>
-    <div class="sb-row"><span class="tn">${uniDot(pl.date, m[1])}${esc(m[1])}</span><span class="sc en">–</span></div>
+    <div class="sb-row"><span class="tn">${uniDot(pl.date, m[0])}${teamLogo(sid, m[0])}${esc(m[0])}</span><span class="sc en">–</span></div>
+    <div class="sb-row"><span class="tn">${uniDot(pl.date, m[1])}${teamLogo(sid, m[1])}${esc(m[1])}</span><span class="sc en">–</span></div>
     <div class="sb-foot">${(() => { const n = state.events.find(x => x.leagueDate === pl.date) || {}; return `${esc(fmtDate(pl.date))}${n.time ? ' ' + esc(n.time) : ''}${n.place ? ` <b class="sb-place">${PIN}${esc(n.place)}</b>` : ' 경기 예정'}`; })()}</div></div>`;
 }
 // MIP: 지난 시즌 대비 MVP 지수가 가장 많이 (비율로) 오른 선수
@@ -1859,7 +1985,7 @@ function mipHTML(s) {
     <div class="mvp-wrap">
       <div class="king-col"><a class="king mip" href="#/player/${encodeURIComponent(top.name)}">
         <div class="king-ph">${pr.photo ? `<img src="${esc(pr.photo)}" alt="">` : `<span class="ko">${esc(top.name.slice(-2))}</span>`}</div>
-        <div class="king-b"><span class="crown">📈 MIP 1위</span><div class="king-name ko">${esc(top.name)}</div><div class="king-team">${esc(top.team)}</div>
+        <div class="king-b"><span class="crown">📈 MIP 1위</span><div class="king-name ko">${esc(top.name)}</div><div class="king-team">${teamName(s.id, top.team)}</div>
           <div class="king-score en num">${pctUp(top.rate)}</div>
           <div class="mip-cmp num"><span>${esc(prev.name)} <b>${f1(top.prev)}</b></span><span class="arrow">→</span><span>${esc(s.name)} <b>${f1(top.now)}</b></span></div></div></a>${cheersHTML('mip', s, top.name)}</div>
       ${rest.length ? `<div class="card race">${rest.slice(0, 9).map((p, i) => `<div class="race-row"><span class="r">${i + 2}</span>
@@ -1903,7 +2029,7 @@ function standingsTable(s) {
   return `<p class="swipe-hint">← 옆으로 밀면 팀 기록이 더 있어요 →</p><div class="tbl-wrap st-wrap"><table class="st-table"><thead>
       <tr class="grp"><th colspan="6"></th><th colspan="3">경기당 득실</th><th colspan="5">경기당 팀 기록</th><th colspan="3">성공률</th></tr>
       <tr><th>순위</th><th class="l sticky-col">팀</th><th>경기</th><th>승</th><th>패</th><th>승률</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>
-    ${st.map((t, i) => `<tr><td class="num">${i + 1}</td><td class="l sticky-col"><b>${esc(t.team)}</b></td><td class="num">${t.gp}</td><td class="num">${t.w}</td><td class="num">${t.l}</td><td class="num">${t.gp ? (t.w / t.gp).toFixed(3).replace(/^0/, '') : '–'}</td>${cols.map(([k, , fn]) => cell(k, fn(t))).join('')}</tr>`).join('')}
+    ${st.map((t, i) => `<tr><td class="num">${i + 1}</td><td class="l sticky-col"><b>${teamName(s.id, t.team)}</b></td><td class="num">${t.gp}</td><td class="num">${t.w}</td><td class="num">${t.l}</td><td class="num">${t.gp ? (t.w / t.gp).toFixed(3).replace(/^0/, '') : '–'}</td>${cols.map(([k, , fn]) => cell(k, fn(t))).join('')}</tr>`).join('')}
     </tbody></table></div>
     ${played ? '<p class="muted" style="font-size:.84rem;margin:8px 2px 0">모두 경기당 평균이에요. 색으로 표시된 칸이 그 항목 1위 팀이에요 (실점과 턴오버는 적을수록 1위). 팀 기록은 게스트 기록까지 포함한 팀 전체 합계예요.</p>' : ''}`;
 }
@@ -1915,8 +2041,8 @@ function pageLeague() {
   const sn = (s.name.match(/\d+/) || [''])[0];
   const st = s.standings, maxW = Math.max(1, ...st.map(t => t.gp));
   const firstDate = Object.values(s.weekDates).sort()[0];
-  const podium = !s.games.length ? st.map(t => `<div class="pod"><div class="pod-rank en" style="font-size:1rem;letter-spacing:.15em;opacity:.7">TEAM</div><div class="pod-team">${esc(t.team)}</div><div class="pod-meta">${(s.rosters[t.team] || []).length}명${firstDate ? `, ${fmtDate(firstDate, false)} 개막` : ''}</div></div>`).join('') : st.map((t, i) => `<div class="pod pod-${i + 1}">
-      <div class="pod-rank en">${i + 1}<small>${i === 0 ? 'ST' : i === 1 ? 'ND' : i === 2 ? 'RD' : 'TH'}</small></div>
+  const podium = !s.games.length ? st.map(t => `<div class="pod ${teamColor(s.id, t.team) ? 'tc' : ''}"${tcStyle(s.id, t.team)}>${teamLogo(s.id, t.team, 'pod-logo')}<div class="pod-rank en" style="font-size:1rem;letter-spacing:.15em;opacity:.7">TEAM</div><div class="pod-team">${esc(t.team)}</div><div class="pod-meta">${(s.rosters[t.team] || []).length}명${firstDate ? `, ${fmtDate(firstDate, false)} 개막` : ''}</div></div>`).join('') : st.map((t, i) => `<div class="pod pod-${i + 1} ${teamColor(s.id, t.team) ? 'tc' : ''}"${tcStyle(s.id, t.team)}>
+      <div class="pod-top"><div class="pod-rank en">${i + 1}<small>${i === 0 ? 'ST' : i === 1 ? 'ND' : i === 2 ? 'RD' : 'TH'}</small></div>${teamLogo(s.id, t.team, 'pod-logo')}</div>
       <div class="pod-team">${esc(t.team)}</div>
       <div class="pod-wl en num">${t.w}<span>W</span> ${t.l}<span>L</span></div>
       <div class="pod-bar"><i style="width:${t.gp ? t.w / t.gp * 100 : 0}%"></i></div>
@@ -1926,7 +2052,7 @@ function pageLeague() {
   const kingPr = king ? prof(king.name) : {};
   return `
   <section class="bleed lg-hero"><div class="wrap">
-    ${EMBLEM.white ? `<img class="lg-emblem" src="${EMBLEM.white}" alt="">` : ''}<div class="lg-head"><div><p class="eyebrow">${EMBLEM.white ? `<img src="${EMBLEM.white}" alt="">` : ''}MOMENTUM LEAGUE</p><h2 class="en lg-title">${sn ? 'SEASON ' + sn : esc(s.name)}</h2></div>${seasonSelect()}</div>
+    ${EMBLEM.white ? `<img class="lg-emblem" src="${EMBLEM.white}" alt="">` : ''}<div class="lg-head"><div><p class="eyebrow">${EMBLEM.white ? `<img src="${EMBLEM.white}" alt="">` : ''}MOMENTUM LEAGUE</p><h2 class="en lg-title">${sn ? 'SEASON ' + sn : esc(s.name)}</h2></div><div class="lg-tools"><button class="btn sm lg-logo-btn" data-team-logos>🛡 팀 로고</button>${seasonSelect()}</div></div>
     <div class="podium ${s.games.length ? '' : 'pre'}">${podium}</div>
   </div></section>
 
@@ -1936,10 +2062,10 @@ function pageLeague() {
     ${king ? `<div class="mvp-wrap">
       <div class="king-col"><a class="king" href="#/player/${encodeURIComponent(king.name)}">
         <div class="king-ph">${kingPr.photo ? `<img src="${esc(kingPr.photo)}" alt="">` : `<span class="ko">${esc(king.name.slice(-2))}</span>`}</div>
-        <div class="king-b"><span class="crown">👑 MVP 1위</span><div class="king-name ko">${esc(king.name)}</div><div class="king-team">${esc(king.team)}</div>
+        <div class="king-b"><span class="crown">👑 MVP 1위</span><div class="king-name ko">${esc(king.name)}</div><div class="king-team">${teamName(s.id, king.team)}</div>
           <div class="king-score en num">${f1(king.avg.mvp)}</div>
           <div class="king-stats num"><span><b>${f1(king.avg.pts)}</b>득점</span><span><b>${f1(king.avg.reb)}</b>리바</span><span><b>${f1(king.avg.ast)}</b>어시</span><span><b>${king.gp}</b>경기</span></div></div></a>${cheersHTML('mvp', s, king.name)}</div>
-      <div class="card race">${mvps.slice(1).map((p, i) => `<div class="race-row"><span class="r">${i + 2}</span><div>${playerLink(p.name)} <span class="muted" style="font-size:.82rem">${esc(p.team)}</span><div class="bar"><i style="width:${p.avg.mvp / king.avg.mvp * 100}%"></i></div></div><span class="v en num">${f1(p.avg.mvp)}</span></div>`).join('')}</div>
+      <div class="card race">${mvps.slice(1).map((p, i) => `<div class="race-row"><span class="r">${i + 2}</span><div>${playerLink(p.name)} <span class="muted" style="font-size:.82rem">${teamName(s.id, p.team)}</span><div class="bar"><i style="width:${p.avg.mvp / king.avg.mvp * 100}%"></i></div></div><span class="v en num">${f1(p.avg.mvp)}</span></div>`).join('')}</div>
     </div>
     <p class="muted" style="font-size:.84rem;margin:8px 2px 0">MVP 지수 = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버 (경기당 평균). 6경기 이상 출전 선수 대상.</p>` : '<p class="empty">아직 기록이 없어요.</p>'}
   </section>
@@ -1952,7 +2078,7 @@ function pageLeague() {
   <section class="sec"><div class="sec-head"><h3 class="en big-h">RESULTS</h3><span class="muted">${s.weekDates[wk] ? fmtDate(s.weekDates[wk]) : ''}</span></div>
     <div class="chips wk-chips" role="group" aria-label="주차 선택">${weeks.map(w => `<button class="chip" data-week="${w}" aria-pressed="${w === wk}">${w}주차</button>`).join('')}</div>
     <div class="sbs">${(() => { const gs = s.games.filter(g => g.week === wk); if (gs.length) return gs.map(scoreboard).join('');
-      const pl = s.plan[wk]; return pl && pl.matchups.length ? pl.matchups.map((m, i) => upcomingBoard(m, pl, i)).join('') : '<p class="empty">경기가 없어요.</p>'; })()}</div></section>
+      const pl = s.plan[wk]; return pl && pl.matchups.length ? pl.matchups.map((m, i) => upcomingBoard(m, pl, i, s.id)).join('') : '<p class="empty">경기가 없어요.</p>'; })()}</div></section>
 
   <section class="sec"><h3 class="en big-h">STANDINGS</h3>${standingsTable(s)}</section>
 
@@ -1967,7 +2093,7 @@ function rosterBlocks(s) {
     s.stats.filter(p => p.team === t.team && !placed.has(p.name) && !names.includes(p.name)).forEach(p => names.push(p.name));
     names.forEach(n => placed.add(n));
     const ps = names.map(n => byName[n] || { name: n, gp: 0, avg: {} }).sort((a, b) => (b.avg.mvp || -99) - (a.avg.mvp || -99));
-    return `<div class="team-block"><div class="tb-head"><span class="tb-rank en">${i + 1}</span><h3 class="ko">${esc(t.team)}</h3><span class="muted num">${t.w}승 ${t.l}패, ${ps.length}명</span></div>
+    return `<div class="team-block ${teamColor(s.id, t.team) ? 'tc' : ''}"${tcStyle(s.id, t.team)}><div class="tb-head"><span class="tb-rank en">${i + 1}</span>${teamLogo(s.id, t.team)}<h3 class="ko">${esc(t.team)}</h3><span class="muted num">${t.w}승 ${t.l}패, ${ps.length}명</span></div>
       <div class="pgrid">${ps.map(p => playerCard(p, true)).join('')}</div></div>`;
   });
   return blocks.join('');
@@ -2160,6 +2286,7 @@ document.addEventListener('click', e => {
   if (d.articlePdf) return openPdf(d.articlePdf);
   if ('shareArticle' in d) { const url = location.href; if (navigator.share) navigator.share({ title: document.title, url }).catch(() => {}); else navigator.clipboard.writeText(url).then(() => { t.textContent = '✓ 복사됐어요'; setTimeout(() => t.textContent = '🔗 링크 복사', 1500); }).catch(() => prompt('이 주소를 복사하세요', url)); return; }
   if ('addArticle' in d) return addArticle();
+  if ('teamLogos' in d) return openTeamLogos();
   if (d.editArticle) return editArticle(d.editArticle);
   if (d.cheerMore) { state.cheerAll[d.cheerMore] = !state.cheerAll[d.cheerMore]; return render(); }
   if (d.emo) { const inp = t.closest('.cheers').querySelector('[name=ctext]'); inp.value = (inp.value + ' ' + d.emo).trim().slice(0, 100); inp.focus(); return; }
