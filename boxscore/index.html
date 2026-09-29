@@ -112,6 +112,14 @@
   .timeline .mk.b { bottom: 3px; background: var(--tb); }
   .timeline .cb { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; opacity: .4; pointer-events: none; }
   .timeline .mk.q { top: 0; bottom: 0; height: auto; width: 1px; background: #fff; opacity: .7; }
+  .timeline .mk.c { top: 0; height: 4px; background: #c9a7ff; opacity: .9; border-radius: 0 0 2px 2px; }
+  .caps { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow: auto; }
+  .cap { display: grid; grid-template-columns: 52px 1fr 56px auto auto; gap: 4px; align-items: center; }
+  .cap .t { font-family: ui-monospace, monospace; font-size: 12px; padding: 4px 2px; color: var(--muted); }
+  .cap .t:hover { color: var(--accent); }
+  .cap input { padding: 4px 6px; font-size: 12px; }
+  .cap button.x { padding: 2px 7px; font-size: 12px; }
+  .cap.now input.txt { border-color: #c9a7ff; }
   .timeline .trim { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.08); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); pointer-events: none; }
   .timeline .cut { position: absolute; top: 0; bottom: 0; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(255,90,90,.45) 0 4px, rgba(255,90,90,.15) 4px 8px); border-left: 1px solid var(--danger); border-right: 1px solid var(--danger); }
   .timeline .cut.pending { border-right: 0; background: rgba(255,90,90,.18); }
@@ -519,6 +527,27 @@
         </div>
       </section>
       <section>
+        <h2>코멘트 자막 <span id="capCount"></span></h2>
+        <div class="hint" style="margin-bottom:8px">영상을 보다가 글을 쓰고 [넣기]를 누르면, 글을 쓰기 시작한 순간에 자막 바가 스르르 떴다가 사라져요. 미리보기와 내보낸 영상 둘 다에 들어가요.</div>
+        <div class="row" style="margin-bottom:6px"><input type="text" id="capText" placeholder="예: 3쿼터 시작 · 파손주의 5점 차 추격" maxlength="120" autocomplete="off"><button id="btnCapAdd" class="primary" style="white-space:nowrap">넣기</button></div>
+        <div class="row hint" style="margin-bottom:10px"><span>넣을 위치: <b id="capAt">현재 위치</b></span><button id="btnCapNow" class="mini" title="지금 영상 위치로 바꾸기">⌖ 현재 위치로</button><span class="sp" style="flex:1"></span><button id="btnCapPreview" class="mini">모양 미리보기</button></div>
+        <div class="caps" id="capList"></div>
+        <details class="adv" style="margin-top:8px" open>
+          <summary>자막 모양</summary>
+          <div class="grid3">
+            <div class="field"><label>위치</label>
+              <select id="capPos"><option value="bc">가운데 아래</option><option value="bl">왼쪽 아래</option><option value="br">오른쪽 아래</option><option value="tc">가운데 위</option><option value="tl">왼쪽 위</option><option value="tr">오른쪽 위</option></select></div>
+            <div class="field"><label>바 너비</label><select id="capWidth"><option value="fit">글자 길이만큼</option><option value="full">화면 가득</option></select></div>
+            <div class="field"><label>글자 크기 <span id="capFontVal"></span></label><input type="range" id="capFont" min="14" max="64" step="1"></div>
+            <div class="field"><label>바 색</label><input type="color" id="capBar"></div>
+            <div class="field"><label>바 투명도 <span id="capAlphaVal"></span>%</label><input type="range" id="capAlpha" min="0" max="100" step="5"></div>
+            <div class="field"><label>글자 색</label><input type="color" id="capColor"></div>
+            <div class="field"><label>표시 시간(초)</label><input type="number" id="capDur" min="1" max="60" step="0.5"></div>
+            <div class="field"><label>페이드(초)</label><input type="number" id="capFade" min="0" max="3" step="0.1"></div>
+          </div>
+        </details>
+      </section>
+      <section>
         <h2>길이 편집</h2>
         <div class="grid2">
           <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
@@ -633,17 +662,19 @@ const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
-const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ'];
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap'];
+// 코멘트 자막 모양 기본값
+const CAP_DEFAULT = { pos: 'bc', width: 'fit', font: 28, bar: '#000000', alpha: 70, color: '#ffffff', dur: 4, fade: 0.5 };
 function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true,
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT },
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
 function newGame() {
-  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], quarters: [], played: {}, source: null, sb: defaultSb(), updated: Date.now() };
+  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], quarters: [], comments: [], played: {}, source: null, sb: defaultSb(), updated: Date.now() };
 }
 function gameIndex() { return lsGet('mm-box:index') || []; }
 let game = null;
@@ -676,7 +707,9 @@ function loadGame(id) {
   game = g || newGame();
   game.played = game.played || {};
   game.quarters = game.quarters || [];
+  game.comments = game.comments || [];
   game.sb = Object.assign(defaultSb(), { trimStart: null, trimEnd: null, cuts: [] }, game.sb || {});
+  game.sb.cap = { ...CAP_DEFAULT, ...(game.sb.cap || {}) };
   cutStart = null;
   touch();
   undoStack = [];
@@ -887,7 +920,7 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
 let undoStack = [];
-let nextId = () => ([...game.events, ...game.quarters].reduce((m, e) => Math.max(m, e.id), 0) + 1);
+let nextId = () => ([...game.events, ...game.quarters, ...game.comments].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
   if (!who) { toast('먼저 선수를 고르세요.', true); return; }
@@ -922,9 +955,11 @@ $('#astBar').addEventListener('click', ev => {
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 });
 function undo() {
-  const all = [...game.events, ...game.quarters];
+  const all = [...game.events, ...game.quarters, ...game.comments];
   const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
   if (id == null) return;
+  const cm = game.comments.find(x => x.id === id);
+  if (cm) { removeComment(id); toast('되돌림: 코멘트'); return; }
   const q = game.quarters.find(x => x.id === id);
   if (q) { removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
   const e = game.events.find(x => x.id === id);
@@ -1195,6 +1230,7 @@ function renderMarkers() {
     + (cutStart != null ? `<div class="cut pending" style="left:${pc(cutStart)};width:0.4%"></div>` : '');
   h += game.events.map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${pc(e.t)}"></div>`).join('');
   h += game.quarters.map(q => `<div class="mk q" style="left:${pc(q.t)}" title="다음 쿼터"></div>`).join('');
+  h += game.comments.map(c => `<div class="mk c" style="left:${pc(c.t)};width:${pc(Math.max(0.3, c.dur))}" title="${esc(c.text)}"></div>`).join('');
   if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${pc(offset(i + 1))}"></div>`).join('');
   $('#markers').innerHTML = h;
   const sb = game.sb, box = $('#trimBox');
@@ -1548,6 +1584,7 @@ function touch() {
   rev++; sortedCache = null;
   cfg = { ...game.sb, teams: [0, 1].map(i => ({ name: game.teams[i].name, color: game.sb.colors[i].color, text: game.sb.colors[i].text })) };
   cfg.match = game.sb.match || `${game.teams[0].name} vs ${game.teams[1].name}`;
+  cfg.captions = game.comments;
 }
 function total() { return offset(clips.length); }
 function autoEvents() {
@@ -1670,6 +1707,7 @@ function editClips(fn) {
   const loc = t => { const [k, lt] = clipAt(t); return { key: clips[k]?.key, t: lt }; };
   const evs = game.events.map(e => ({ e, ...loc(e.t) }));
   const qs = game.quarters.map(q => ({ e: q, ...loc(q.t) }));
+  const cms = game.comments.map(c => ({ e: c, ...loc(c.t) }));
   const oldCuts = game.sb.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
   const oldTrim = ['trimStart', 'trimEnd'].map(k => game.sb[k] == null ? null : loc(game.sb[k]));
   fn();
@@ -1677,6 +1715,7 @@ function editClips(fn) {
   const back = list => list.filter(x => idx(x.key) >= 0).map(x => ({ ...x.e, t: offset(idx(x.key)) + x.t }));
   game.events = back(evs).sort((a, b) => a.t - b.t || a.id - b.id);
   game.quarters = back(qs);
+  game.comments = back(cms).sort((a, b) => a.t - b.t);
   game.sb.cuts = normCuts(oldCuts.filter(c => {
     const ks = idx(c.s.key), ke = idx(c.e.key);
     return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
@@ -1750,9 +1789,9 @@ function drawBoard(ctx, W, H, st) {
   ctx.restore();
 }
 // Top-left corner of a w×h board for the chosen position.
-function place(W, H, w, h) {
+function place(W, H, w, h) { return placeAt(cfg.pos, W, H, w, h); }
+function placeAt(p, W, H, w, h) {
   const m = W * 0.014;
-  const p = cfg.pos;
   const x = p.endsWith('l') ? m : p.endsWith('r') ? W - w - m : (W - w) / 2;
   const y = p.startsWith('t') ? m : H - h - m * 1.4;
   return [x, y];
@@ -2046,12 +2085,79 @@ function renderOverlay(st) {
   const w = Math.round(stage.clientWidth * dpr), h = Math.round(stage.clientHeight * dpr);
   if (!w || !h) return;
   const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
-  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}`;
+  const caps = [...activeCaptions(st.t), ...previewCaption()];
+  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}`;
   if (key === lastBoardKey) return;
   lastBoardKey = key;
   if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
   octx.clearRect(0, 0, w, h);
   if (cfg.show) drawBoard(octx, w, h, st);
+  drawCaptions(octx, w, h, caps);
+}
+
+// ---------- 코멘트 자막 그리기 ----------
+// 시작·끝에서 페이드(초)만큼 서서히 나타나고 사라져요. 나타날 때는 살짝 미끄러져 올라와요.
+function capAlpha(c, t) {
+  if (t < c.t || t > c.t + c.dur) return 0;
+  const f = Math.max(0.01, +cfg.cap.fade || 0.01);
+  return Math.max(0, Math.min(1, (t - c.t) / f, (c.t + c.dur - t) / f));
+}
+function activeCaptions(t) {
+  const f = Math.max(0.01, +cfg.cap.fade || 0.01);
+  return (cfg.captions || []).filter(c => c.text).map(c => ({ c, a: capAlpha(c, t), rise: Math.min(1, Math.max(0, (t - c.t) / f)) })).filter(x => x.a > 0);
+}
+let capPreview = null;   // {start, text} — [모양 미리보기]를 누르면 3초 동안 실제 시계로 재생
+function previewCaption() {
+  if (!capPreview) return [];
+  const el = (performance.now() - capPreview.start) / 1000, c = { id: 'pv', t: 0, dur: 3, text: capPreview.text };
+  if (el > 3.2) { capPreview = null; return []; }
+  const f = Math.max(0.01, +cfg.cap.fade || 0.01);
+  return [{ c, a: capAlpha(c, el), rise: Math.min(1, el / f) }];
+}
+function hexA(hex, a) { const n = parseInt(String(hex).slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+// 긴 글은 화면 너비에 맞춰 줄을 나눠요 (띄어쓰기가 있으면 거기서, 없으면 글자 단위로).
+function wrapText(ctx, text, maxW) {
+  const lines = [];
+  for (const para of String(text).split(/\n/)) {
+    let line = '';
+    for (const word of para.split(/(\s+)/)) {
+      if (ctx.measureText(line + word).width <= maxW) { line += word; continue; }
+      if (line.trim()) { lines.push(line.trim()); line = ''; }
+      if (ctx.measureText(word).width <= maxW) { line = word; continue; }
+      for (const ch of word) { if (ctx.measureText(line + ch).width > maxW && line) { lines.push(line); line = ''; } line += ch; }
+    }
+    if (line.trim()) lines.push(line.trim());
+  }
+  return lines.length ? lines : [''];
+}
+function drawCaptions(ctx, W, H, list) {
+  if (!list.length) return;
+  const cap = cfg.cap, u = W / 1000, m = W * 0.014;
+  const stack = {};   // 같은 자리에 여럿이면 가장자리에서 안쪽으로 쌓아요
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  for (const { c, a, rise } of list) {
+    const fs = Math.max(8, (+cap.font || 28) * u);
+    ctx.font = `700 ${fs}px ${FONT}`;
+    const lines = wrapText(ctx, c.text, W - 2 * m - fs * 1.8);
+    const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const padX = fs * 0.9, padY = fs * 0.4, lh = fs * 1.3;
+    const w = cap.width === 'full' ? W - 2 * m : Math.min(W - 2 * m, tw + padX * 2), h = lines.length * lh + padY * 2;
+    let [x, y] = placeAt(cap.pos, W, H, w, h);
+    const top = cap.pos.startsWith('t');
+    const off = stack[cap.pos] || 0; y += top ? off : -off; stack[cap.pos] = off + h + 6 * u;
+    y += (1 - rise) * 16 * u * (top ? -1 : 1);
+    ctx.globalAlpha = a;
+    ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 10 * u; ctx.shadowOffsetY = 2 * u;
+    ctx.fillStyle = hexA(cap.bar, Math.max(0, Math.min(1, (+cap.alpha || 0) / 100)));
+    rr(ctx, x, y, w, h, 5 * u); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = cap.color;
+    ctx.textAlign = cap.pos.endsWith('l') && cap.width === 'full' ? 'left' : cap.pos.endsWith('r') && cap.width === 'full' ? 'right' : 'center';
+    const tx = ctx.textAlign === 'left' ? x + padX : ctx.textAlign === 'right' ? x + w - padX : x + w / 2;
+    lines.forEach((l, i) => ctx.fillText(l, tx, y + padY + lh * (i + 0.5)));
+  }
+  ctx.restore();
 }
 function renderLive() {
   const st = stateAt(player.time());
@@ -2093,7 +2199,12 @@ function renderVideoPane() {
   $('#xRes').value = sb.res; $('#xFps').value = String(sb.fps); $('#xCodec').value = sb.vcodec;
   $('#xMbps').value = sb.mbps; $('#xAbr').value = String(sb.abr); $('#xAch').value = String(sb.ach);
   $('#xMbps').disabled = sb.quality !== 'custom';
-  renderStyles(); renderCuts(); renderClips();
+  const cap = sb.cap;
+  $('#capPos').value = cap.pos; $('#capWidth').value = cap.width;
+  $('#capFont').value = cap.font; $('#capFontVal').textContent = cap.font;
+  $('#capBar').value = cap.bar; $('#capAlpha').value = cap.alpha; $('#capAlphaVal').textContent = cap.alpha;
+  $('#capColor').value = cap.color; $('#capDur').value = cap.dur; $('#capFade').value = cap.fade;
+  renderStyles(); renderCuts(); renderClips(); renderCaps();
 }
 function readVideoPane() {
   const sb = game.sb;
@@ -2111,10 +2222,75 @@ function readVideoPane() {
   sb.mbps = Math.min(150, Math.max(1, +$('#xMbps').value || 12));
   sb.abr = +$('#xAbr').value; sb.ach = +$('#xAch').value;
   $('#xMbps').disabled = sb.quality !== 'custom';
+  sb.cap = { pos: $('#capPos').value, width: $('#capWidth').value, font: +$('#capFont').value || 28, bar: $('#capBar').value,
+    alpha: +$('#capAlpha').value, color: $('#capColor').value, dur: Math.max(1, +$('#capDur').value || 4), fade: Math.max(0, +$('#capFade').value || 0) };
+  $('#capFontVal').textContent = sb.cap.font; $('#capAlphaVal').textContent = sb.cap.alpha;
+  lastBoardKey = '';
   save(); renderMarkers(); renderLog();
 }
+
+// ---------- 코멘트 자막 입력 ----------
+// 글을 쓰기 시작한 순간(입력칸에 처음 들어간 때)의 영상 위치에 넣어요. 다 쓰고 [넣기]를 누를 때는 이미 장면이 지나가 있으니까요.
+let capAnchor = null;
+function setCapAnchor(t) { capAnchor = t; $('#capAt').textContent = t == null ? '현재 위치' : fmt(t, true); }
+$('#capText').addEventListener('focus', () => { if (capAnchor == null && mode) setCapAnchor(player.time()); });
+$('#capText').addEventListener('input', () => { if (!$('#capText').value) setCapAnchor(null); else if (capAnchor == null && mode) setCapAnchor(player.time()); });
+$('#btnCapNow').addEventListener('click', () => { if (mode) setCapAnchor(player.time()); });
+function addCaption() {
+  const text = $('#capText').value.trim();
+  if (!text) { toast('코멘트 내용을 적어주세요.', true); $('#capText').focus(); return; }
+  if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
+  const t = Math.round((capAnchor ?? player.time()) * 10) / 10;
+  const c = { id: nextId(), t, dur: +game.sb.cap.dur || 4, text };
+  game.comments.push(c); game.comments.sort((a, b) => a.t - b.t);
+  undoStack.push(c.id);
+  $('#capText').value = ''; setCapAnchor(null);
+  save(); renderCaps(); renderMarkers(); lastBoardKey = '';
+  toast(`코멘트 넣음 · ${fmt(t)} "${text.slice(0, 20)}${text.length > 20 ? '…' : ''}"`);
+  player.seek(Math.max(0, t - 0.5));   // 바로 확인할 수 있게 그 장면으로
+}
+function removeComment(id) { game.comments = game.comments.filter(c => c.id !== id); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; }
+$('#btnCapAdd').addEventListener('click', addCaption);
+$('#capText').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); addCaption(); } });
+$('#btnCapPreview').addEventListener('click', () => {
+  if (!mode) { toast('영상을 열면 미리보기가 보여요.', true); return; }
+  capPreview = { start: performance.now(), text: $('#capText').value.trim() || '코멘트 자막 미리보기' };
+  lastBoardKey = '';
+});
+let lastCapNow = null;
+function highlightCap(t) {
+  const now = game.comments.find(c => t >= c.t && t <= c.t + c.dur)?.id ?? null;
+  if (now === lastCapNow) return; lastCapNow = now;
+  $$('#capList .cap').forEach(r => r.classList.toggle('now', +r.dataset.id === now));
+}
+function renderCaps() {
+  const list = game.comments;
+  $('#capCount').textContent = list.length ? `(${list.length})` : '';
+  $('#capList').innerHTML = list.length ? list.map(c => `<div class="cap" data-id="${c.id}">
+    <button class="t" data-act="seek" title="이 장면으로 이동">${fmt(c.t, true)}</button>
+    <input type="text" class="txt" value="${esc(c.text)}" maxlength="120" title="내용 고치기">
+    <input type="number" class="dur" value="${c.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
+    <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
+  </div>`).join('') : '<div class="hint">아직 코멘트가 없어요.</div>';
+}
+$('#capList').addEventListener('click', ev => {
+  const row = ev.target.closest('.cap'); if (!row) return;
+  const c = game.comments.find(x => x.id === +row.dataset.id); if (!c) return;
+  const act = ev.target.closest('[data-act]')?.dataset.act;
+  if (act === 'seek') player.seek(Math.max(0, c.t - 0.5));
+  else if (act === 'here') { if (!mode) return; c.t = Math.round(player.time() * 10) / 10; game.comments.sort((a, b) => a.t - b.t); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; }
+  else if (act === 'rm') removeComment(c.id);
+});
+$('#capList').addEventListener('change', ev => {
+  const row = ev.target.closest('.cap'); if (!row) return;
+  const c = game.comments.find(x => x.id === +row.dataset.id); if (!c) return;
+  if (ev.target.classList.contains('txt')) c.text = ev.target.value.trim();
+  if (ev.target.classList.contains('dur')) c.dur = Math.max(1, +ev.target.value || 4);
+  if (!c.text) { removeComment(c.id); return; }
+  save(); renderMarkers(); lastBoardKey = '';
+});
 $$('#pane-video input, #pane-video select').forEach(el => {
-  if (el.id === 'format') return;
+  if (el.id === 'format' || el.id === 'capText') return;
   el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
     // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
     if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
@@ -2170,7 +2346,7 @@ $('#btnExport').onclick = async () => {
   $('#btnExport').disabled = true;
   // 내보내는 동안 기록이나 설정이 바뀌어도 영상 전체가 한 상태로 그려지게, 시작할 때 모습을 붙잡아 둬요.
   const snapCfg = JSON.parse(JSON.stringify(cfg)), snapEvents = sorted().slice();
-  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { drawBoard(ctx, W, H, stateAt(t, snapEvents)); } finally { cfg = live; } };
+  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { if (cfg.show) drawBoard(ctx, W, H, stateAt(t, snapEvents)); drawCaptions(ctx, W, H, activeCaptions(t)); } finally { cfg = live; } };
   $('#exportBox').classList.remove('hidden');
   setProgress(0, '준비 중…');
   showMsg('');
@@ -2441,6 +2617,7 @@ function tick() {
     }
     renderLive();
     const t = player.time(), D = player.duration();
+    highlightCap(t);
     const tl = `${fmt(t)} / ${fmt(D)}`;
     if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').textContent = tl; }
     $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
