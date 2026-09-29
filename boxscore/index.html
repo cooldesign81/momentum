@@ -2320,17 +2320,22 @@ function activeCaptions(t) {
   return (cfg.captions || []).filter(c => c.text).map(c => ({ c, a: capAlpha(c, t), rise: Math.min(1, Math.max(0, (t - c.t) / f)) })).filter(x => x.a > 0);
 }
 // ---------- 자막 효과음 ----------
-// 기본은 같은 폴더의 caption.m4a. 바꾼 파일은 브라우저에 저장돼요.
+// 기본은 같은 폴더의 caption.wav (WAV는 모든 브라우저가 읽어요). 바꾼 파일은 브라우저에 저장돼요.
 let sfx = { buf: null, name: '기본 소리', error: '' }, actx = null;
 function audioCtx() { return actx || (actx = new (window.AudioContext || window.webkitAudioContext)()); }
 async function loadSfx() {
   const custom = lsGet('mm-box:capsfx');
   sfx = { buf: null, name: custom?.name || '기본 소리', error: '' };
   renderSfx();
+  let bytes = null;
   try {
-    const res = await fetch(custom?.data || 'caption.m4a'); if (!res.ok) throw new Error('HTTP ' + res.status);
-    sfx.buf = await audioCtx().decodeAudioData(await res.arrayBuffer());
-  } catch (e) { sfx.error = '이 브라우저에서 소리 파일을 읽지 못했어요'; }
+    const res = await fetch(custom?.data || 'caption.wav', { cache: 'no-store' }); if (!res.ok) throw new Error('HTTP ' + res.status);
+    bytes = await res.arrayBuffer();
+  } catch (e) { sfx.error = `소리 파일을 불러오지 못했어요 (${e.message}). 새로고침해 보세요.`; }
+  if (bytes) {
+    try { sfx.buf = await audioCtx().decodeAudioData(bytes); }
+    catch (e) { sfx.error = '이 브라우저가 이 소리 형식을 재생하지 못해요. WAV나 MP3 파일로 바꿔주세요.'; }
+  }
   renderSfx();
 }
 function renderSfx() {
