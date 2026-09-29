@@ -95,7 +95,8 @@
   .vcol kbd { font-size: 9px; min-width: 0; padding: 0 3px; border-bottom-width: 1px; opacity: .8; }
   .vcol .q { font-size: 12px; font-weight: 700; color: var(--muted); opacity: .7; padding: 4px 6px 0; }
   .vcol .vsep { height: 6px; }
-  .vcol .time { margin-top: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); opacity: .75; white-space: nowrap; padding: 0 6px 2px; font-variant-numeric: tabular-nums; }
+  /* 재생 시간: 장면을 맞출 때 계속 봐야 해서 버튼과 달리 크고 또렷하게 */
+  .vcol .time { margin-top: auto; font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600; color: var(--text); opacity: 1; white-space: nowrap; padding: 0 4px 2px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
   /* 폰: 영상 아래에 버튼을 가로로 늘어놓아요 (위의 .vcol 규칙보다 뒤에 있어야 먹혀요) */
   @media (max-width: 700px) {
     .stagerow { flex-wrap: wrap; }
