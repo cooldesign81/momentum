@@ -660,6 +660,7 @@ const CONFIG = {
   // 유튜브 채널: 채널 ID(UC로 시작)를 넣으면 Watch에 '채널 최신 영상'이 자동으로 나와요.
   youtubeChannelId: 'UC7SQcuXY6X-Wsn-HhY40ZQw',          // @Momentum_Ansan
   youtubeChannelUrl: 'https://www.youtube.com/@Momentum_Ansan',
+  youtubeApiKey: '',   // 비워두면 Firebase 키를 써요. 그 키가 속한 구글 클라우드 프로젝트에서 'YouTube Data API v3'를 켜면 최신 영상 목록이 가장 안정적으로 나와요.
 
   // 비밀번호용 계정 (Firebase Authentication에 이 두 이메일로 계정을 만들고, 비밀번호를 각각 정하세요)
   auth: {
@@ -2299,18 +2300,48 @@ document.addEventListener('click', e => {
   }
 });
 
+// 유튜브 채널 최신 영상: 되는 방법을 차례로 시도해요 (① YouTube Data API ② rss2json ③ 유튜브 RSS 직접).
+// 마지막으로 받은 목록은 이 브라우저에 기억해 둬서, 다음에 모두 실패해도 목록이 비지 않아요.
+const FEED_CACHE = 'momentum-feed-v1';
+async function getJSON(url, asText) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
+  try { const res = await fetch(url, { signal: ac.signal }); if (!res.ok) throw new Error(res.status); return asText ? res.text() : res.json(); }
+  finally { clearTimeout(t); }
+}
+const FEEDS = [
+  async ch => { // YouTube Data API: 구글 클라우드에서 'YouTube Data API v3'를 켜야 동작
+    const key = CONFIG.youtubeApiKey || FIREBASE.apiKey; if (!key || !/^UC/.test(ch)) return [];
+    const d = await getJSON(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=15&playlistId=UU${ch.slice(2)}&key=${encodeURIComponent(key)}`);
+    return (d.items || []).map(it => it.snippet || {}).filter(sn => sn.resourceId && !/^(Private|Deleted) video$/.test(sn.title))
+      .map(sn => ({ url: 'https://www.youtube.com/watch?v=' + sn.resourceId.videoId, title: sn.title || '', date: String(sn.publishedAt || '').slice(0, 10) }));
+  },
+  async ch => {
+    const d = await getJSON('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id=' + ch));
+    if (d.status !== 'ok' || !Array.isArray(d.items)) return [];
+    return d.items.map(it => ({ url: it.link || '', title: it.title || '', date: String(it.pubDate || '').slice(0, 10) }));
+  },
+  async ch => {
+    const xml = await getJSON('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id=' + ch), true);
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    return [...doc.getElementsByTagName('entry')].map(e => {
+      const id = (e.getElementsByTagName('yt:videoId')[0] || {}).textContent || '';
+      return { url: id ? 'https://www.youtube.com/watch?v=' + id : '', title: (e.getElementsByTagName('title')[0] || {}).textContent || '', date: ((e.getElementsByTagName('published')[0] || {}).textContent || '').slice(0, 10) };
+    });
+  },
+];
 async function loadFeed() {
   const ch = CONFIG.youtubeChannelId;
   if (!ch) return;
-  try {
-    const rss = encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id=' + ch);
-    const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + rss);
-    const data = await res.json();
-    if (data.status !== 'ok' || !Array.isArray(data.items)) return;
-    state.feed = data.items.map(it => ({ url: it.link || '', title: it.title || '', date: String(it.pubDate || '').slice(0, 10), category: 'feed' }))
-      .filter(v => ytId(v.url));
-    render();
-  } catch (e) { /* 목록을 못 가져와도 위의 채널 플레이어는 그대로 동작 */ }
+  try { const c = JSON.parse(localStorage.getItem(FEED_CACHE)); if (c && c.ch === ch && Array.isArray(c.items) && c.items.length) { state.feed = c.items; render(); } } catch (e) {}
+  for (const get of FEEDS) {
+    try {
+      const items = (await get(ch)).map(v => ({ ...v, category: 'feed' })).filter(v => ytId(v.url));
+      if (!items.length) continue;
+      state.feed = items; render();
+      try { localStorage.setItem(FEED_CACHE, JSON.stringify({ ch, items })); } catch (e) {}
+      return;
+    } catch (e) { console.warn('유튜브 목록을 못 가져왔어요, 다음 방법으로 시도', e); }
+  }
 }
 
 (async function start() {
