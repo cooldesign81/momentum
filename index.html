@@ -2052,7 +2052,7 @@ function pageLeague() {
   const kingPr = king ? prof(king.name) : {};
   return `
   <section class="bleed lg-hero"><div class="wrap">
-    ${EMBLEM.white ? `<img class="lg-emblem" src="${EMBLEM.white}" alt="">` : ''}<div class="lg-head"><div><p class="eyebrow">${EMBLEM.white ? `<img src="${EMBLEM.white}" alt="">` : ''}MOMENTUM LEAGUE</p><h2 class="en lg-title">${sn ? 'SEASON ' + sn : esc(s.name)}</h2></div><div class="lg-tools"><button class="btn sm lg-logo-btn" data-team-logos>🛡 팀 로고</button>${seasonSelect()}</div></div>
+    ${EMBLEM.white ? `<img class="lg-emblem" src="${EMBLEM.white}" alt="">` : ''}<div class="lg-head"><div><p class="eyebrow">${EMBLEM.white ? `<img src="${EMBLEM.white}" alt="">` : ''}MOMENTUM LEAGUE</p><h2 class="en lg-title">${sn ? 'SEASON ' + sn : esc(s.name)}</h2></div><div class="lg-tools">${can('admin') ? '<button class="btn sm lg-logo-btn" data-team-logos>🛡 팀 로고</button>' : ''}${seasonSelect()}</div></div>
     <div class="podium ${s.games.length ? '' : 'pre'}">${podium}</div>
   </div></section>
 
