@@ -567,6 +567,12 @@
             <div class="field"><label>표시 시간(초)</label><input type="number" id="capDur" min="1" max="60" step="0.5"></div>
             <div class="field"><label>페이드(초)</label><input type="number" id="capFade" min="0" max="3" step="0.1"></div>
           </div>
+          <div class="row" style="margin-top:6px;gap:10px;flex-wrap:wrap">
+            <label class="check" style="white-space:nowrap"><input type="checkbox" id="sfxOn"> 자막 나올 때 효과음</label>
+            <div class="field" style="margin:0;flex:1;min-width:140px"><label>소리 크기 <span id="sfxGainVal"></span>%</label><input type="range" id="sfxGain" min="0" max="100" step="5"></div>
+          </div>
+          <div class="row hint" style="gap:6px;flex-wrap:wrap;margin-top:6px"><span id="sfxName" style="flex:1;min-width:120px"></span><button id="sfxPlay" class="mini">들어보기</button><button id="sfxPick" class="mini">소리 파일 바꾸기</button><button id="sfxReset" class="mini">기본 소리로</button><input type="file" id="sfxFile" accept="audio/*" class="hidden"></div>
+          <div class="hint">효과음은 미리보기에서도 나고, 내보낸 영상 소리에도 섞여 들어가요. 바꾼 소리 파일은 이 브라우저에 저장돼요 (2MB까지).</div>
         </details>
       </section>
       <section>
@@ -690,7 +696,7 @@ const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode:
 const SB_LAST = 'mm-box:sb-last';
 const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur'];
 // 코멘트 자막 모양 기본값
-const CAP_DEFAULT = { pos: 'bc', width: 'fit', font: 28, bar: '#000000', alpha: 70, color: '#ffffff', dur: 4, fade: 0.5 };
+const CAP_DEFAULT = { pos: 'bc', width: 'fit', font: 28, bar: '#000000', alpha: 70, color: '#ffffff', dur: 4, fade: 0.5, sfx: true, sfxGain: 80 };
 function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
@@ -810,7 +816,7 @@ const player = {
   toggle() { if (hold) { cancelHold(true); return; } this.paused() ? this.play() : this.pause(); },
   seek(T) {
     if (typeof hold !== 'undefined' && hold) cancelHold(false);
-    lastTickT = T;
+    lastTickT = T; capSeeked = true;
     T = Math.max(0, Math.min(Math.max(0, this.duration() - 0.05), T));
     if (mode === 'yt') { ytReady && yt.seekTo(T, true); return; }
     if (mode !== 'file' || !clips.length) return;
@@ -2313,6 +2319,58 @@ function activeCaptions(t) {
   const f = Math.max(0.01, +cfg.cap.fade || 0.01);
   return (cfg.captions || []).filter(c => c.text).map(c => ({ c, a: capAlpha(c, t), rise: Math.min(1, Math.max(0, (t - c.t) / f)) })).filter(x => x.a > 0);
 }
+// ---------- 자막 효과음 ----------
+// 기본은 같은 폴더의 caption.m4a. 바꾼 파일은 브라우저에 저장돼요.
+let sfx = { buf: null, name: '기본 소리', error: '' }, actx = null;
+function audioCtx() { return actx || (actx = new (window.AudioContext || window.webkitAudioContext)()); }
+async function loadSfx() {
+  const custom = lsGet('mm-box:capsfx');
+  sfx = { buf: null, name: custom?.name || '기본 소리', error: '' };
+  renderSfx();
+  try {
+    const res = await fetch(custom?.data || 'caption.m4a'); if (!res.ok) throw new Error('HTTP ' + res.status);
+    sfx.buf = await audioCtx().decodeAudioData(await res.arrayBuffer());
+  } catch (e) { sfx.error = '이 브라우저에서 소리 파일을 읽지 못했어요'; }
+  renderSfx();
+}
+function renderSfx() {
+  $('#sfxName').textContent = `소리: ${sfx.name}` + (sfx.buf ? ` (${sfx.buf.duration.toFixed(1)}초)` : sfx.error ? ` · ${sfx.error}` : ' · 불러오는 중…');
+  $('#sfxReset').disabled = !lsGet('mm-box:capsfx');
+}
+function playSfx(force) {
+  if (!sfx.buf || (!force && game.sb.cap.sfx === false)) return false;
+  const c = audioCtx(); if (c.state === 'suspended') c.resume();
+  const src = c.createBufferSource(); src.buffer = sfx.buf;
+  const g = c.createGain(); g.gain.value = (game.sb.cap.sfxGain ?? 80) / 100;
+  src.connect(g).connect(c.destination); src.start();
+  return true;
+}
+$('#sfxPlay').addEventListener('click', () => { if (!playSfx(true)) toast(sfx.error || '소리를 아직 불러오지 못했어요.', true); });
+$('#sfxPick').addEventListener('click', () => $('#sfxFile').click());
+$('#sfxFile').addEventListener('change', ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  if (f.size > 2 * 1024 * 1024) { toast('소리 파일은 2MB까지만 넣을 수 있어요. 짧게 잘라서 넣어주세요.', true); return; }
+  const r = new FileReader();
+  r.onload = () => { lsSet('mm-box:capsfx', { name: f.name, data: r.result }); loadSfx().then(() => { if (sfx.buf) { toast(`효과음을 '${f.name}'(으)로 바꿨어요.`); playSfx(true); } else toast(sfx.error, true); }); };
+  r.readAsDataURL(f);
+});
+$('#sfxReset').addEventListener('click', () => { try { localStorage.removeItem('mm-box:capsfx'); } catch {} loadSfx().then(() => toast('기본 소리로 돌아갔어요.')); });
+// 미리보기: 재생 중에 자막이 새로 나타나면 소리를 내요. 자막 한가운데로 건너뛴 경우에는 안 내요.
+let lastCapIds = new Set(), capSeeked = false;
+function tickSfx(t) {
+  const ids = new Set(activeCaptions(t).map(x => x.c.id));
+  if (!player.paused() && !pendingSeek && !capSeeked) for (const id of ids) if (!lastCapIds.has(id)) playSfx();
+  capSeeked = false; lastCapIds = ids;
+}
+// 내보내기용: 효과음을 출력 오디오 형식(샘플레이트·채널)에 맞춘 PCM으로
+async function sfxPCM(sr, ch) {
+  if (!sfx.buf) return null;
+  const len = Math.ceil(sfx.buf.duration * sr), oc = new OfflineAudioContext(ch, len, sr);
+  const src = oc.createBufferSource(); src.buffer = sfx.buf; src.connect(oc.destination); src.start();
+  const out = await oc.startRendering();
+  return { len, data: Array.from({ length: ch }, (_, i) => out.getChannelData(i)) };
+}
+
 let capPreview = null;   // {start, text} — [모양 미리보기]를 누르면 3초 동안 실제 시계로 재생
 function previewCaption() {
   if (!capPreview) return [];
@@ -2417,6 +2475,7 @@ function renderVideoPane() {
   $('#xMbps').value = sb.mbps; $('#xAbr').value = String(sb.abr); $('#xAch').value = String(sb.ach);
   $('#xMbps').disabled = sb.quality !== 'custom';
   const cap = sb.cap;
+  $('#sfxOn').checked = cap.sfx !== false; $('#sfxGain').value = cap.sfxGain ?? 80; $('#sfxGainVal').textContent = cap.sfxGain ?? 80;
   $('#capPos').value = cap.pos; $('#capWidth').value = cap.width;
   $('#capFont').value = cap.font; $('#capFontVal').textContent = cap.font;
   $('#capBar').value = cap.bar; $('#capAlpha').value = cap.alpha; $('#capAlphaVal').textContent = cap.alpha;
@@ -2440,7 +2499,9 @@ function readVideoPane() {
   sb.abr = +$('#xAbr').value; sb.ach = +$('#xAch').value;
   $('#xMbps').disabled = sb.quality !== 'custom';
   sb.cap = { pos: $('#capPos').value, width: $('#capWidth').value, font: +$('#capFont').value || 28, bar: $('#capBar').value,
-    alpha: +$('#capAlpha').value, color: $('#capColor').value, dur: Math.max(1, +$('#capDur').value || 4), fade: Math.max(0, +$('#capFade').value || 0) };
+    alpha: +$('#capAlpha').value, color: $('#capColor').value, dur: Math.max(1, +$('#capDur').value || 4), fade: Math.max(0, +$('#capFade').value || 0),
+    sfx: $('#sfxOn').checked, sfxGain: +$('#sfxGain').value };
+  $('#sfxGainVal').textContent = sb.cap.sfxGain;
   $('#capFontVal').textContent = sb.cap.font; $('#capAlphaVal').textContent = sb.cap.alpha;
   lastBoardKey = '';
   save(); renderMarkers(); renderLog();
@@ -2507,7 +2568,7 @@ $('#capList').addEventListener('change', ev => {
   save(); renderMarkers(); lastBoardKey = '';
 });
 $$('#pane-video input, #pane-video select').forEach(el => {
-  if (el.id === 'format' || el.id === 'capText' || el.id === 'insDur') return;
+  if (['format', 'capText', 'insDur', 'sfxFile', 'insImageFile', 'logoFile'].includes(el.id)) return;
   el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
     // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
     if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
@@ -2650,9 +2711,12 @@ $('#btnExport').onclick = async () => {
 
     let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
-    if (firstAudio) {
-      const keep = !cfg.ach;
-      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : cfg.ach;
+    // 자막 효과음: 켜져 있고 소리를 읽었고 자막이 있으면, 영상에 소리가 없어도 오디오 트랙을 만들어 넣어요.
+    const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? (snapCfg.captions || []).filter(c => c.text) : [];
+    if (snapCfg.cap?.sfx !== false && !sfx.buf && (snapCfg.captions || []).some(c => c.text)) notes.push('효과음 파일을 읽지 못해 효과음 없이 저장');
+    if (firstAudio || sfxCaps.length) {
+      const keep = !cfg.ach && firstAudio;
+      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : (cfg.ach || 2);
       const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
       if (acodec && acodec !== 'aac') notes.push(`AAC 인코더가 없어 ${acodec.toUpperCase()} 오디오로 저장`);
       if (acodec) {
@@ -2661,6 +2725,23 @@ $('#btnExport').onclick = async () => {
         output.addAudioTrack(audioSource);
       }
     }
+    // 효과음 PCM과 섞는 함수. data는 평면(planar) Float32Array(n×ch), gameStart는 그 조각의 첫 샘플의 경기 시각.
+    const sfxBuf = audioSource && sfxCaps.length ? await sfxPCM(audioFormat.sampleRate, audioFormat.numberOfChannels) : null;
+    const sfxGain = (snapCfg.cap?.sfxGain ?? 80) / 100;
+    const mixSfx = (data, n, ch, sr, gameStart) => {
+      if (!sfxBuf) return false;
+      let hit = false;
+      for (const c of sfxCaps) {
+        const i0 = Math.round((c.t - gameStart) * sr);
+        if (i0 >= n || i0 + sfxBuf.len <= 0) continue;
+        const a = Math.max(0, i0), z = Math.min(n, i0 + sfxBuf.len);
+        for (let k = 0; k < ch; k++) { const src = sfxBuf.data[Math.min(k, sfxBuf.data.length - 1)], off = k * n; for (let i = a; i < z; i++) data[off + i] += src[i - i0] * sfxGain; }
+        hit = true;
+      }
+      if (hit) for (let i = 0; i < data.length; i++) data[i] = data[i] > 1 ? 1 : data[i] < -1 ? -1 : data[i];
+      return hit;
+    };
+    const sfxNear = (gameStart, len) => !!sfxBuf && sfxCaps.some(c => c.t < gameStart + len && c.t + sfxBuf.len / audioFormat.sampleRate > gameStart);
     await output.start();
     const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
 
@@ -2741,15 +2822,38 @@ $('#btnExport').onclick = async () => {
         }
       })();
       const audioJob = (async () => {
-        if (!at || !audioSource) return;
-        const conform = makeResampler(MB, audioFormat.sampleRate, audioFormat.numberOfChannels);
+        if (!audioSource) return;
+        const { sampleRate: sr, numberOfChannels: ch } = audioFormat;
+        if (!at) {
+          // 소리 없는 영상: 무음을 채우고 그 위에 효과음만 얹어요.
+          for (let cur = from; cur < to - 1e-4;) {
+            if (job.canceled) throw new Error('canceled');
+            const len = Math.min(0.5, to - cur), n = Math.round(len * sr), data = new Float32Array(n * ch);
+            mixSfx(data, n, ch, sr, o + cur);
+            const ts = Math.max(base + (cur - from), lastA);
+            const smp = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: ts });
+            await audioSource.add(smp); smp.close();
+            lastA = ts + n / sr; cur += n / sr;
+          }
+          return;
+        }
+        const conform = makeResampler(MB, sr, ch);
         for await (const raw of new MB.AudioSampleSink(at).samples(t0 + from, t0 + to)) {
           if (job.canceled) { raw.close(); throw new Error('canceled'); }
-          const s = conform(raw);
+          let s = conform(raw);
           if (s !== raw) raw.close();
           if (!s) continue;
+          const gameStart = o + (s.timestamp - t0);
           const ts = base + (s.timestamp - t0) - from;
           if (ts < lastA - 0.02) { s.close(); continue; }
+          if (sfxNear(gameStart, s.duration)) {
+            // 이 조각에 자막 시작이 걸쳐 있으면 효과음을 섞은 새 조각으로 바꿔요.
+            const n = s.numberOfFrames, data = new Float32Array(n * ch);
+            for (let k = 0; k < ch; k++) s.copyTo(data.subarray(k * n, (k + 1) * n), { planeIndex: k, format: 'f32-planar' });
+            mixSfx(data, n, ch, sr, gameStart);
+            const mixed = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: s.timestamp });
+            s.close(); s = mixed;
+          }
           s.setTimestamp(Math.max(ts, lastA));
           lastA = s.timestamp + s.duration;
           await audioSource.add(s);
@@ -2872,7 +2976,7 @@ function tick() {
     checkInserts(player.time());
     renderLive();
     const t = player.time(), D = player.duration();
-    highlightCap(t);
+    highlightCap(t); tickSfx(t);
     const tl = `${fmt(t)} / ${fmt(D)}`;
     if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').textContent = tl; }
     $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
@@ -2894,6 +2998,7 @@ setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 window.addEventListener('pagehide', flushSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 loadGame(lsGet('mm-box:last'));
+loadSfx();
 setMode(opts.mode);
 requestAnimationFrame(tick);
 </script>
