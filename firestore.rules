@@ -12,13 +12,14 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email in ['schedule@momentum.team', 'admin@momentum.team'];
     }
 
-    // 관리자만 쓰는 것: 공지, 영상, 선수, 기사(+기사 파일), 시즌별 팀 로고
+    // 관리자만 쓰는 것: 공지, 영상, 선수, 기사(+기사 파일), 시즌별 팀 로고, STATS에서 숨길 선수
     match /news/{id}         { allow read: if true; allow write: if isAdmin(); }
     match /videos/{id}       { allow read: if true; allow write: if isAdmin(); }
     match /members/{id}      { allow read: if true; allow write: if isAdmin(); }
     match /articles/{id}     { allow read: if true; allow write: if isAdmin(); }
     match /articleFiles/{id} { allow read: if true; allow write: if isAdmin(); }
     match /teamLogos/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /statHidden/{id}   { allow read: if true; allow write: if isAdmin(); }
 
     // 일정: 일정 관리 비번 또는 관리자 비번
     match /events/{id} { allow read: if true; allow write: if isSchedule(); }

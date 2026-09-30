@@ -633,6 +633,10 @@ html,body{overflow-x:clip}
 .logo-row b{display:block;font-size:1rem;margin-bottom:6px}
 .logo-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.85rem}
 .logo-acts input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer}
+.page-head .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hide-btn{font-size:.72rem;margin-left:6px;font-weight:500}
+.hidden-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.88rem}
+.hid-chip{display:inline-flex;gap:6px;align-items:center;padding:2px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -992,7 +996,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', sortDir: 'desc', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', sortDir: 'desc', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [], statHidden: [] };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -1118,7 +1122,10 @@ function pagePlayer(name) {
 function pageStats() {
   const career = state.statScope === 'career';
   const s = season();
-  const list = career ? careerStats() : s.stats;
+  const admin = can('admin'), hidden = hiddenSet();
+  const list = (career ? careerStats() : s.stats).filter(p => !hidden.has(p.name));
+  const hideBtn = p => admin ? ` <button class="link-btn danger hide-btn" data-stat-hide="${esc(p.name)}" title="STATS에서 숨기기">숨기기</button>` : '';
+  const more = (key, n) => n > 10 ? `<button class="btn" data-${key} style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state[key === 'showall' ? 'showAll' : 'avgAll'] ? 'TOP 10만 보기' : `전체 ${n}명 보기`}</button>` : '';
   // 표 머리글 정렬: 같은 항목을 다시 누르면 순서가 뒤집혀요. 기록이 없는 칸(–)은 항상 맨 아래.
   const sortBy = (rows, sk, asc, val) => rows.slice().sort((a, b) => {
     if (sk === 'name') return (asc ? 1 : -1) * a.name.localeCompare(b.name, 'ko');
@@ -1146,21 +1153,22 @@ function pageStats() {
   const acols = [...COUNTS, ['fgp', 'FG%'], ['tpp', '3P%'], ['ftp', 'FT%'], ['mvp', 'MVP'], ['eff', 'EFF']];
   const avg = (p, k) => k === 'gp' ? p.gp : p.avg[k];
   const ak = state.sortKey, aAsc = state.sortDir === 'asc';
-  const all = sortBy(list, ak, aAsc, avg);
+  const allAvg = sortBy(list, ak, aAsc, avg), all = state.avgAll ? allAvg : allAvg.slice(0, 10);
   const ath = th('data-sort', ak, aAsc);
 
-  return `<div class="page-head"><h2 class="en">${career ? 'TOTAL STATS' : 'LEAGUE STATS'}</h2>${seasonSelect(true)}</div>
+  return `<div class="page-head"><h2 class="en">${career ? 'TOTAL STATS' : 'LEAGUE STATS'}</h2><div class="btns">${admin ? '<button class="btn" data-logout>관리자 모드 끄기</button>' : '<button class="btn" data-admin-mode>✎ 관리자 모드</button>'}${seasonSelect(true)}</div></div>
+  ${admin ? `<div class="card admin-bar">관리자 모드예요. 선수 이름 옆 <b>숨기기</b>를 누르면 STATS 표에서만 빠져요 (기록 시트, 리그 탭, 선수 페이지는 그대로).${hidden.size ? `<div class="hidden-list">숨긴 선수 ${hidden.size}명: ${[...hidden].sort((a, b) => a.localeCompare(b, 'ko')).map(n => `<span class="hid-chip">${esc(n)} <button class="link-btn" data-stat-show="${esc(n)}">다시 보이기</button></span>`).join('')}</div>` : ''}</div>` : ''}
   ${career ? `<p class="muted" style="margin-top:-6px">${state.seasons.map(x => x.name).join(', ')} 기록을 합친 통산이에요.</p>` : ''}
   <section class="sec" style="margin-top:12px"><h3>누적 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">${career ? '통산' : esc(s.name)} 합계예요. 항목 이름을 누르면 그 기준으로 순위가 바뀌어요.</p>
     <div class="tbl-wrap"><table><thead><tr><th>순위</th>${tth('name', '선수', 'l sticky-col')}${career ? '' : '<th class="l">팀</th>'}${tcols.map(([k, l]) => tth(k, l)).join('')}</tr></thead><tbody>
-    ${shown.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l sticky-col">${playerLink(p.name)}</td>${career ? '' : `<td class="l muted">${teamName(s.id, p.team)}</td>`}${tcols.map(([k]) => `<td class="num">${k === tk ? `<b>${tot(p, k)}</b>` : tot(p, k)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${tcols.length + 3}" class="l muted">기록이 없어요.</td></tr>`}
+    ${shown.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l sticky-col">${playerLink(p.name)}${hideBtn(p)}</td>${career ? '' : `<td class="l muted">${teamName(s.id, p.team)}</td>`}${tcols.map(([k]) => `<td class="num">${k === tk ? `<b>${tot(p, k)}</b>` : tot(p, k)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${tcols.length + 3}" class="l muted">기록이 없어요.</td></tr>`}
     </tbody></table></div>
     <p class="muted" style="font-size:.85rem;margin:8px 2px 0">게스트는 제외돼요. MVP = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버, EFF = MVP − 놓친 야투 − 놓친 자유투.
-    ${totals.length > 10 ? `<button class="btn" data-showall style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state.showAll ? 'TOP 10만 보기' : `전체 ${totals.length}명 보기`}</button>` : ''}</p></section>
+    ${more('showall', totals.length)}</p></section>
   <section class="sec"><h3>평균 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">항목 이름을 누르면 그 기준으로 정렬돼요. 모두 경기당 평균이에요.</p>
     <div class="tbl-wrap"><table><thead><tr>${ath('name', '선수', 'l sticky-col')}${acols.map(([k, l]) => ath(k, l)).join('')}</tr></thead><tbody>
-    ${all.map(p => `<tr><td class="l sticky-col">${playerLink(p.name)}</td>${acols.map(([k]) => `<td class="num">${k === 'gp' ? p.gp : /p$/.test(k) && k !== 'mvp' ? pct(p.avg[k]) : f1(p.avg[k])}</td>`).join('')}</tr>`).join('')}
-    </tbody></table></div></section>`;
+    ${all.map(p => `<tr><td class="l sticky-col">${playerLink(p.name)}${hideBtn(p)}</td>${acols.map(([k]) => `<td class="num">${k === 'gp' ? p.gp : /p$/.test(k) && k !== 'mvp' ? pct(p.avg[k]) : f1(p.avg[k])}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>${allAvg.length > 10 ? `<p style="margin:8px 2px 0">${more('avgall', allAvg.length)}</p>` : ''}</section>`;
 }
 
 /* ===================== 박스스코어 ===================== */
@@ -1232,7 +1240,7 @@ document.addEventListener('keydown', e => {
 /* ===================== 저장소와 비밀번호 (Firebase) ===================== */
 const FB_EXPECTED = !!FIREBASE.apiKey;
 const FB = FB_EXPECTED && typeof firebase !== 'undefined';
-const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles', 'teamLogos'];
+const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles', 'teamLogos', 'statHidden'];
 let fdb, fauth;
 const DEMO_KEY = 'momentum-league-demo-v1';
 let demo = null;
@@ -1736,6 +1744,15 @@ async function processLogo(file) {
   let data = c.toDataURL('image/webp', .9);
   if (!data.startsWith('data:image/webp')) data = c.toDataURL('image/png');
   return { img: data, color: dominantColor(x.getImageData(0, 0, c.width, c.height).data) };
+}
+// STATS에서만 숨길 선수 (탈퇴 회원 등): statHidden/{이름} = { name }. 기록 시트와 리그 탭은 그대로예요.
+const hiddenSet = () => new Set(state.statHidden.map(h => h.name));
+async function setStatHidden(name, hide) {
+  const id = encodeURIComponent(name);
+  if (FB) return hide ? fdb.collection('statHidden').doc(id).set({ name }) : fdb.collection('statHidden').doc(id).delete();
+  demo.statHidden = (demo.statHidden || []).filter(x => x.id !== id);
+  if (hide) demo.statHidden.push({ id, name });
+  demoSave(); demoSync();
 }
 async function saveLogo(sid, team, v) {
   const id = logoKey(sid, team);
@@ -2289,6 +2306,9 @@ document.addEventListener('click', e => {
   if (d.pos) { state.posFilter = d.pos; return render(); }
   if (d.week) { state.leagueWeek[season().id] = +d.week; return render(); }
   if ('showall' in d) { state.showAll = !state.showAll; return render(); }
+  if ('avgall' in d) { state.avgAll = !state.avgAll; return render(); }
+  if (d.statHide) { if (confirm(`${d.statHide} 선수를 STATS 표에서 숨길까요? 기록은 지워지지 않고, 언제든 다시 보이게 할 수 있어요.`)) withAuth('admin', () => setStatHidden(d.statHide, true).catch(err => alert(errMsg(err)))); return; }
+  if (d.statShow) { withAuth('admin', () => setStatHidden(d.statShow, false).catch(err => alert(errMsg(err)))); return; }
   if ('newsAll' in d) { state.newsAll = !state.newsAll; return render(); }
   if (d.jump) { state.calMonth = d.jump; return render(); }
   if (d.month !== undefined) {
