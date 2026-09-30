@@ -91,8 +91,14 @@ th{font-size:.8rem;color:var(--muted);font-weight:700;border-bottom:1px solid va
 td{border-bottom:1px solid var(--line)}
 tr:last-child td{border-bottom:0}
 th.l,td.l{text-align:left}
-th.sortable{cursor:pointer;user-select:none}
-th.sorted{color:var(--brand)}
+th.sortable{padding:0}
+.th-sort{all:unset;box-sizing:border-box;display:block;width:100%;padding:10px 12px;text-align:inherit;cursor:pointer;user-select:none;white-space:nowrap}
+.th-sort:hover{color:var(--brand)}
+.th-sort:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px}
+.th-sort .dir{display:inline-block;width:.9em;font-size:.75em;opacity:0}
+.th-sort:hover .dir{opacity:.4}
+th.sorted,th.sorted .th-sort{color:var(--brand)}
+th.sorted .dir{opacity:1}
 td a{color:inherit;text-decoration:none;font-weight:700}
 td a:hover{text-decoration:underline}
 .sticky-col{position:sticky;left:0;background:var(--surface);z-index:1}
@@ -986,7 +992,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', sortDir: 'desc', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [] };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -1113,24 +1119,47 @@ function pageStats() {
   const career = state.statScope === 'career';
   const s = season();
   const list = career ? careerStats() : s.stats;
-  const cat = CATS.find(c => c.k === state.statCat) || CATS[0];
-  const top = leaders(list, cat.k, state.showAll ? 999 : 10);
-  const minNote = Math.max(0, ...list.map(p => p.gp)) >= 6 ? '6경기 이상 출전한 선수만 순위에 들어가요. 게스트는 제외돼요.' : '게스트는 순위에서 제외돼요.';
-  const cols = [['gp', '경기'], ['pts', '득점'], ['reb', '리바'], ['oreb', '공리'], ['dreb', '수리'], ['ast', '어시'], ['stl', '스틸'], ['blk', '블록'], ['to', '턴오버'], ['pf', '파울'], ['fgp', 'FG%'], ['tpp', '3P%'], ['ftp', 'FT%'], ['mvp', 'MVP'], ['eff', 'EFF']];
-  const val = (p, k) => k === 'gp' ? p.gp : p.avg[k];
-  const all = list.slice().sort((a, b) => (val(b, state.sortKey) ?? -1) - (val(a, state.sortKey) ?? -1));
-  const wm = career ? [] : weeklyMVP(s);
+  // 표 머리글 정렬: 같은 항목을 다시 누르면 순서가 뒤집혀요. 기록이 없는 칸(–)은 항상 맨 아래.
+  const sortBy = (rows, sk, asc, val) => rows.slice().sort((a, b) => {
+    if (sk === 'name') return (asc ? 1 : -1) * a.name.localeCompare(b.name, 'ko');
+    const x = val(a, sk), y = val(b, sk);
+    if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1;
+    if (y === null || y === undefined) return -1;
+    return (asc ? 1 : -1) * (x - y) || b.gp - a.gp;
+  });
+  const th = (attr, sk, asc) => (k, l, cls = '') => `<th class="sortable ${cls} ${sk === k ? 'sorted' : ''}" ${sk === k ? `aria-sort="${asc ? 'ascending' : 'descending'}"` : ''}><button class="th-sort" ${attr}="${k}">${l}<span class="dir" aria-hidden="true">${sk === k && asc ? '▲' : '▼'}</span></button></th>`;
+  const COUNTS = [['gp', '경기'], ['pts', '득점'], ['reb', '리바'], ['oreb', '공리'], ['dreb', '수리'], ['ast', '어시'], ['stl', '스틸'], ['blk', '블록'], ['to', '턴오버'], ['pf', '파울']];
+
+  // 누적 기록표: 시즌(또는 통산) 합계. 성공률은 합계가 없어서 빼요.
+  const tcols = [...COUNTS, ['mvp', 'MVP'], ['eff', 'EFF']];
+  const tot = (p, k) => {
+    if (k === 'gp') return p.gp;
+    if (k === 'mvp') return p.pts + p.reb + p.ast + p.stl + p.blk - p.to;
+    if (k === 'eff') return p.pts + p.reb + p.ast + p.stl + p.blk - p.to - (p.fga - p.fgm) - (p.fta - p.ftm);
+    return p[k];
+  };
+  const tk = state.totKey || 'mvp', tAsc = state.totDir === 'asc';
+  const totals = sortBy(list, tk, tAsc, tot), shown = state.showAll ? totals : totals.slice(0, 10);
+  const tth = th('data-tsort', tk, tAsc);
+
+  // 평균 기록표
+  const acols = [...COUNTS, ['fgp', 'FG%'], ['tpp', '3P%'], ['ftp', 'FT%'], ['mvp', 'MVP'], ['eff', 'EFF']];
+  const avg = (p, k) => k === 'gp' ? p.gp : p.avg[k];
+  const ak = state.sortKey, aAsc = state.sortDir === 'asc';
+  const all = sortBy(list, ak, aAsc, avg);
+  const ath = th('data-sort', ak, aAsc);
+
   return `<div class="page-head"><h2 class="en">${career ? 'TOTAL STATS' : 'LEAGUE STATS'}</h2>${seasonSelect(true)}</div>
   ${career ? `<p class="muted" style="margin-top:-6px">${state.seasons.map(x => x.name).join(', ')} 기록을 합친 통산이에요.</p>` : ''}
-  <div class="chips" role="group" aria-label="기록 항목">${CATS.map(c => `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === cat.k}">${c.label}</button>`).join('')}</div>
-  <section class="sec" style="margin-top:18px"><div class="tbl-wrap"><table><thead><tr><th>순위</th><th class="l">선수</th>${career ? '' : '<th class="l">팀</th>'}<th>경기</th><th>${cat.label} 평균</th></tr></thead><tbody>
-    ${top.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l">${playerLink(p.name)}</td>${career ? '' : `<td class="l muted">${teamName(s.id, p.team)}</td>`}<td class="num">${p.gp}</td><td class="num"><b>${cat.pct ? pct(p.avg[cat.k]) : f1(p.avg[cat.k])}</b></td></tr>`).join('') || '<tr><td colspan="5" class="l muted">기록이 없어요.</td></tr>'}
+  <section class="sec" style="margin-top:12px"><h3>누적 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">${career ? '통산' : esc(s.name)} 합계예요. 항목 이름을 누르면 그 기준으로 순위가 바뀌어요.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>순위</th>${tth('name', '선수', 'l sticky-col')}${career ? '' : '<th class="l">팀</th>'}${tcols.map(([k, l]) => tth(k, l)).join('')}</tr></thead><tbody>
+    ${shown.map((p, i) => `<tr><td class="num">${i + 1}</td><td class="l sticky-col">${playerLink(p.name)}</td>${career ? '' : `<td class="l muted">${teamName(s.id, p.team)}</td>`}${tcols.map(([k]) => `<td class="num">${k === tk ? `<b>${tot(p, k)}</b>` : tot(p, k)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${tcols.length + 3}" class="l muted">기록이 없어요.</td></tr>`}
     </tbody></table></div>
-    <p class="muted" style="font-size:.85rem;margin:8px 2px 0">${minNote}${cat.k === 'fgp' ? ' 야투율은 슛 10개 이상 시도한 선수만.' : ''}${cat.k === 'mvp' ? ' MVP 지수 = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버 (경기당 평균).' : ''}
-    <button class="btn" data-showall style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state.showAll ? 'TOP 10만 보기' : '전체 순위 보기'}</button></p></section>
-  <section class="sec"><h3>전체 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">항목 이름을 누르면 그 기준으로 정렬돼요. 모두 경기당 평균이에요.</p>
-    <div class="tbl-wrap"><table><thead><tr><th class="l sticky-col">선수</th>${cols.map(([k, l]) => `<th class="sortable ${state.sortKey === k ? 'sorted' : ''}" data-sort="${k}">${l}</th>`).join('')}</tr></thead><tbody>
-    ${all.map(p => `<tr><td class="l sticky-col">${playerLink(p.name)}</td>${cols.map(([k]) => `<td class="num">${k === 'gp' ? p.gp : /p$/.test(k) && k !== 'mvp' ? pct(p.avg[k]) : f1(p.avg[k])}</td>`).join('')}</tr>`).join('')}
+    <p class="muted" style="font-size:.85rem;margin:8px 2px 0">게스트는 제외돼요. MVP = 득점 + 리바운드 + 어시스트 + 스틸 + 블록 − 턴오버, EFF = MVP − 놓친 야투 − 놓친 자유투.
+    ${totals.length > 10 ? `<button class="btn" data-showall style="margin-left:6px;padding:4px 12px;font-size:.82rem">${state.showAll ? 'TOP 10만 보기' : `전체 ${totals.length}명 보기`}</button>` : ''}</p></section>
+  <section class="sec"><h3>평균 기록표</h3><p class="muted" style="font-size:.85rem;margin:-6px 0 10px">항목 이름을 누르면 그 기준으로 정렬돼요. 모두 경기당 평균이에요.</p>
+    <div class="tbl-wrap"><table><thead><tr>${ath('name', '선수', 'l sticky-col')}${acols.map(([k, l]) => ath(k, l)).join('')}</tr></thead><tbody>
+    ${all.map(p => `<tr><td class="l sticky-col">${playerLink(p.name)}</td>${acols.map(([k]) => `<td class="num">${k === 'gp' ? p.gp : /p$/.test(k) && k !== 'mvp' ? pct(p.avg[k]) : f1(p.avg[k])}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div></section>`;
 }
 
@@ -2255,7 +2284,8 @@ document.addEventListener('click', e => {
   const d = t.dataset;
   if (d.game) return openBox(d.game);
   if (d.cat) { state.statCat = d.cat; state.showAll = false; return render(); }
-  if (d.sort) { state.sortKey = d.sort; return render(); }
+  if (d.tsort) { if ((state.totKey || 'mvp') === d.tsort) state.totDir = state.totDir === 'asc' ? 'desc' : 'asc'; else { state.totKey = d.tsort; state.totDir = d.tsort === 'name' ? 'asc' : 'desc'; } return render(); }
+  if (d.sort) { if (state.sortKey === d.sort) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'; else { state.sortKey = d.sort; state.sortDir = d.sort === 'name' ? 'asc' : 'desc'; } return render(); }
   if (d.pos) { state.posFilter = d.pos; return render(); }
   if (d.week) { state.leagueWeek[season().id] = +d.week; return render(); }
   if ('showall' in d) { state.showAll = !state.showAll; return render(); }
