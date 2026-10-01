@@ -106,7 +106,15 @@
     .stagerow .vcol .time { margin-top: 0; width: 100%; text-align: center; }
   }
   .speed button.on { border-color: var(--accent); color: var(--accent); }
-  .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; overflow: hidden; touch-action: none; }
+  .timeline.zoomed { cursor: grab; } .timeline.dragging { cursor: grabbing; }
+  .timeline .tk { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.08); pointer-events: none; }
+  .timeline .tk span { position: absolute; left: 3px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
+  .tlmini { flex: none; position: relative; height: 8px; margin: 0 0 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; overflow: hidden; }
+  .tlmini .win { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.25); border: 1px solid var(--accent); border-radius: 3px; min-width: 4px; pointer-events: none; }
+  .tlmini .ph { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--danger); pointer-events: none; }
+  .tlmini.off { visibility: hidden; }   /* 자리를 차지한 채 숨겨요 (확대할 때 타임라인이 아래로 밀리지 않게) */
+  .tlzoom { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--muted); background: rgba(0,0,0,.45); padding: 1px 6px; border-radius: 6px; pointer-events: none; }
   .timeline .mk { position: absolute; width: 2px; height: 9px; pointer-events: none; opacity: .85; }
   .timeline .mk.a { top: 3px; background: var(--ta); }
   .timeline .mk.b { bottom: 3px; background: var(--tb); }
@@ -353,10 +361,12 @@
         <button id="btnCutOut" title="잘라낼 구간 끝을 현재 위치로 (] 키)">✂ 끝 <kbd>]</kbd></button>
       </div>
     </div>
-    <div class="timeline hidden" id="timeline" title="클릭해서 이동">
+    <div class="tlmini hidden off" id="tlmini" title="전체 보기 · 클릭하면 그 부분으로"><div class="win" id="tlwin"></div><div class="ph" id="tlph"></div></div>
+    <div class="timeline hidden" id="timeline" title="클릭: 이동 · 휠: 확대/축소 · 드래그: 좌우 이동 · 더블클릭: 전체 보기">
       <div class="trim" id="trimBox"></div>
       <div id="markers"></div>
       <div class="head" id="playhead"></div>
+      <span class="tlzoom hidden" id="tlzoom"></span>
     </div>
 
 
@@ -651,7 +661,7 @@ function fmt(t, precise) {
   if (!isFinite(t)) t = 0;
   t = Math.max(0, t);
   const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
-  const ss = precise ? sec.toFixed(1).padStart(4, '0') : String(Math.floor(sec)).padStart(2, '0');
+  const ss = precise === 2 ? sec.toFixed(2).padStart(5, '0') : precise ? sec.toFixed(1).padStart(4, '0') : String(Math.floor(sec)).padStart(2, '0');
   return h ? `${h}:${pad2(m)}:${ss}` : `${m}:${ss}`;
 }
 function parseTime(str) {
@@ -944,6 +954,7 @@ async function openYt(url) {
 function showStage() {
   $('#drop').classList.add('hidden');
   ['#stageRow', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
+  tlZoom = 1; tlStart = 0;
   video.classList.toggle('hidden', mode !== 'file');
   $('#yt') && $('#yt').classList.toggle('hidden', mode !== 'yt');
   // 유튜브 화면을 누르면 키보드 포커스가 영상 안으로 들어가 단축키가 안 먹어서, 투명 막으로 덮어요.
@@ -1268,26 +1279,98 @@ $('#pane-box').addEventListener('change', ev => {
   save(); renderBox();
 });
 
+// ---------- 타임라인 확대 ----------
+// 보이는 구간은 [tlStart, tlStart + D/tlZoom]. 휠로 커서 위치를 기준으로 확대하고, 드래그·가로 휠로 옮겨요. 화면 상태일 뿐 기록에는 영향이 없어요.
+let tlZoom = 1, tlStart = 0;
+const tlDur = () => player.duration() || Math.max(60, ...game.events.map(e => e.t + 10));
+const tlSpan = () => tlDur() / tlZoom;
+function tlClamp() { const D = tlDur(); tlZoom = Math.max(1, Math.min(Math.max(1, D / 1), tlZoom)); tlStart = Math.max(0, Math.min(D - tlSpan(), tlStart)); }
+function tlSetZoom(z, anchorT, anchorFrac) { tlZoom = z; tlClamp(); tlStart = anchorT - anchorFrac * tlSpan(); tlClamp(); renderMarkers(); }
+function tlReset() { tlZoom = 1; tlStart = 0; renderMarkers(); }
+const tlX = t => (t - tlStart) / tlSpan();   // 0~1 (보이는 구간 기준)
+// 눈금 간격: 한 칸이 70px 이상 되는 가장 촘촘한 간격
+function tlStep(widthPx) {
+  const steps = [1 / 30, 0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600, 1800];
+  const pxPerSec = widthPx / tlSpan();
+  return steps.find(st => st * pxPerSec >= 70) || 3600;
+}
 function renderMarkers() {
-  const D = player.duration() || Math.max(60, ...game.events.map(e => e.t + 10));
-  const pc = t => (t / D * 100).toFixed(3) + '%';
-  let h = game.sb.cuts.map(c => `<div class="cut" style="left:${pc(c.s)};width:${pc(c.e - c.s)}"></div>`).join('')
+  const D = tlDur(), span = tlSpan();
+  tlClamp();
+  const pc = t => (tlX(t) * 100).toFixed(3) + '%';
+  const vis = (t, w = 0) => t + w >= tlStart - span * 0.02 && t <= tlStart + span * 1.02;   // 안 보이는 건 그리지 않아요
+  let h = '';
+  { const st = tlStep($('#timeline').clientWidth || 800), fine = st < 1;
+    for (let k = Math.max(1, Math.ceil(tlStart / st)); k * st <= tlStart + span; k++) { const t = k * st; h += `<div class="tk" style="left:${pc(t)}"><span>${fine ? fmt(t, 2) : fmt(t)}</span></div>`; } }
+  h += game.sb.cuts.filter(c => vis(c.s, c.e - c.s)).map(c => `<div class="cut" style="left:${pc(c.s)};width:${pc(c.e - c.s)}"></div>`).join('')
     + (cutStart != null ? `<div class="cut pending" style="left:${pc(cutStart)};width:0.4%"></div>` : '');
-  h += game.events.map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${pc(e.t)}"></div>`).join('');
+  h += game.events.filter(e => vis(e.t)).map(e => `<div class="mk ${e.team ? 'b' : 'a'}" style="left:${pc(e.t)}"></div>`).join('');
   h += game.quarters.map(q => `<div class="mk q" style="left:${pc(q.t)}" title="다음 쿼터"></div>`).join('');
-  h += game.comments.map(c => `<div class="mk c" style="left:${pc(c.t)};width:${pc(Math.max(0.3, c.dur))}" title="${esc(c.text)}"></div>`).join('');
-  h += game.inserts.map(i => `<div class="mk i" style="left:${pc(i.t)}" title="${esc(insLabel(i))}"></div>`).join('');
+  h += game.comments.filter(c => vis(c.t, c.dur)).map(c => `<div class="mk c" style="left:${pc(c.t)};width:${pc(Math.max(0.3 / tlZoom, c.dur))}" title="${esc(c.text)}"></div>`).join('');
+  h += game.inserts.filter(i => vis(i.t)).map(i => `<div class="mk i" style="left:${pc(i.t)}" title="${esc(insLabel(i))}"></div>`).join('');
   if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${pc(offset(i + 1))}"></div>`).join('');
   $('#markers').innerHTML = h;
   const sb = game.sb, box = $('#trimBox');
   box.style.display = sb.trimStart != null || sb.trimEnd != null ? '' : 'none';
   const a = sb.trimStart ?? 0, z = sb.trimEnd ?? D;
   box.style.left = pc(a); box.style.width = pc(Math.max(0, z - a));
+  // 확대 표시 · 미니맵
+  const zoomed = tlZoom > 1.01;
+  $('#timeline').classList.toggle('zoomed', zoomed);
+  $('#tlzoom').classList.toggle('hidden', !zoomed); $('#tlzoom').textContent = `${tlZoom < 10 ? tlZoom.toFixed(1) : Math.round(tlZoom)}× · 더블클릭: 전체`;
+  $('#tlmini').classList.toggle('off', !zoomed); $('#tlmini').classList.toggle('hidden', $('#timeline').classList.contains('hidden'));
+  if (zoomed) { $('#tlwin').style.left = (tlStart / D * 100) + '%'; $('#tlwin').style.width = (span / D * 100) + '%'; }
+  lastPlayheadX = null;
 }
-$('#timeline').addEventListener('click', ev => {
-  const r = $('#timeline').getBoundingClientRect();
-  player.seek((ev.clientX - r.left) / r.width * player.duration());
-});
+// 클릭: 이동 / 드래그: 좌우 이동 / 휠: 확대·축소(세로), 이동(가로) / 더블클릭: 전체 보기
+let lastPlayheadX = null;
+{
+  const tl = $('#timeline');
+  const tAt = x => { const r = tl.getBoundingClientRect(); return tlStart + (x - r.left) / r.width * tlSpan(); };
+  let drag = null;
+  tl.addEventListener('pointerdown', ev => { if (ev.button !== 0) return; drag = { x0: ev.clientX, start0: tlStart, moved: false }; tl.setPointerCapture(ev.pointerId); });
+  tl.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.x0;
+    if (!drag.moved && Math.abs(dx) < 4) return;
+    drag.moved = true;
+    if (tlZoom <= 1.01) { player.seek(tAt(ev.clientX)); return; }   // 전체 보기에서는 끌어서 탐색
+    tl.classList.add('dragging');
+    tlStart = drag.start0 - dx / tl.getBoundingClientRect().width * tlSpan(); tlClamp(); renderMarkers();
+  });
+  const up = ev => { if (!drag) return; const d = drag; drag = null; tl.classList.remove('dragging'); if (!d.moved) player.seek(tAt(ev.clientX)); };
+  tl.addEventListener('pointerup', up); tl.addEventListener('pointercancel', () => { drag = null; tl.classList.remove('dragging'); });
+  tl.addEventListener('dblclick', ev => { ev.preventDefault(); tlReset(); });
+  tl.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const r = tl.getBoundingClientRect();
+    if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) { tlStart += ev.deltaX / r.width * tlSpan(); tlClamp(); renderMarkers(); return; }   // 트랙패드 가로 스와이프
+    const frac = (ev.clientX - r.left) / r.width, anchor = tlStart + frac * tlSpan();
+    const unit = ev.deltaMode === 1 ? 30 : ev.deltaMode === 2 ? 300 : 1;   // 줄/페이지 단위 휠도 픽셀처럼
+    tlSetZoom(tlZoom * Math.exp(-ev.deltaY * unit * 0.0025), anchor, frac);
+  }, { passive: false });
+  const mini = $('#tlmini');
+  const miniTo = x => { const r = mini.getBoundingClientRect(); tlStart = (x - r.left) / r.width * tlDur() - tlSpan() / 2; tlClamp(); renderMarkers(); };
+  let mdrag = false;
+  mini.addEventListener('pointerdown', ev => { mdrag = true; mini.setPointerCapture(ev.pointerId); miniTo(ev.clientX); });
+  mini.addEventListener('pointermove', ev => { if (mdrag) miniTo(ev.clientX); });
+  mini.addEventListener('pointerup', () => { mdrag = false; }); mini.addEventListener('pointercancel', () => { mdrag = false; });
+  window.addEventListener('resize', () => { if (tlZoom > 1.01) renderMarkers(); });
+}
+// 재생 위치 표시: 확대 중에 화면 밖으로 나가면 한 화면씩 넘겨서 따라가요 (매 프레임 스크롤하지 않아요)
+function renderPlayhead(t, D) {
+  if (tlZoom > 1.01) {
+    const span = tlSpan();
+    if (!player.paused() && (t > tlStart + span * 0.95 || t < tlStart)) { tlStart = t - span * 0.05; tlClamp(); renderMarkers(); }
+    $('#tlph').style.left = (D ? t / D * 100 : 0) + '%';
+  }
+  const x = tlX(t);
+  const css = x < -0.001 || x > 1.001 ? 'none' : '';
+  const left = (x * 100).toFixed(3) + '%';
+  if (left === lastPlayheadX) return;
+  lastPlayheadX = left;
+  const ph = $('#playhead'); ph.style.left = left; ph.style.display = css;
+}
 
 function renderSetup() {
   $('#title').value = game.title || '';
@@ -3150,9 +3233,9 @@ function tick() {
     renderLive();
     const t = player.time(), D = player.duration();
     highlightCap(t); tickSfx(t);
-    const tl = `${fmt(t)} / ${fmt(D)}`;
+    const tl = `${fmt(t, 2)} / ${fmt(D)}`;
     if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').textContent = tl; }
-    $('#playhead').style.left = (D ? t / D * 100 : 0) + '%';
+    renderPlayhead(t, D);
     if ($('#logFollow').checked && !$('#pane-log').classList.contains('hidden')) {
       const rows = $$('#log .ev');
       let now = null;
