@@ -47,7 +47,7 @@
   header .yt-in input { width: 100%; min-width: 0; }
   /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
   @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
-  @media (max-width: 1350px) { header #btnUndo kbd, header .src { display: none; } }
+  @media (max-width: 1350px) { header #btnUndo kbd, header #btnRedo kbd, header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
@@ -322,6 +322,7 @@
     <div class="modebar">
       <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="grid">표</button><button data-mode="pick">선수 선택</button></span>
       <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+      <button id="btnRedo" class="mini">앞돌리기 <kbd>Ctrl+Y</kbd></button>
     </div>
     <div class="yt-in">
       <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
@@ -785,7 +786,7 @@ function loadGame(id) {
   game.sb.cap = { ...CAP_DEFAULT, ...(game.sb.cap || {}) };
   cutStart = null;
   touch();
-  undoStack = [];
+  undoStack = []; redoStack = [];
   selected = null; astPending = null;
   renderAll();
 }
@@ -995,7 +996,8 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 // ---------- 입력 ----------
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
-let undoStack = [];
+let undoStack = [], redoStack = [];   // redoStack: 되돌린 항목 {kind, obj} — 새 입력을 하면 비워요
+const pushUndo = id => { undoStack.push(id); redoStack = []; };
 let nextId = () => ([...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
@@ -1004,7 +1006,7 @@ function record(k, who = selected) {
   const e = { id: nextId(), t: Math.round(t * 10) / 10, team: who.team, player: who.name, k };
   game.events.push(e);
   game.events.sort((a, b) => a.t - b.t || a.id - b.id);
-  undoStack.push(e.id);
+  pushUndo(e.id);
   if (k !== 'ast') clearAst();
   toast(`${who.name} · ${STAT[k].short}`);
   if (opts.askAst && opts.mode === 'pick' && (k === 'p2' || k === 'p3')) askAssist(who, e.t);
@@ -1026,7 +1028,7 @@ $('#astBar').addEventListener('click', ev => {
   if (!name) return;
   const e = { id: nextId(), t: p.t, team: p.team, player: name, k: 'ast' };
   game.events.push(e); game.events.sort((a, b) => a.t - b.t || a.id - b.id);
-  undoStack.push(e.id);
+  pushUndo(e.id);
   toast(`${name} · 어시스트`);
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 });
@@ -1034,17 +1036,31 @@ function undo() {
   const all = [...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music];
   const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
   if (id == null) return;
-  if (game.music.find(x => x.id === id)) { removeMusic(id); toast('되돌림: 배경음악'); return; }
+  const keep = (kind, obj) => redoStack.push({ kind, obj: JSON.parse(JSON.stringify(obj)) });
+  const mu = game.music.find(x => x.id === id);
+  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악 (Ctrl+Y로 다시)'); return; }
   const ins = game.inserts.find(x => x.id === id);
-  if (ins) { removeInsert(id); toast('되돌림: 삽입 카드'); return; }
+  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드 (Ctrl+Y로 다시)'); return; }
   const cm = game.comments.find(x => x.id === id);
-  if (cm) { removeComment(id); toast('되돌림: 코멘트'); return; }
+  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트 (Ctrl+Y로 다시)'); return; }
   const q = game.quarters.find(x => x.id === id);
-  if (q) { removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
+  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터 (Ctrl+Y로 다시)'); return; }
   const e = game.events.find(x => x.id === id);
   if (!e) return undo();
+  keep('event', e);
   removeEvent(id);
-  toast(`되돌림: ${e.player} · ${STAT[e.k].short}`);
+  toast(`되돌림: ${e.player} · ${STAT[e.k].short} (Ctrl+Y로 다시)`);
+}
+// 앞돌리기: 마지막으로 되돌린 항목을 다시 넣어요 (되돌린 뒤 새 입력이 없을 때만).
+function redo() {
+  const r = redoStack.pop();
+  if (!r) { toast('앞돌릴 게 없어요.'); return; }
+  const o = r.obj;
+  if (r.kind === 'event') { game.events.push(o); game.events.sort((a, b) => a.t - b.t || a.id - b.id); undoStack.push(o.id); save(); renderEntry(); renderLog(); renderBox(); renderMarkers(); toast(`다시: ${o.player} · ${STAT[o.k].short}`); return; }
+  if (r.kind === 'quarter') { game.quarters.push(o); game.quarters.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderMarkers(); renderLog(); lastBoardKey = ''; toast('다시: 다음 쿼터'); return; }
+  if (r.kind === 'comment') { game.comments.push(o); game.comments.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; toast('다시: 코멘트'); return; }
+  if (r.kind === 'insert') { game.inserts.push(o); game.inserts.sort(insOrder); undoStack.push(o.id); save(); renderInserts(); renderMarkers(); lastBoardKey = ''; toast('다시: 삽입 카드'); return; }
+  if (r.kind === 'music') { game.music.push(o); game.music.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderMusic(); renderMarkers(); toast('다시: 배경음악'); }
 }
 function removeEvent(id) {
   game.events = game.events.filter(e => e.id !== id);
@@ -1435,7 +1451,7 @@ $('#keepSel').addEventListener('change', ev => { opts.keepSel = ev.target.checke
 $('#gameSel').addEventListener('change', ev => loadGame(ev.target.value));
 function startNewGame(src) {
   flushSave();
-  game = newGame(); game.played = {}; undoStack = []; selected = null; clearAst();
+  game = newGame(); game.played = {}; undoStack = []; redoStack = []; selected = null; clearAst();
   cutStart = null;
   game.source = src;
   save(); renderAll();
@@ -1604,7 +1620,7 @@ function clearRecords() {
   const n = game.events.length + game.quarters.length;
   if (!n) { toast('지울 기록이 없어요.'); return; }
   if (!confirm(`'${gameTitle()}' 경기의 기록 ${game.events.length}개${game.quarters.length ? `와 쿼터 표시 ${game.quarters.length}개` : ''}를 모두 지울까요? 되돌릴 수 없어요.\n(팀·로스터·영상 설정은 그대로 남아요)`)) return;
-  game.events = []; game.quarters = []; game.played = {}; undoStack = []; selected = null; clearAst();
+  game.events = []; game.quarters = []; game.played = {}; undoStack = []; redoStack = []; selected = null; clearAst();
   save(); renderAll(); toast('기록을 모두 지웠어요.');
 }
 $('#btnClear').addEventListener('click', clearRecords);
@@ -1684,6 +1700,7 @@ document.addEventListener('drop', ev => {
   else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
 });
 $('#btnUndo').addEventListener('click', ev => { undo(); ev.currentTarget.blur(); });
+$('#btnRedo').addEventListener('click', ev => { redo(); ev.currentTarget.blur(); });
 $('#ytNoticeClose').addEventListener('click', () => { $('#ytNotice').classList.add('hidden'); fitStage(); });
 $('#btnPlay').addEventListener('click', () => player.toggle());
 $('#shield').addEventListener('click', () => player.toggle());
@@ -1707,6 +1724,7 @@ $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('[data-
 
 document.addEventListener('keydown', ev => {
   if (ev.target.closest('input, textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement?.tagName === 'BUTTON') document.activeElement.blur(); player.toggle(); return; }
@@ -1783,7 +1801,7 @@ function addQuarter() {
   const t = Math.round(Math.max(0, player.time() - (+opts.lag || 0)) * 10) / 10;
   const q = { id: nextId(), t };
   game.quarters.push(q);
-  undoStack.push(q.id);
+  pushUndo(q.id);
   save();
   toast(`다음 쿼터 → ${quarterLabel(stateAt(t).q)}`);
   renderMarkers(); renderLog();
@@ -1881,7 +1899,7 @@ function editClips(fn) {
   }).map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
   // 내보낼 시작·끝도 자기 영상을 따라가요. 그 영상을 뺐으면 지워요.
   ['trimStart', 'trimEnd'].forEach((k, i) => { const x = oldTrim[i]; game.sb[k] = x && idx(x.key) >= 0 ? offset(idx(x.key)) + x.t : null; });
-  cutStart = null; undoStack = [];
+  cutStart = null; undoStack = []; redoStack = [];
   game.source = { type: 'file', names: clips.map(c => c.name) };
   const k = idx(key0);
   cur = -1;
@@ -2442,7 +2460,7 @@ function addInsert(kind, extra = {}, quiet = false) {
   const t = at != null ? at : insTime(player.time());
   const ins = { id: nextId(), t, dur: kind === 'intro' ? 4 : +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : '', ...extra };
   game.inserts.push(ins); game.inserts.sort(insOrder);
-  undoStack.push(ins.id);
+  pushUndo(ins.id);
   save(); renderInserts(); renderMarkers(); lastBoardKey = '';
   if (quiet) return ins;
   if (kind === 'intro') { toast(`매치업 카드를 ${fmt(t)}부터 ${ins.dur}초 동안 영상 위에 보여줘요. 재생해서 확인해 보세요.`); player.pause(); player.seek(t + 0.8); return ins; }
@@ -2579,7 +2597,7 @@ function addMusic() {
   if (!bgmLib.length) { toast('먼저 아래 보관함에 음악 파일을 넣어주세요.', true); $('#bgmAdd').focus(); return; }
   const d = musDefaults();
   const m = { id: nextId(), t: Math.round(player.time() * 100) / 100, bgm: d.bgm && bgmLib.some(b => b.id === d.bgm) ? d.bgm : bgmLib[0].id, mode: d.mode, dur: +d.dur || 10, gain: +d.gain || 60, fade: +d.fade || 0 };
-  game.music.push(m); game.music.sort((a, b) => a.t - b.t); undoStack.push(m.id);
+  game.music.push(m); game.music.sort((a, b) => a.t - b.t); pushUndo(m.id);
   save(); renderMusic(); renderMarkers();
   toast(`'${musName(m)}'을(를) ${fmt(m.t)}부터 ${m.dur}초 동안 깔아요. 재생해서 들어보세요.`);
 }
@@ -2976,7 +2994,7 @@ function addCaption() {
   const t = Math.round((capAnchor ?? player.time()) * 10) / 10;
   const c = { id: nextId(), t, dur: +game.sb.cap.dur || 4, text };
   game.comments.push(c); game.comments.sort((a, b) => a.t - b.t);
-  undoStack.push(c.id);
+  pushUndo(c.id);
   $('#capText').value = ''; setCapAnchor(null);
   save(); renderCaps(); renderMarkers(); lastBoardKey = '';
   toast(`코멘트 넣음 · ${fmt(t)} "${text.slice(0, 20)}${text.length > 20 ? '…' : ''}"`);
