@@ -559,7 +559,7 @@
           </div>
           <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="sbSize" min="15" max="55" step="1"></div>
           <label class="check" style="margin-bottom:8px" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="sbFlash"> 득점 강조</label>
-          <label class="check" style="margin-bottom:8px" title="아래 '기록 카드' 칸의 팀 로고를 점수판 팀 이름 옆에 보여줘요"><input type="checkbox" id="sbLogo"> 팀 로고 표시</label>
+          <div class="field"><label>팀 로고</label><select id="sbLogo" title="아래 '기록 카드' 칸의 팀 로고를 점수판에 보여줘요"><option value="back">팀 칸 배경에 겹치기</option><option value="side">이름 옆에 작게</option><option value="off">안 보이기</option></select></div>
           <div class="hint" id="logoStatus" style="grid-column:1 / -1;margin:-4px 0 6px"></div>
         </div>
       </section>
@@ -742,7 +742,7 @@ function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: true,
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: 'back',
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
@@ -2022,12 +2022,22 @@ function scoreBadge(ctx, st, i, x, y, u, align, size = 18) {
   ctx.restore();
 }
 // 팀 로고(기록 카드 칸에서 올린 것)를 size 정사각형 안에 맞춰 그려요. 옵션이 꺼져 있거나 로고가 없으면 0을 돌려줘요 (이름이 그 자리로 당겨져요).
+// 로고 표시 방식: 'back'(팀 칸 배경에 크게 겹침, 기본) / 'side'(이름 옆에 작게) / 'off'. 예전 저장값 true/false도 읽어요.
+const logoMode = sb => sb.logo === false || sb.logo === 'off' ? 'off' : sb.logo === 'side' ? 'side' : 'back';
 function boardLogo(ctx, i, x, y, size) {
-  if (cfg.logo === false) return 0;
+  if (logoMode(cfg) !== 'side') return 0;
   const img = imgFor(logoOf(cfg.teams[i].name)); if (!img) return 0;
   const sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
   ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
   return size;
+}
+// 팀 칸(x,y,w,h) 배경에 로고를 크게 반투명으로 겹쳐요 (글씨 뒤 레이어). align: 'l'이면 왼쪽, 'r'이면 오른쪽에.
+function boardLogoBack(ctx, i, x, y, w, h, align = 'l', alpha = 0.34) {
+  if (logoMode(cfg) !== 'back') return;
+  const img = imgFor(logoOf(cfg.teams[i].name)); if (!img) return;
+  const size = h * 1.3, sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
+  const lx = align === 'l' ? x + w * 0.04 : x + w - w * 0.04 - dw, ly = y + (h - dh) / 2;
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.globalAlpha = alpha; ctx.drawImage(img, lx, ly, dw, dh); ctx.restore();
 }
 function foulDots(ctx, st, i, x, y, w, u, { on = '#f7d54a', off = 'rgba(255,255,255,.22)', h = 5 } = {}) {
   const n = foulCount(), gap = 3 * u;
@@ -2054,6 +2064,7 @@ function drawBar(ctx, W, H, st, u) {
     g.addColorStop(0, shade(c, 0.12)); g.addColorStop(1, shade(c, -0.18));
     ctx.fillStyle = g;
     ctx.fillRect(tx, y, teamW * u, h * u);
+    boardLogoBack(ctx, i, tx, y, teamW * u - 92 * u, h * u);
     // score panel
     const sw = 92 * u, sx = tx + teamW * u - sw;
     ctx.fillStyle = 'rgba(0,0,0,.28)';
@@ -2127,6 +2138,7 @@ function drawStack(ctx, W, H, st, u) {
     const g = ctx.createLinearGradient(0, ry, 0, ry + row);
     g.addColorStop(0, shade(c, 0.08)); g.addColorStop(1, shade(c, -0.15));
     ctx.fillStyle = g; ctx.fillRect(x, ry, w, row);
+    boardLogoBack(ctx, i, x, ry, w - 84 * u - 110 * u, row);
     const sw = 84 * u, sx = x + w - sw;
     const a = flash(st, i);
     ctx.fillStyle = '#12151c'; ctx.fillRect(sx, ry, sw, row);
@@ -2188,6 +2200,7 @@ function drawGlass(ctx, W, H, st, u) {
     // name + colour chip
     const nameEdge = scx + dir * (sw / 2 + 10 * u);
     const outer = i === 0 ? x + 22 * u : x + w - 22 * u;
+    { ctx.save(); rr(ctx, x, y, w, h, h / 2); ctx.clip(); const L = i === 0 ? x + 14 * u : nameEdge, R = i === 0 ? nameEdge : x + w - 14 * u; boardLogoBack(ctx, i, L, y, R - L, h, i === 0 ? 'l' : 'r', 0.3); ctx.restore(); }
     const ls = h - 16 * u, lw = boardLogo(ctx, i, i === 0 ? outer : outer - ls, y + 8 * u, ls);   // 로고가 있으면 색 칩 대신
     const inner = outer - dir * (lw ? lw + 8 * u : 0);
     const avail = Math.abs(nameEdge - inner) - (lw ? 6 * u : 22 * u);
@@ -2241,6 +2254,7 @@ function drawClassic(ctx, W, H, st, s) {
     const bx = x + pad + i * (bw + pad);
     ctx.fillStyle = cfg.teams[i].color;
     ctx.fillRect(bx, by, bw, h2);
+    boardLogoBack(ctx, i, bx, by, bw * 0.7, h2);
     const a = flash(st, i);
     if (a) { ctx.fillStyle = `rgba(255,255,255,${0.25 * a})`; ctx.fillRect(bx, by, bw, h2); }
 
@@ -2703,7 +2717,7 @@ function renderOverlay(st) {
   if (!w || !h) return;
   const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
   const caps = [...activeCaptions(st.t), ...previewCaption()], intro = activeIntro(st.t);
-  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${cfg.logo !== false && cfg.show ? 'lg' + imgReadyKey() : ''}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}|${intro ? `in${intro.ins.id}:${Math.round(intro.a * 60)}:${imgReadyKey()}` : ''}`;
+  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${logoMode(cfg) !== 'off' && cfg.show ? 'lg' + imgReadyKey() : ''}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}|${intro ? `in${intro.ins.id}:${Math.round(intro.a * 60)}:${imgReadyKey()}` : ''}`;
   if (key === lastBoardKey) return;
   lastBoardKey = key;
   if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
@@ -2945,8 +2959,8 @@ function renderVideoPane() {
   $('#sbShow').checked = sb.show !== false;
   $('#sbMatch').value = sb.match || ''; $('#sbMatch').placeholder = `${game.teams[0].name} vs ${game.teams[1].name}`;
   $('#sbStartQ').value = sb.startQ; $('#sbFoulSlots').value = sb.foulSlots;
-  $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash; $('#sbLogo').checked = sb.logo !== false;
-  $('#logoStatus').textContent = sb.logo === false ? '' : '로고: ' + [0, 1].map(i => `${game.teams[i].name} ${logoOf(game.teams[i].name) ? '✓' : '없음'}`).join(' · ') + ([0, 1].some(i => !logoOf(game.teams[i].name)) ? ' → 아래 기록 카드 칸의 [팀 로고]에서 올려주세요' : '');
+  $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash; $('#sbLogo').value = logoMode(sb);
+  $('#logoStatus').textContent = logoMode(sb) === 'off' ? '' : '로고: ' + [0, 1].map(i => `${game.teams[i].name} ${logoOf(game.teams[i].name) ? '✓' : '없음'}`).join(' · ') + ([0, 1].some(i => !logoOf(game.teams[i].name)) ? ' → 아래 기록 카드 칸의 [팀 로고]에서 올려주세요' : '');
   $('#sbSize').value = sb.size; $('#sizeVal').textContent = sb.size;
   $('#autoQ').checked = sb.autoQ !== false; $('#skipCuts').checked = sb.skipCuts !== false;
   $('#trimStart').value = sb.trimStart != null ? fmt(sb.trimStart, true) : '';
@@ -2970,7 +2984,7 @@ function readVideoPane() {
   sb.match = $('#sbMatch').value;
   sb.startQ = +$('#sbStartQ').value;
   sb.foulSlots = Math.min(10, Math.max(1, +$('#sbFoulSlots').value || 5));
-  sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked; sb.logo = $('#sbLogo').checked;
+  sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked; sb.logo = $('#sbLogo').value;
   sb.size = +$('#sbSize').value; $('#sizeVal').textContent = sb.size;
   sb.autoQ = $('#autoQ').checked; sb.skipCuts = $('#skipCuts').checked;
   sb.trimStart = parseTime($('#trimStart').value); sb.trimEnd = parseTime($('#trimEnd').value);
