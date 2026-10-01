@@ -544,8 +544,8 @@
       <section>
         <h2>기록 카드 · 이미지 삽입 <span id="insCount"></span></h2>
         <div class="hint" style="margin-bottom:8px">영상 사이에 몇 초짜리 정지 화면을 끼워 넣어요. 기록 카드는 그 시점까지의 팀 기록(점수·FG%·3점·자유투·리바운드·어시스트·턴오버)으로 페이지가 직접 그려요. 미리보기에서는 그 지점에서 잠깐 멈춰 보여주고, 내보낸 영상에는 실제로 그 길이만큼 들어가요.</div>
-        <div class="btns" style="margin-bottom:6px"><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
-        <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드와 이미지는 현재 위치에 들어가요. 시간은 목록에서 고칠 수 있어요.</div>
+        <div class="btns" style="margin-bottom:6px"><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
+        <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드·선수별 카드·이미지는 현재 위치에 들어가요. 선수별 기록 카드는 위에 두 팀 점수, 아래에 한 팀의 선수별 표가 나오고, 1팀 → 2팀 순서로 두 장이 이어서 들어가요. 시간은 목록에서 고칠 수 있어요.</div>
         <div class="caps" id="insList"></div>
         <div class="grid3" style="margin-top:10px">
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
@@ -2125,7 +2125,7 @@ function drawClassic(ctx, W, H, st, s) {
 // ---------- 미리보기 ----------
 // 화면 크기에 맞춘 캔버스에, 보이는 내용이 바뀔 때만 다시 그려요 (영상 재생을 방해하지 않게).
 // ---------- 기록 카드 · 이미지 삽입 ----------
-const insLabel = i => i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
+const insLabel = i => i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
 // 팀 로고는 팀 이름별로 브라우저에 기억해요 (다음 경기에서도 같은 팀이면 그대로).
 const logoStore = () => lsGet('mm-box:logos') || {};
 const logoOf = name => logoStore()[name] || null;
@@ -2154,7 +2154,17 @@ function teamTotals(events, ti, upto) {
 }
 function cardData(ins, src = { events: game.events, teams: cfg.teams, match: cfg.match }) {
   const upto = ins.kind === 'half' ? ins.t : null;
-  return { teams: src.teams, stats: [0, 1].map(ti => teamTotals(src.events, ti, upto)), logos: src.teams.map(t => logoOf(t.name)), title: insLabel(ins), match: src.match };
+  const d = { teams: src.teams, stats: [0, 1].map(ti => teamTotals(src.events, ti, upto)), logos: src.teams.map(t => logoOf(t.name)), title: insLabel(ins), match: src.match };
+  if (ins.kind === 'box') d.lines = playerLines(src.events, ins.team);
+  return d;
+}
+// 선수별 합계 (출전 체크된 선수만, 득점 많은 순). 기록이 없어도 출전으로 체크한 선수는 0으로 들어가요.
+function playerLines(events, ti) {
+  const m = new Map();
+  const line = name => { let l = m.get(name); if (!l) { l = blankLine(name); m.set(name, l); } return l; };
+  (game.teams[ti]?.roster || []).forEach(n => { if (game.played[ti + ':' + n] === true) line(n); });
+  for (const e of events) { if (e.team !== ti) continue; const l = line(e.player); l.n = (l.n || 0) + 1; Object.entries(STAT[e.k].fx).forEach(([k, v]) => l[k] += v); }
+  return [...m.values()].filter(l => game.played[ti + ':' + l.name] !== false).map(finishLine).sort((a, b) => b.pts - a.pts || b.reb - a.reb);
 }
 const pctTxt = (m, a) => a ? Math.round(m / a * 100) + '%' : '–';
 function drawInsert(ctx, W, H, ins, data) {
@@ -2165,6 +2175,7 @@ function drawInsert(ctx, W, H, ins, data) {
     if (img) { const sc = Math.min(W / img.naturalWidth, H / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc; ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh); }
     ctx.restore(); return;
   }
+  if (ins.kind === 'box') { drawBoxCard(ctx, W, H, ins, data); ctx.restore(); return; }
   const u = W / 1000;
   const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#12151d'); g.addColorStop(1, '#0a0c10');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -2216,6 +2227,65 @@ function drawInsert(ctx, W, H, ins, data) {
   });
   ctx.restore();
 }
+// 선수별 기록 카드: 위에 두 팀 점수, 아래에 한 팀의 선수 표
+function drawBoxCard(ctx, W, H, ins, data) {
+  const u = W / 1000, ti = ins.team, tm = data.teams[ti];
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#12151d'); g.addColorStop(1, '#0a0c10');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.textBaseline = 'middle';
+  // 위: 로고 · 팀 이름 · 점수
+  const topH = H * 0.2, cy = H * 0.1;
+  for (const i of [0, 1]) {
+    const t = data.teams[i], img = imgFor(data.logos[i]), box = topH * 0.62, cx = W * (i ? 0.76 : 0.24), ly = cy - topH * 0.08;
+    if (img) { const sc = Math.min(box / img.naturalWidth, box / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc; ctx.drawImage(img, cx - dw / 2, ly - dh / 2, dw, dh); }
+    else { ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(cx, ly, box / 2, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = t.text || ink(t.color); ctx.font = `900 ${box * 0.4}px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(t.name.slice(0, 2), cx, ly + box * 0.02); }
+    ctx.fillStyle = '#e8eaee'; ctx.textAlign = 'center';
+    fitText(ctx, t.name, 700, 20 * u, W * 0.24);
+    ctx.fillText(t.name, cx, cy + topH * 0.33);
+  }
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = `700 ${topH * 0.62}px ${NUM}`;
+  ctx.fillText(`${data.stats[0].pts}`, W * 0.44, cy); ctx.fillText(`${data.stats[1].pts}`, W * 0.56, cy);
+  ctx.fillStyle = '#8b93a1'; ctx.font = `700 ${topH * 0.3}px ${NUM}`; ctx.fillText(':', W * 0.5, cy);
+  // 팀 띠
+  const by = H * 0.22, bh = H * 0.06;
+  const pg = ctx.createLinearGradient(0, by, W, by); pg.addColorStop(0, shade(tm.color, 0)); pg.addColorStop(1, shade(tm.color, -0.35));
+  ctx.fillStyle = pg; rr(ctx, W * 0.03, by, W * 0.94, bh, 6 * u); ctx.fill();
+  ctx.fillStyle = tm.text || ink(tm.color); ctx.textAlign = 'left';
+  fitText(ctx, `${tm.name} 선수 기록`, 800, bh * 0.58, W * 0.6);
+  ctx.fillText(`${tm.name} 선수 기록`, W * 0.05, by + bh / 2 + 1 * u);
+  // 표
+  const lines = data.lines || [], tot = totalOf(lines.map(l => ({ ...l, played: true })));
+  const cols = [['선수', 0.17, 'l'], ['득점', 0.07], ['야투', 0.095], ['3점', 0.095], ['자유투', 0.095], ['리바', 0.06], ['공리', 0.06], ['수리', 0.06], ['어시', 0.06], ['스틸', 0.06], ['블록', 0.06], ['턴오버', 0.065], ['파울', 0.05]];
+  const x0 = W * 0.03, tw = W * 0.94, ty = by + bh + H * 0.015, th = H * 0.96 - ty;
+  const nRows = lines.length + 2, rh = Math.min(th / nRows, 46 * u), fs = Math.max(9 * u, Math.min(20 * u, rh * 0.5)), small = fs * 0.72, twoLine = rh >= 30 * u;
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(ctx, x0, ty, tw, rh * nRows, 8 * u); ctx.fill();
+  const shoot = (m, a) => a ? (twoLine ? [`${m}/${a}`, `${Math.round(m / a * 100)}%`] : [`${m}/${a} ${Math.round(m / a * 100)}%`, '']) : ['–', '']; 
+  const cells = l => [[l.name], [String(l.pts)], shoot(l.fgm, l.fga), shoot(l.tpm, l.tpa), shoot(l.ftm, l.fta), [String(l.reb)], [String(l.oreb)], [String(l.dreb)], [String(l.ast)], [String(l.stl)], [String(l.blk)], [String(l.to)], [String(l.pf)]];
+  const drawRow = (vals, y, { head = false, bold = false, muted = false } = {}) => {
+    let x = x0;
+    cols.forEach(([label, w, align], ci) => {
+      const cw = tw * w, v = head ? [label] : vals[ci];
+      ctx.textAlign = align === 'l' ? 'left' : 'center';
+      const tx = align === 'l' ? x + 14 * u : x + cw / 2;
+      ctx.fillStyle = head ? '#8b93a1' : muted ? '#c9ced8' : '#fff';
+      ctx.font = `${head ? 600 : bold || ci <= 1 ? 700 : 500} ${head ? small : fs}px ${ci === 0 ? FONT : NUM}`;
+      if (ci === 0 && !head) fitText(ctx, v[0], bold ? 800 : 700, fs, cw - 20 * u);
+      if (v[1]) { ctx.fillText(v[0], tx, y + rh * 0.36); ctx.fillStyle = '#8b93a1'; ctx.font = `500 ${small}px ${NUM}`; ctx.fillText(v[1], tx, y + rh * 0.72); }
+      else ctx.fillText(v[0], tx, y + rh / 2 + 1 * u);
+      x += cw;
+    });
+  };
+  drawRow(null, ty, { head: true });
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x0 + 10 * u, ty + rh - 1, tw - 20 * u, 1 * u);
+  lines.forEach((l, i) => {
+    const y = ty + rh * (i + 1);
+    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(x0, y, tw, rh); }
+    drawRow(cells(l), y);
+  });
+  const yT = ty + rh * (lines.length + 1);
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(x0 + 10 * u, yT, tw - 20 * u, 1.5 * u);
+  drawRow(cells({ ...tot, name: '합계' }), yT, { bold: true });
+}
 // 그림 파일을 작게 줄여서 저장해요 (브라우저 저장 공간이 넉넉하지 않아서).
 function shrinkImage(file, max, type = 'image/jpeg', q = 0.86) {
   return new Promise((res, rej) => {
@@ -2232,7 +2302,7 @@ function shrinkImage(file, max, type = 'image/jpeg', q = 0.86) {
 }
 // 전반 카드 자리: 두 번째 쿼터 넘김(3쿼터 시작) 시각, 없으면 현재 위치
 function halfTime() { const qs = sorted().filter(e => e.kind === 'q'); return qs.length >= 2 ? qs[1].t : null; }
-function addInsert(kind, extra = {}) {
+function addInsert(kind, extra = {}, quiet = false) {
   if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
   const at = kind === 'half' ? halfTime() : null;
   // 쿼터 경계는 영상 경계와 정확히 같아야 하니 반올림하지 않아요 (반올림하면 앞 영상 끝에 붙어버려요)
@@ -2241,9 +2311,17 @@ function addInsert(kind, extra = {}) {
   game.inserts.push(ins); game.inserts.sort((a, b) => a.t - b.t);
   undoStack.push(ins.id);
   save(); renderInserts(); renderMarkers(); lastBoardKey = '';
+  if (quiet) return ins;
   toast(`${insLabel(ins)} 카드를 ${fmt(t)}에 넣었어요.${kind === 'half' && at != null ? ' (2쿼터 끝 자리)' : ''}`);
   player.pause(); player.seek(t); hold = { ins, until: performance.now() + 2500 }; lastBoardKey = '';   // 바로 미리보기
+  return ins;
 }
+$('#btnInsBox').addEventListener('click', () => {
+  if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
+  addInsert('box', { team: 0 }, true);
+  addInsert('box', { team: 1 });
+  toast(`선수별 기록 카드 두 장(${game.teams[0].name} → ${game.teams[1].name})을 ${fmt(player.time())}에 넣었어요.`);
+});
 function removeInsert(id) { game.inserts = game.inserts.filter(i => i.id !== id); if (hold && hold.ins.id === id) cancelHold(false); save(); renderInserts(); renderMarkers(); lastBoardKey = ''; }
 $('#btnInsHalf').addEventListener('click', () => addInsert('half'));
 $('#btnInsFinal').addEventListener('click', () => addInsert('final'));
@@ -2258,8 +2336,8 @@ function renderInserts() {
   $('#insCount').textContent = list.length ? `(${list.length})` : '';
   $('#insList').innerHTML = list.length ? list.map(i => `<div class="ins" data-id="${i.id}">
     <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(i.t, true)}</button>
-    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : '최종 기록'}</span>
-    <input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : '카드 제목'}" maxlength="40">
+    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : '최종 기록'}</span>
+    <input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">
     <input type="number" class="dur" value="${i.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
   </div>`).join('') : '<div class="hint">아직 넣은 카드가 없어요.</div>';
@@ -2438,11 +2516,18 @@ function drawCaptions(ctx, W, H, list) {
 let hold = null, lastTickT = 0;
 function cancelHold(resume) { if (!hold) return; hold = null; lastBoardKey = ''; if (resume) player.play(); }
 function checkInserts(t) {
-  if (hold) { if (performance.now() > hold.until) cancelHold(true); return; }
+  if (hold) {
+    if (performance.now() > hold.until) {
+      const rest = hold.rest || [];
+      if (rest.length) { hold = { ins: rest[0], rest: rest.slice(1), until: performance.now() + (+rest[0].dur || 6) * 1000 }; lastBoardKey = ''; }   // 같은 자리의 다음 카드
+      else cancelHold(true);
+    }
+    return;
+  }
   if (player.paused() || pendingSeek) { lastTickT = t; return; }
-  const ins = game.inserts.find(i => lastTickT < i.t && t >= i.t && t - i.t < 1);
+  const list = game.inserts.filter(i => lastTickT < i.t && t >= i.t && t - i.t < 1);
   lastTickT = t;
-  if (ins) { player.pause(); hold = { ins, until: performance.now() + (+ins.dur || 6) * 1000 }; lastBoardKey = ''; }
+  if (list.length) { player.pause(); hold = { ins: list[0], rest: list.slice(1), until: performance.now() + (+list[0].dur || 6) * 1000 }; lastBoardKey = ''; }
 }
 function renderLive() {
   const st = stateAt(player.time());
