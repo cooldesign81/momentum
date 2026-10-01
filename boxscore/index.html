@@ -119,6 +119,7 @@
   .ins .k { font-size: 11px; color: var(--tb); white-space: nowrap; }
   .ins .t { font-family: ui-monospace, monospace; font-size: 12px; padding: 4px 2px; color: var(--muted); }
   .ins input { padding: 4px 6px; font-size: 12px; }
+  .ins .ens { display: flex; gap: 4px; min-width: 0; } .ins .ens input { width: 100%; min-width: 0; }
   .ins button.x { padding: 2px 7px; font-size: 12px; }
   .logos { display: flex; flex-wrap: wrap; gap: 8px 18px; }
   .logo { display: flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -544,11 +545,12 @@
       <section>
         <h2>기록 카드 · 이미지 삽입 <span id="insCount"></span></h2>
         <div class="hint" style="margin-bottom:8px">영상 사이에 몇 초짜리 정지 화면을 끼워 넣어요. 기록 카드는 그 시점까지의 팀 기록(점수·FG%·3점·자유투·리바운드·어시스트·턴오버)으로 페이지가 직접 그려요. 미리보기에서는 그 지점에서 잠깐 멈춰 보여주고, 내보낸 영상에는 실제로 그 길이만큼 들어가요.</div>
-        <div class="btns" style="margin-bottom:6px"><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
-        <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드·선수별 카드·이미지는 현재 위치에 들어가요. 선수별 기록 카드는 위에 두 팀 점수, 아래에 한 팀의 선수별 표가 나오고, 1팀 → 2팀 순서로 두 장이 이어서 들어가요. 시간은 목록에서 고칠 수 있어요.</div>
+        <div class="btns" style="margin-bottom:6px"><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
+        <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드·선수별 카드·이미지는 현재 위치에 들어가요. 선수별 기록 카드는 위에 두 팀 점수, 아래에 한 팀의 선수별 표가 나오고, 1팀 → 2팀 순서로 두 장이 이어서 들어가요. 매치업 카드는 영상을 멈추지 않고 그 위에 겹쳐서 양 팀 로고 패널이 가운데에서 펼쳐졌다가 접혀요 (팀 색·로고 사용, 영문 이름은 목록에서 입력). 시간은 목록에서 고칠 수 있어요.</div>
         <div class="caps" id="insList"></div>
         <div class="grid3" style="margin-top:10px">
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
+          <div class="field"><label>매치업 가운데 색</label><input type="color" id="introColor" title="매치업 카드 가운데 띠 색"></div>
           <div class="field" style="grid-column:1 / -1"><label>팀 로고 (카드에 들어가요 · 팀 이름별로 기억)</label><div class="logos" id="logos"></div></div>
         </div>
         <input type="file" id="logoFile" accept="image/*" class="hidden">
@@ -699,14 +701,15 @@ const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
-const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur'];
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor'];
+const INTRO_COLOR = '#e8761a';
 // 코멘트 자막 모양 기본값
 const CAP_DEFAULT = { pos: 'bc', width: 'fit', font: 28, bar: '#000000', alpha: 70, color: '#ffffff', dur: 4, fade: 0.5, sfx: true, sfxGain: 80 };
 function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6,
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR,
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
@@ -2125,7 +2128,7 @@ function drawClassic(ctx, W, H, st, s) {
 // ---------- 미리보기 ----------
 // 화면 크기에 맞춘 캔버스에, 보이는 내용이 바뀔 때만 다시 그려요 (영상 재생을 방해하지 않게).
 // ---------- 기록 카드 · 이미지 삽입 ----------
-const insLabel = i => i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
+const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
 // 팀 로고는 팀 이름별로 브라우저에 기억해요 (다음 경기에서도 같은 팀이면 그대로).
 const logoStore = () => lsGet('mm-box:logos') || {};
 const logoOf = name => logoStore()[name] || null;
@@ -2312,15 +2315,17 @@ function addInsert(kind, extra = {}, quiet = false) {
   const at = kind === 'half' ? halfTime() : null;
   // 쿼터 경계는 영상 경계와 정확히 같아야 하니 반올림하지 않아요 (반올림하면 앞 영상 끝에 붙어버려요)
   const t = at != null ? at : insTime(player.time());
-  const ins = { id: nextId(), t, dur: +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : '', ...extra };
+  const ins = { id: nextId(), t, dur: kind === 'intro' ? 4 : +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : '', ...extra };
   game.inserts.push(ins); game.inserts.sort(insOrder);
   undoStack.push(ins.id);
   save(); renderInserts(); renderMarkers(); lastBoardKey = '';
   if (quiet) return ins;
+  if (kind === 'intro') { toast(`매치업 카드를 ${fmt(t)}부터 ${ins.dur}초 동안 영상 위에 보여줘요. 재생해서 확인해 보세요.`); player.pause(); player.seek(t + 0.8); return ins; }
   toast(`${insLabel(ins)} 카드를 ${fmt(t)}에 넣었어요.${kind === 'half' && at != null ? ' (2쿼터 끝 자리)' : ''}`);
   player.pause(); player.seek(t); hold = { ins, until: performance.now() + 2500, end: nearEnd(t) }; lastBoardKey = '';   // 바로 미리보기
   return ins;
 }
+$('#btnInsIntro').addEventListener('click', () => addInsert('intro', { en: ['', ''] }));
 $('#btnInsBox').addEventListener('click', () => {
   if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
   addInsert('box', { team: 0 }, true);
@@ -2341,12 +2346,15 @@ function renderInserts() {
   $('#insCount').textContent = list.length ? `(${list.length})` : '';
   $('#insList').innerHTML = list.length ? list.map(i => `<div class="ins" data-id="${i.id}">
     <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(i.t, true)}</button>
-    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : '최종 기록'}</span>
-    <input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">
+    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : i.kind === 'intro' ? '매치업' : '최종 기록'}</span>
+    ${i.kind === 'intro'
+      ? `<span class="ens"><input type="text" class="en0" value="${esc(i.en?.[0] || '')}" placeholder="${esc(game.teams[0].name)} 영문" maxlength="24" title="왼쪽 세로 글씨 (비우면 팀 이름)"><input type="text" class="en1" value="${esc(i.en?.[1] || '')}" placeholder="${esc(game.teams[1].name)} 영문" maxlength="24" title="오른쪽 세로 글씨 (비우면 팀 이름)"></span>`
+      : `<input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">`}
     <input type="number" class="dur" value="${i.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
   </div>`).join('') : '<div class="hint">아직 넣은 카드가 없어요.</div>';
   $('#insDur').value = game.sb.insDur || 6;
+  $('#introColor').value = game.sb.introColor || INTRO_COLOR;
   $('#logos').innerHTML = [0, 1].map(i => { const n = game.teams[i].name, src = logoOf(n); return `<div class="logo" data-team="${i}"><span class="th" style="${src ? `background-image:url(${src})` : ''}">${src ? '' : '없음'}</span><span class="nm" title="${esc(n)}">${esc(n)}</span><button class="mini" data-act="up">올리기</button>${src ? '<button class="mini" data-act="rm">지우기</button>' : ''}</div>`; }).join('');
 }
 let logoTeam = 0;
@@ -2362,11 +2370,12 @@ $('#logoFile').addEventListener('change', async ev => {
   catch (e) { toast(e.message, true); }
 });
 $('#insDur').addEventListener('change', () => { game.sb.insDur = Math.max(1, +$('#insDur').value || 6); save(); });
+$('#introColor').addEventListener('input', () => { game.sb.introColor = $('#introColor').value; save(); lastBoardKey = ''; });
 $('#insList').addEventListener('click', ev => {
   const row = ev.target.closest('.ins'); if (!row) return;
   const i = game.inserts.find(x => x.id === +row.dataset.id); if (!i) return;
   const act = ev.target.closest('[data-act]')?.dataset.act;
-  if (act === 'seek') { player.pause(); player.seek(i.t); hold = { ins: i, until: performance.now() + 2500 }; lastBoardKey = ''; }
+  if (act === 'seek') { player.pause(); player.seek(i.kind === 'intro' ? i.t + 0.8 : i.t); if (i.kind !== 'intro') hold = { ins: i, until: performance.now() + 2500 }; lastBoardKey = ''; }
   else if (act === 'here') { if (!mode) return; i.t = insTime(player.time()); game.inserts.sort(insOrder); save(); renderInserts(); renderMarkers(); }
   else if (act === 'rm') removeInsert(i.id);
 });
@@ -2374,6 +2383,7 @@ $('#insList').addEventListener('change', ev => {
   const row = ev.target.closest('.ins'); if (!row) return;
   const i = game.inserts.find(x => x.id === +row.dataset.id); if (!i) return;
   if (ev.target.classList.contains('txt')) i.title = ev.target.value.trim();
+  if (ev.target.classList.contains('en0') || ev.target.classList.contains('en1')) { i.en = i.en || ['', '']; i.en[ev.target.classList.contains('en0') ? 0 : 1] = ev.target.value.trim(); }
   if (ev.target.classList.contains('dur')) i.dur = Math.max(1, +ev.target.value || 6);
   save(); renderMarkers(); lastBoardKey = '';
 });
@@ -2385,15 +2395,70 @@ function renderOverlay(st) {
   const w = Math.round(stage.clientWidth * dpr), h = Math.round(stage.clientHeight * dpr);
   if (!w || !h) return;
   const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
-  const caps = [...activeCaptions(st.t), ...previewCaption()];
-  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}`;
+  const caps = [...activeCaptions(st.t), ...previewCaption()], intro = activeIntro(st.t);
+  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}|${intro ? `in${intro.ins.id}:${Math.round(intro.a * 60)}:${imgReadyKey()}` : ''}`;
   if (key === lastBoardKey) return;
   lastBoardKey = key;
   if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
   octx.clearRect(0, 0, w, h);
   if (hold) { drawInsert(octx, w, h, hold.ins, cardData(hold.ins)); return; }
-  if (cfg.show) drawBoard(octx, w, h, st);
+  if (cfg.show && !intro) drawBoard(octx, w, h, st);   // 매치업 카드가 떠 있는 동안은 점수판을 숨겨요
+  if (intro) drawIntro(octx, w, h, intro);
   drawCaptions(octx, w, h, caps);
+}
+
+// ---------- 매치업 카드 (영상 위에 겹쳐서, 가운데에서 펼쳐짐) ----------
+const INTRO_IN = 0.6, INTRO_OUT = 0.45;
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+function activeIntro(t) {
+  const ins = (cfg.inserts || []).find(i => i.kind === 'intro' && t >= i.t && t <= i.t + (+i.dur || 4));
+  if (!ins) return null;
+  const a = Math.min(easeOut(Math.min(1, (t - ins.t) / INTRO_IN)), easeOut(Math.min(1, (ins.t + (+ins.dur || 4) - t) / INTRO_OUT)));
+  return { ins, a };
+}
+function drawIntro(ctx, W, H, { ins, a }) {
+  if (a <= 0) return;
+  const u = W / 1000, Wp = W * 0.78, Hp = H * 0.68, cx = W / 2, cy = H * 0.5, r = 22 * u;
+  const mid = cfg.introColor || INTRO_COLOR, strip = '#15171c';
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, a * 1.6);
+  // 가운데에서 양쪽으로 열리는 창 안에 그려요 (모양은 그대로, 보이는 폭만 넓어져요)
+  const x0 = cx - Wp / 2, y0 = cy - Hp / 2, vw = Wp * (0.06 + 0.94 * a);
+  rr(ctx, cx - vw / 2, y0, vw, Hp, r); ctx.clip();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 30 * u;
+  // 세 부분: 팀 패널 | 세로 이름띠 · 코트 · 세로 이름띠 | 팀 패널
+  const pw = Wp * 0.31, sw = Wp * 0.07, mw = Wp - 2 * pw - 2 * sw;
+  const px = [x0, x0 + Wp - pw], sx = [x0 + pw, x0 + Wp - pw - sw], mx = x0 + pw + sw;
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  for (const i of [0, 1]) {
+    const t = cfg.teams[i];
+    const g = ctx.createLinearGradient(0, y0, 0, y0 + Hp); g.addColorStop(0, shade(t.color, 0.08)); g.addColorStop(1, shade(t.color, -0.25));
+    ctx.fillStyle = g; ctx.fillRect(px[i], y0, pw, Hp);
+    ctx.shadowBlur = 0;
+    const img = imgFor(logoOf(t.name)), box = Math.min(pw * 0.72, Hp * 0.52), lx = px[i] + pw / 2, ly = y0 + Hp * 0.42;
+    if (img) { const sc = Math.min(box / img.naturalWidth, box / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc; ctx.drawImage(img, lx - dw / 2, ly - dh / 2, dw, dh); }
+    else { ctx.fillStyle = hexA(t.text || ink(t.color), 0.15); ctx.beginPath(); ctx.arc(lx, ly, box / 2, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = t.text || ink(t.color); ctx.font = `900 ${box * 0.42}px ${FONT}`; ctx.fillText(t.name.slice(0, 2), lx, ly + box * 0.02); }
+    ctx.fillStyle = t.text || ink(t.color);
+    fitText(ctx, t.name, 800, 30 * u, pw * 0.86);
+    ctx.fillText(t.name, lx, y0 + Hp * 0.84);
+    // 세로 이름띠
+    ctx.fillStyle = strip; ctx.fillRect(sx[i], y0, sw, Hp);
+    const label = (ins.en?.[i] || '').trim() || t.name;
+    ctx.save(); ctx.translate(sx[i] + sw / 2, cy); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#fff'; fitText(ctx, label, 800, sw * 0.5, Hp * 0.9); ctx.fillText(label, 0, 1 * u);
+    ctx.restore();
+  }
+  // 가운데: 색 띠 + 하프코트 선
+  const g2 = ctx.createLinearGradient(0, y0, 0, y0 + Hp); g2.addColorStop(0, shade(mid, 0.1)); g2.addColorStop(1, shade(mid, -0.2));
+  ctx.fillStyle = g2; ctx.fillRect(mx, y0, mw, Hp);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = Math.max(1, 2 * u);
+  const kw = mw * 0.5, kh = Hp * 0.3, kx = mx + (mw - kw) / 2, ky = y0 + Hp - kh;
+  ctx.strokeRect(kx, ky, kw, kh);
+  ctx.beginPath(); ctx.arc(mx + mw / 2, ky, kw * 0.3, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx + mw / 2, y0 + Hp, kw * 0.11, Math.PI, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx + mw / 2, y0 + Hp, mw * 0.46, Math.PI, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx + mw / 2, y0, kw * 0.3, 0, Math.PI); ctx.stroke();   // 센터 서클 반쪽
+  ctx.restore();
 }
 
 // ---------- 코멘트 자막 그리기 ----------
@@ -2451,7 +2516,7 @@ $('#sfxReset').addEventListener('click', () => { try { localStorage.removeItem('
 // 미리보기: 재생 중에 자막이 새로 나타나면 소리를 내요. 자막 한가운데로 건너뛴 경우에는 안 내요.
 let lastCapIds = new Set(), capSeeked = false;
 function tickSfx(t) {
-  const ids = new Set(activeCaptions(t).map(x => x.c.id));
+  const ids = new Set(activeCaptions(t).map(x => x.c.id)); const intro = activeIntro(t); if (intro) ids.add('in' + intro.ins.id);
   if (!player.paused() && !pendingSeek && !capSeeked) for (const id of ids) if (!lastCapIds.has(id)) playSfx();
   capSeeked = false; lastCapIds = ids;
 }
@@ -2526,7 +2591,7 @@ let endShown = false;
 function endInserts() {
   if (hold || endShown) return;
   endShown = true;
-  showHold(game.inserts.filter(i => nearEnd(i.t)).sort(insOrder), true);
+  showHold(game.inserts.filter(i => i.kind !== 'intro' && nearEnd(i.t)).sort(insOrder), true);
 }
 function checkInserts(t) {
   if (hold) {
@@ -2538,7 +2603,7 @@ function checkInserts(t) {
     return;
   }
   if (player.paused() || pendingSeek) { lastTickT = t; return; }
-  const list = game.inserts.filter(i => lastTickT < i.t && t >= i.t && t - i.t < 1 && !nearEnd(i.t));   // 끝 카드는 영상이 끝난 뒤에
+  const list = game.inserts.filter(i => i.kind !== 'intro' && lastTickT < i.t && t >= i.t && t - i.t < 1 && !nearEnd(i.t));   // 끝 카드는 영상이 끝난 뒤에
   lastTickT = t;
   showHold(list, false);
 }
@@ -2733,7 +2798,7 @@ $('#btnExport').onclick = async () => {
   // 내보내는 동안 기록이나 설정이 바뀌어도 영상 전체가 한 상태로 그려지게, 시작할 때 모습을 붙잡아 둬요.
   const snapCfg = JSON.parse(JSON.stringify(cfg)), snapEvents = sorted().slice();
   const snapInserts = JSON.parse(JSON.stringify(game.inserts)), snapAllEvents = JSON.parse(JSON.stringify(game.events));
-  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { if (cfg.show) drawBoard(ctx, W, H, stateAt(t, snapEvents)); drawCaptions(ctx, W, H, activeCaptions(t)); } finally { cfg = live; } };
+  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { const intro = activeIntro(t); if (cfg.show && !intro) drawBoard(ctx, W, H, stateAt(t, snapEvents)); if (intro) drawIntro(ctx, W, H, intro); drawCaptions(ctx, W, H, activeCaptions(t)); } finally { cfg = live; } };
   $('#exportBox').classList.remove('hidden');
   setProgress(0, '준비 중…');
   showMsg('');
@@ -2762,13 +2827,13 @@ $('#btnExport').onclick = async () => {
     }
     if (!parts.length) throw new Error('잘라낸 구간을 빼고 나면 내보낼 부분이 없어요.');
     // 삽입 카드: 그 시각에서 영상을 둘로 나누고 사이에 카드를 끼워요. 잘라낸 구간 안의 카드는 빼요.
-    const pending = snapInserts.filter(i => i.t >= S - 1e-3 && i.t <= E + 0.05 && !cfg.cuts.some(c => i.t > c.s && i.t < c.e)).sort(insOrder)
+    const pending = snapInserts.filter(i => i.kind !== 'intro' && i.t >= S - 1e-3 && i.t <= E + 0.05 && !cfg.cuts.some(c => i.t > c.s && i.t < c.e)).sort(insOrder)
       .map(i => ({ ...i, data: cardData(i, { events: snapAllEvents, teams: snapCfg.teams, match: snapCfg.match }) }));
     for (const ins of pending) {
       const k = parts.findIndex(pt => pt.o + pt.from < ins.t - 0.02 && pt.o + pt.to > ins.t + 0.02);
       if (k >= 0) { const pt = parts[k]; parts.splice(k, 1, { ...pt, to: ins.t - pt.o }, { ...pt, from: ins.t - pt.o }); }
     }
-    await Promise.all(pending.flatMap(i => [i.src, ...(i.data.logos || [])]).filter(Boolean).map(loadImg));
+    await Promise.all([...pending.flatMap(i => [i.src, ...(i.data.logos || [])]), ...snapCfg.teams.map(t => logoOf(t.name))].filter(Boolean).map(loadImg));
 
     // One decoder input per clip, shared by every part cut from it.
     const inputs = new Map();
@@ -2820,7 +2885,7 @@ $('#btnExport').onclick = async () => {
     let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
     // 자막 효과음: 켜져 있고 소리를 읽었고 자막이 있으면, 영상에 소리가 없어도 오디오 트랙을 만들어 넣어요.
-    const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? (snapCfg.captions || []).filter(c => c.text) : [];
+    const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? [...(snapCfg.captions || []).filter(c => c.text), ...snapInserts.filter(i => i.kind === 'intro')] : [];
     if (snapCfg.cap?.sfx !== false && !sfx.buf && (snapCfg.captions || []).some(c => c.text)) notes.push('효과음 파일을 읽지 못해 효과음 없이 저장');
     if (firstAudio || sfxCaps.length) {
       const keep = !cfg.ach && firstAudio;
