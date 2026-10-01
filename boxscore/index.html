@@ -106,7 +106,7 @@
     .stagerow .vcol .time { margin-top: 0; width: 100%; text-align: center; }
   }
   .speed button.on { border-color: var(--accent); color: var(--accent); }
-  .timeline { flex: none; position: relative; height: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; overflow: hidden; touch-action: none; }
+  .timeline { flex: none; position: relative; height: 36px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; overflow: hidden; touch-action: none; }
   .timeline.zoomed { cursor: grab; } .timeline.dragging { cursor: grabbing; }
   .timeline .tk { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.08); pointer-events: none; }
   .timeline .tk span { position: absolute; left: 3px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
@@ -115,7 +115,7 @@
   .tlmini .ph { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--danger); pointer-events: none; }
   .tlmini.off { visibility: hidden; }   /* 자리를 차지한 채 숨겨요 (확대할 때 타임라인이 아래로 밀리지 않게) */
   .tlzoom { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--muted); background: rgba(0,0,0,.45); padding: 1px 6px; border-radius: 6px; pointer-events: none; }
-  .timeline .mk { position: absolute; width: 2px; height: 9px; pointer-events: none; opacity: .85; }
+  .timeline .mk { position: absolute; width: 2px; height: 13px; pointer-events: none; opacity: .85; }
   .timeline .mk.a { top: 3px; background: var(--ta); }
   .timeline .mk.b { bottom: 3px; background: var(--tb); }
   .timeline .cb { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; opacity: .4; pointer-events: none; }
@@ -124,6 +124,14 @@
   .caps { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow: auto; }
   .timeline .mk.i { top: 0; bottom: 0; height: auto; width: 3px; background: #ffb86b; opacity: .95; }
   .ins { display: grid; grid-template-columns: 52px 62px 1fr 56px auto auto; gap: 4px; align-items: center; }
+  .mus { display: grid; grid-template-columns: 58px 1fr auto auto; gap: 4px; align-items: center; }
+  .mus .opts { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .mus .opts input { width: 54px; padding: 3px 5px; font-size: 12px; } .mus .opts select, .mus select.pick { padding: 3px 5px; font-size: 12px; min-width: 0; }
+  .mus select.pick { width: 100%; }
+  .mus + .mus { border-top: 1px solid var(--line); padding-top: 6px; }
+  .timeline .mk.m { top: 7px; height: 4px; background: #7be3a0; opacity: .9; border-radius: 2px; }
+  .bgms { display: flex; flex-direction: column; gap: 4px; }
+  .bgm-row { display: flex; align-items: center; gap: 6px; font-size: 12px; } .bgm-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .bgm-row .d { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; }
   .ins .k { font-size: 11px; color: var(--tb); white-space: nowrap; }
   .ins .t { font-family: ui-monospace, monospace; font-size: 12px; padding: 4px 2px; color: var(--muted); }
   .ins input { padding: 4px 6px; font-size: 12px; }
@@ -555,15 +563,26 @@
       <section>
         <h2>기록 카드 · 이미지 삽입 <span id="insCount"></span></h2>
         <div class="hint" style="margin-bottom:8px">영상 사이에 몇 초짜리 정지 화면을 끼워 넣어요. 기록 카드는 그 시점까지의 팀 기록(점수·FG%·3점·자유투·리바운드·어시스트·턴오버)으로 페이지가 직접 그려요. 미리보기에서는 그 지점에서 잠깐 멈춰 보여주고, 내보낸 영상에는 실제로 그 길이만큼 들어가요.</div>
-        <div class="btns" style="margin-bottom:6px"><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
+        <div class="btns" style="margin-bottom:6px"><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
         <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드·선수별 카드·이미지는 현재 위치에 들어가요. 선수별 기록 카드는 위에 두 팀 점수, 아래에 한 팀의 선수별 표가 나오고, 1팀 → 2팀 순서로 두 장이 이어서 들어가요. 매치업 카드는 영상을 멈추지 않고 그 위에 겹쳐서 양 팀 로고 패널이 가운데에서 펼쳐졌다가 접혀요 (팀 색·로고 사용, 영문 이름은 목록에서 입력). 시간은 목록에서 고칠 수 있어요.</div>
         <div class="caps" id="insList"></div>
         <div class="grid3" style="margin-top:10px">
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
           <div class="field"><label>매치업 가운데 색</label><input type="color" id="introColor" title="매치업 카드 가운데 띠 색"></div>
+
           <div class="field" style="grid-column:1 / -1"><label>팀 로고 (카드에 들어가요 · 팀 이름별로 기억)</label><div class="logos" id="logos"></div></div>
         </div>
         <input type="file" id="logoFile" accept="image/*" class="hidden">
+      </section>
+      <section>
+        <h2>배경음악 <span id="musCount"></span></h2>
+        <div class="hint" style="margin-bottom:8px">원하는 위치에 음악을 깔아요. 카드와 상관없이 따로 넣고, 영상 소리 위에 섞을지 영상 소리를 끄고 음악만 들리게 할지, 몇 초 동안, 어느 크기로, 끝나기 몇 초 전부터 작아질지 정해요. 미리보기에서도 들리고 내보낸 영상에도 들어가요. 그 자리에 카드가 있으면 카드가 나오는 시간도 음악 시간에 포함돼요.</div>
+        <div class="btns" style="margin-bottom:6px"><button id="btnMusAdd">음악 넣기 (현재 위치)</button></div>
+        <div class="caps" id="musList"></div>
+        <div class="field" style="margin-top:10px"><label>음악 보관함 (이 브라우저에 저장)</label>
+          <div class="bgms" id="bgmList"></div>
+          <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button id="bgmAdd" class="mini">음악 파일 추가</button><input type="file" id="bgmFile" accept="audio/*" multiple class="hidden"><span class="hint" id="bgmHint" style="margin:0">MP3·WAV·M4A, 파일당 15MB까지. 다른 컴퓨터에서 열면 보관함이 비어 있으니 다시 넣어주세요.</span></div>
+        </div>
       </section>
       <section>
         <h2>코멘트 자막 <span id="capCount"></span></h2>
@@ -711,20 +730,21 @@ const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
-const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor'];
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor', 'music'];
 const INTRO_COLOR = '#e8761a';
+const MUSIC_DEFAULT = { mode: 'mix', dur: 10, gain: 60, fade: 2 };   // 배경음악 기본값: 섞기 · 10초 · 60% · 끝 2초 전부터 페이드
 // 코멘트 자막 모양 기본값
 const CAP_DEFAULT = { pos: 'bc', width: 'fit', font: 28, bar: '#000000', alpha: 70, color: '#ffffff', dur: 4, fade: 0.5, sfx: true, sfxGain: 80 };
 function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR,
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT },
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
 function newGame() {
-  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], quarters: [], comments: [], inserts: [], played: {}, source: null, sb: defaultSb(), updated: Date.now() };
+  return { id: Date.now().toString(36), title: '', teams: [{ name: '왼쪽 팀', roster: [] }, { name: '오른쪽 팀', roster: [] }], events: [], quarters: [], comments: [], inserts: [], music: [], played: {}, source: null, sb: defaultSb(), updated: Date.now() };
 }
 function gameIndex() { return lsGet('mm-box:index') || []; }
 let game = null;
@@ -759,6 +779,7 @@ function loadGame(id) {
   game.quarters = game.quarters || [];
   game.comments = game.comments || [];
   game.inserts = game.inserts || [];
+  game.music = game.music || [];
   game.sb = Object.assign(defaultSb(), { trimStart: null, trimEnd: null, cuts: [] }, game.sb || {});
   game.sb.cap = { ...CAP_DEFAULT, ...(game.sb.cap || {}) };
   cutStart = null;
@@ -834,7 +855,7 @@ const player = {
   toggle() { if (hold) { cancelHold(true); return; } this.paused() ? this.play() : this.pause(); },
   seek(T) {
     if (typeof hold !== 'undefined' && hold) cancelHold(false);
-    lastTickT = T; capSeeked = true; endShown = false;
+    lastTickT = T; capSeeked = true; capSeekedMus = true; lastMusT = T; endShown = false;
     T = Math.max(0, Math.min(Math.max(0, this.duration() - 0.05), T));
     if (mode === 'yt') { ytReady && yt.seekTo(T, true); return; }
     if (mode !== 'file' || !clips.length) return;
@@ -974,7 +995,7 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
 let undoStack = [];
-let nextId = () => ([...game.events, ...game.quarters, ...game.comments, ...game.inserts].reduce((m, e) => Math.max(m, e.id), 0) + 1);
+let nextId = () => ([...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
   if (!who) { toast('먼저 선수를 고르세요.', true); return; }
@@ -1009,9 +1030,10 @@ $('#astBar').addEventListener('click', ev => {
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 });
 function undo() {
-  const all = [...game.events, ...game.quarters, ...game.comments, ...game.inserts];
+  const all = [...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music];
   const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
   if (id == null) return;
+  if (game.music.find(x => x.id === id)) { removeMusic(id); toast('되돌림: 배경음악'); return; }
   const ins = game.inserts.find(x => x.id === id);
   if (ins) { removeInsert(id); toast('되돌림: 삽입 카드'); return; }
   const cm = game.comments.find(x => x.id === id);
@@ -1308,6 +1330,7 @@ function renderMarkers() {
   h += game.quarters.map(q => `<div class="mk q" style="left:${pc(q.t)}" title="다음 쿼터"></div>`).join('');
   h += game.comments.filter(c => vis(c.t, c.dur)).map(c => `<div class="mk c" style="left:${pc(c.t)};width:${pc(Math.max(0.3 / tlZoom, c.dur))}" title="${esc(c.text)}"></div>`).join('');
   h += game.inserts.filter(i => vis(i.t)).map(i => `<div class="mk i" style="left:${pc(i.t)}" title="${esc(insLabel(i))}"></div>`).join('');
+  h += game.music.filter(m => vis(m.t, m.dur)).map(m => `<div class="mk m" style="left:${pc(m.t)};width:${pc(Math.max(0.3 / tlZoom, m.dur))}" title="♪ ${esc(bgmLib.find(b => b.id === m.bgm)?.name || '음악')}"></div>`).join('');
   if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${pc(offset(i + 1))}"></div>`).join('');
   $('#markers').innerHTML = h;
   const sb = game.sb, box = $('#trimBox');
@@ -1715,6 +1738,7 @@ function touch() {
   cfg.match = game.sb.match || `${game.teams[0].name} vs ${game.teams[1].name}`;
   cfg.captions = game.comments;
   cfg.inserts = game.inserts;
+  cfg.music = game.music;
 }
 function total() { return offset(clips.length); }
 function autoEvents() {
@@ -1839,6 +1863,7 @@ function editClips(fn) {
   const qs = game.quarters.map(q => ({ e: q, ...loc(q.t) }));
   const cms = game.comments.map(c => ({ e: c, ...loc(c.t) }));
   const inss = game.inserts.map(c => ({ e: c, ...loc(c.t) }));
+  const muss = game.music.map(c => ({ e: c, ...loc(c.t) }));
   const oldCuts = game.sb.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
   const oldTrim = ['trimStart', 'trimEnd'].map(k => game.sb[k] == null ? null : loc(game.sb[k]));
   fn();
@@ -1848,6 +1873,7 @@ function editClips(fn) {
   game.quarters = back(qs);
   game.comments = back(cms).sort((a, b) => a.t - b.t);
   game.inserts = back(inss).sort(insOrder);
+  game.music = back(muss).sort((a, b) => a.t - b.t);
   game.sb.cuts = normCuts(oldCuts.filter(c => {
     const ks = idx(c.s.key), ke = idx(c.e.key);
     return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
@@ -2389,7 +2415,7 @@ function shrinkImage(file, max, type = 'image/jpeg', q = 0.86) {
 // 전반 카드 자리: 두 번째 쿼터 넘김(3쿼터 시작) 시각, 없으면 현재 위치
 function halfTime() { const qs = sorted().filter(e => e.kind === 'q'); return qs.length >= 2 ? qs[1].t : null; }
 // 같은 시간의 카드 순서: 기록 카드·이미지 → 선수별 카드(1팀 → 2팀) → 넣은 순서
-const insOrder = (a, b) => a.t - b.t || (a.kind === 'box') - (b.kind === 'box') || (a.team || 0) - (b.team || 0) || a.id - b.id;
+const insOrder = (a, b) => a.t - b.t || (a.kind !== 'intro') - (b.kind !== 'intro') || (a.kind === 'box') - (b.kind === 'box') || (a.team || 0) - (b.team || 0) || a.id - b.id;
 // 현재 위치를 카드 시간으로: 영상 끝 근처면 정확히 끝으로 맞춰요 (반올림 때문에 끝을 넘어가면 내보내기에서 빠져요)
 const nearEnd = t => { const D = player.duration(); return !!D && t >= D - 0.1; };
 function insTime(raw) { const t = Math.round(raw * 100) / 100; return nearEnd(t) ? Math.round(player.duration() * 1000) / 1000 : t; }
@@ -2438,6 +2464,7 @@ function renderInserts() {
   </div>`).join('') : '<div class="hint">아직 넣은 카드가 없어요.</div>';
   $('#insDur').value = game.sb.insDur || 6;
   $('#introColor').value = game.sb.introColor || INTRO_COLOR;
+  renderBgmList(); renderMusic();
   $('#logos').innerHTML = [0, 1].map(i => { const n = game.teams[i].name, src = logoOf(n); return `<div class="logo" data-team="${i}"><span class="th" style="${src ? `background-image:url(${src})` : ''}">${src ? '' : '없음'}</span><span class="nm" title="${esc(n)}">${esc(n)}</span><button class="mini" data-act="up">올리기</button>${src ? '<button class="mini" data-act="rm">지우기</button>' : ''}</div>`; }).join('');
 }
 let logoTeam = 0;
@@ -2470,6 +2497,162 @@ $('#insList').addEventListener('change', ev => {
   if (ev.target.classList.contains('dur')) i.dur = Math.max(1, +ev.target.value || 6);
   save(); renderMarkers(); lastBoardKey = '';
 });
+
+// ---------- 배경음악 보관함 (IndexedDB에 파일 저장, 메모리에 디코딩) ----------
+let bgmLib = [];   // [{id, name, dur, buf}]
+const bgmBuf = id => bgmLib.find(m => m.id === id)?.buf || null;
+const bgmDB = {
+  open() { return new Promise((res, rej) => { if (!window.indexedDB) return rej(new Error('no idb')); const r = indexedDB.open('mm-box-media', 1); r.onupgradeneeded = () => r.result.createObjectStore('bgm', { keyPath: 'id', autoIncrement: true }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async run(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('bgm', mode), req = fn(tx.objectStore('bgm')); tx.oncomplete = () => { res(req?.result); db.close(); }; tx.onerror = () => rej(tx.error); }); },
+  all() { return this.run('readonly', st => st.getAll()); },
+  put(rec) { return this.run('readwrite', st => st.put(rec)); },
+  del(id) { return this.run('readwrite', st => st.delete(id)); },
+};
+async function loadBgm() {
+  let recs = [];
+  try { recs = (await bgmDB.all()) || []; } catch { $('#bgmHint').textContent = '이 브라우저에서는 음악을 저장할 수 없어요 (시크릿 창이거나 저장이 막혀 있어요).'; return; }
+  bgmLib = recs.map(r => ({ id: r.id, name: r.name, dur: r.dur || 0, buf: null }));
+  renderInserts();
+  for (const r of recs) {
+    try { const buf = await audioCtx().decodeAudioData(r.data.slice(0)); const m = bgmLib.find(m => m.id === r.id); if (m) { m.buf = buf; m.dur = buf.duration; } }
+    catch { const m = bgmLib.find(m => m.id === r.id); if (m) m.error = true; }
+  }
+  renderInserts();
+}
+function renderBgmList() {
+  $('#bgmList').innerHTML = bgmLib.length ? bgmLib.map(m => `<div class="bgm-row" data-id="${m.id}"><span class="nm" title="${esc(m.name)}">${esc(m.name)}</span><span class="d">${m.error ? '읽기 실패' : m.buf ? fmt(m.dur) : '읽는 중…'}</span><button class="mini" data-act="play">들어보기</button><button class="mini" data-act="rm">지우기</button></div>`).join('') : '<div class="hint" style="margin:0">아직 넣은 음악이 없어요. MP3·WAV·M4A 파일을 넣어주세요 (파일당 15MB까지).</div>';
+}
+$('#bgmAdd').addEventListener('click', () => $('#bgmFile').click());
+$('#bgmFile').addEventListener('change', async ev => {
+  const files = [...ev.target.files]; ev.target.value = '';
+  for (const f of files) {
+    if (f.size > 15 * 1024 * 1024) { toast(`${f.name}: 15MB가 넘어서 넣지 못했어요.`, true); continue; }
+    try {
+      const data = await f.arrayBuffer();
+      const buf = await audioCtx().decodeAudioData(data.slice(0));
+      const id = await bgmDB.put({ name: f.name, dur: buf.duration, data });
+      bgmLib.push({ id, name: f.name, dur: buf.duration, buf });
+      toast(`'${f.name}' (${fmt(buf.duration)}) 를 보관함에 넣었어요.`);
+    } catch (e) { toast(`${f.name}: ${e?.name === 'EncodingError' || e instanceof DOMException ? '이 브라우저가 읽지 못하는 소리 형식이에요. MP3나 WAV로 바꿔주세요.' : '저장하지 못했어요. ' + (e?.message || '')}`, true); }
+  }
+  renderInserts();
+});
+let bgmTry = null;
+$('#bgmList').addEventListener('click', async ev => {
+  const row = ev.target.closest('.bgm-row'); if (!row) return; const id = +row.dataset.id, act = ev.target.closest('[data-act]')?.dataset.act;
+  if (act === 'play') {
+    if (bgmTry) { bgmTry.stop(); bgmTry = null; ev.target.textContent = '들어보기'; return; }
+    const buf = bgmBuf(id); if (!buf) { toast('아직 읽는 중이에요.', true); return; }
+    const c = audioCtx(); if (c.state === 'suspended') c.resume();
+    const src = c.createBufferSource(); src.buffer = buf; const g = c.createGain(); g.gain.value = (musDefaults().gain || 60) / 100; src.connect(g).connect(c.destination); src.start(0, 0, 8);
+    bgmTry = src; ev.target.textContent = '멈춤'; src.onended = () => { if (bgmTry === src) { bgmTry = null; renderBgmList(); } };
+  } else if (act === 'rm') {
+    if (!confirm('이 음악을 보관함에서 지울까요? 이 음악을 고른 항목은 음악 없음이 돼요.')) return;
+    try { await bgmDB.del(id); } catch {}
+    bgmLib = bgmLib.filter(m => m.id !== id);
+    game.music.forEach(m => { if (m.bgm === id) m.bgm = null; });
+    save(); renderInserts();
+  }
+});
+// ---------- 배경음악 항목 (영상 위치에 따로 넣는 음악) ----------
+// {id, t, dur, bgm, mode:'mix'|'solo', gain(%), fade(초)} — 영상 시각 t부터 dur초. 카드가 그 자리에 있으면 카드 시간도 포함해 실제 시간으로 흘러요.
+const musDefaults = () => ({ ...MUSIC_DEFAULT, ...(game.sb.music || {}) });
+const musName = m => bgmLib.find(b => b.id === m.bgm)?.name || (m.bgm ? '(없는 음악)' : '음악 없음');
+function addMusic() {
+  if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
+  if (!bgmLib.length) { toast('먼저 아래 보관함에 음악 파일을 넣어주세요.', true); $('#bgmAdd').focus(); return; }
+  const d = musDefaults();
+  const m = { id: nextId(), t: Math.round(player.time() * 100) / 100, bgm: d.bgm && bgmLib.some(b => b.id === d.bgm) ? d.bgm : bgmLib[0].id, mode: d.mode, dur: +d.dur || 10, gain: +d.gain || 60, fade: +d.fade || 0 };
+  game.music.push(m); game.music.sort((a, b) => a.t - b.t); undoStack.push(m.id);
+  save(); renderMusic(); renderMarkers();
+  toast(`'${musName(m)}'을(를) ${fmt(m.t)}부터 ${m.dur}초 동안 깔아요. 재생해서 들어보세요.`);
+}
+function removeMusic(id) { game.music = game.music.filter(m => m.id !== id); if (musCur && musCur.id === id) musStop(); save(); renderMusic(); renderMarkers(); }
+$('#btnMusAdd').addEventListener('click', addMusic);
+function renderMusic() {
+  const list = game.music;
+  $('#musCount').textContent = list.length ? `(${list.length})` : '';
+  const opts = m => ['<option value="">음악 없음</option>', ...bgmLib.map(b => `<option value="${b.id}" ${m.bgm === b.id ? 'selected' : ''}>${esc(b.name)}</option>`), m.bgm && !bgmLib.some(b => b.id === m.bgm) ? `<option value="${m.bgm}" selected>(없는 음악)</option>` : ''].join('');
+  $('#musList').innerHTML = list.length ? list.map(m => `<div class="mus" data-id="${m.id}">
+    <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(m.t, true)}</button>
+    <select class="pick" title="보관함에서 고르기">${opts(m)}</select>
+    <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
+    <span class="opts">
+      <select class="mode" title="영상 소리와 어떻게 섞을지"><option value="mix" ${m.mode !== 'solo' ? 'selected' : ''}>영상 소리 위에 섞기</option><option value="solo" ${m.mode === 'solo' ? 'selected' : ''}>영상 소리 끄고 음악만</option></select>
+      <label>길이 <input type="number" class="dur" value="${m.dur}" min="1" max="600" step="0.5">초</label>
+      <label>볼륨 <input type="number" class="gain" value="${m.gain}" min="0" max="100" step="5">%</label>
+      <label>페이드 <input type="number" class="fade" value="${m.fade}" min="0" max="60" step="0.5">초 전부터</label>
+    </span>
+  </div>`).join('') : '<div class="hint">아직 넣은 음악이 없어요.</div>';
+}
+$('#musList').addEventListener('click', ev => {
+  const row = ev.target.closest('.mus'); if (!row) return;
+  const m = game.music.find(x => x.id === +row.dataset.id); if (!m) return;
+  const act = ev.target.closest('[data-act]')?.dataset.act;
+  if (act === 'seek') { player.seek(m.t); }
+  else if (act === 'here') { if (!mode) return; m.t = Math.round(player.time() * 100) / 100; game.music.sort((a, b) => a.t - b.t); save(); renderMusic(); renderMarkers(); }
+  else if (act === 'rm') removeMusic(m.id);
+});
+$('#musList').addEventListener('change', ev => {
+  const row = ev.target.closest('.mus'); if (!row) return;
+  const m = game.music.find(x => x.id === +row.dataset.id); if (!m) return;
+  const c = ev.target.classList;
+  if (c.contains('pick')) m.bgm = +ev.target.value || null;
+  if (c.contains('mode')) m.mode = ev.target.value;
+  if (c.contains('dur')) m.dur = Math.max(1, +ev.target.value || 10);
+  if (c.contains('gain')) m.gain = Math.max(0, Math.min(100, +ev.target.value || 0));
+  if (c.contains('fade')) m.fade = Math.max(0, Math.min(m.dur, +ev.target.value || 0));
+  game.sb.music = { bgm: m.bgm, mode: m.mode, dur: m.dur, gain: m.gain, fade: m.fade };   // 다음에 넣을 때 기본값
+  if (musCur && musCur.id === m.id) musStop();
+  save(); renderMarkers();   // 입력 중인 칸이 사라지지 않게 목록은 다시 그리지 않아요
+});
+// 미리보기: 재생 중 음악 시작점을 지나면 실제 시간으로 dur초 동안 틀어요 (카드로 멈춘 시간도 포함). 멈추거나 건너뛰면 끊어요.
+let musCur = null, lastMusT = 0;   // {id, src, g, gameEl}
+function musStop(fade = 0.2) {
+  if (!musCur) return;
+  const { src, g, solo } = musCur, c = audioCtx(); musCur = null;
+  try { g.gain.cancelScheduledValues(c.currentTime); g.gain.setValueAtTime(g.gain.value, c.currentTime); g.gain.linearRampToValueAtTime(0, c.currentTime + fade); src.stop(c.currentTime + fade + 0.01); } catch {}
+  if (solo) setVideoMuted(false);
+}
+function musStart(m, offset = 0) {
+  const buf = bgmBuf(m.bgm); if (!buf) return;
+  const c = audioCtx(); if (c.state === 'suspended') c.resume();
+  const dur = +m.dur || 10, left = Math.max(0.05, dur - offset), gain = (+m.gain || 0) / 100, fade = Math.min(left, +m.fade || 0);
+  const src = c.createBufferSource(); src.buffer = buf;
+  const g = c.createGain(); g.gain.setValueAtTime(gain, c.currentTime);
+  if (fade > 0) { g.gain.setValueAtTime(gain, c.currentTime + left - fade); g.gain.linearRampToValueAtTime(0, c.currentTime + left); }
+  src.connect(g).connect(c.destination); src.start(0, Math.min(offset, Math.max(0, buf.duration - 0.05)), left + 0.05);
+  musCur = { id: m.id, src, g, solo: m.mode === 'solo' };
+  if (m.mode === 'solo') setVideoMuted(true);
+  src.onended = () => { if (musCur && musCur.src === src) { musCur = null; if (m.mode === 'solo') setVideoMuted(false); } };
+}
+function setVideoMuted(on) { if (mode === 'file') video.muted = on; else if (mode === 'yt' && ytReady) (on ? yt.mute() : yt.unMute()); }
+function tickMusic(t) {
+  const running = hold ? true : (!player.paused() && !pendingSeek);
+  if (musCur && (!running || capSeekedMus)) musStop();
+  capSeekedMus = false;
+  if (running && !hold) {
+    const m = game.music.find(m => lastMusT < m.t && t >= m.t && t - m.t < 1 && m.bgm && bgmBuf(m.bgm));
+    if (m && !(musCur && musCur.id === m.id)) { musStop(0.05); musStart(m, 0); }
+  }
+  if (!hold) lastMusT = t;
+}
+let capSeekedMus = false;
+// 내보내기용: 음악을 출력 형식에 맞춰 dur초만큼(볼륨·페이드 적용) PCM으로
+const bgmPcmCache = new Map();
+async function musPCM(m, sr, ch) {
+  const buf = bgmBuf(m.bgm); if (!buf) return null;
+  const dur = +m.dur || 10, gain = (+m.gain || 0) / 100, fade = Math.min(dur, +m.fade || 0);
+  const key = `${m.bgm}|${sr}|${ch}|${dur}|${gain}|${fade}`;
+  if (bgmPcmCache.has(key)) return bgmPcmCache.get(key);
+  const len = Math.ceil(dur * sr), oc = new OfflineAudioContext(ch, len, sr);
+  const src = oc.createBufferSource(); src.buffer = buf; const g = oc.createGain();
+  g.gain.setValueAtTime(gain, 0); if (fade > 0) { g.gain.setValueAtTime(gain, dur - fade); g.gain.linearRampToValueAtTime(0, dur); }
+  src.connect(g).connect(oc.destination); src.start(0, 0, dur);
+  const out = await oc.startRendering();
+  const pcm = { len, data: Array.from({ length: ch }, (_, i) => out.getChannelData(i)) };
+  bgmPcmCache.set(key, pcm); return pcm;
+}
 
 let lastBoardKey = '', lastQ = '';
 function renderOverlay(st) {
@@ -2667,7 +2850,7 @@ function drawCaptions(ctx, W, H, list) {
 }
 // 미리보기에서 삽입 지점을 지나면 잠깐 멈추고 카드를 보여줘요 (내보낸 영상에서 들어갈 자리).
 let hold = null, lastTickT = 0;
-function cancelHold(resume) { if (!hold) return; const end = hold.end; hold = null; lastBoardKey = ''; if (resume && !end) player.play(); }
+function cancelHold(resume) { if (!hold) return; const end = hold.end; hold = null; lastBoardKey = ''; if (resume && !end) player.play(); else musStop(); }
 function showHold(list, end) { if (!list.length) return; player.pause(); hold = { ins: list[0], rest: list.slice(1), until: performance.now() + (+list[0].dur || 6) * 1000, end }; lastBoardKey = ''; }
 // 영상이 다 끝났을 때: 끝에 넣은 카드(최종 기록·선수별 카드)를 이어서 보여줘요. 재생은 다시 시작하지 않아요.
 let endShown = false;
@@ -2970,7 +3153,11 @@ $('#btnExport').onclick = async () => {
     // 자막 효과음: 켜져 있고 소리를 읽었고 자막이 있으면, 영상에 소리가 없어도 오디오 트랙을 만들어 넣어요.
     const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? [...(snapCfg.captions || []).filter(c => c.text), ...snapInserts.filter(i => i.kind === 'intro')] : [];
     if (snapCfg.cap?.sfx !== false && !sfx.buf && (snapCfg.captions || []).some(c => c.text)) notes.push('효과음 파일을 읽지 못해 효과음 없이 저장');
-    if (firstAudio || sfxCaps.length) {
+    // 배경음악: 내보낼 범위 안에서 시작하는 것만. 출력 시각은 그 자리에 도착했을 때 정해요 (카드 시간이 앞에 끼면 그만큼 밀려요).
+    const snapMusic = JSON.parse(JSON.stringify(game.music)).filter(m => m.t >= S - 1e-3 && m.t <= E + 0.05 && m.bgm && !cfg.cuts.some(c => m.t > c.s && m.t < c.e)).sort((a, b) => a.t - b.t);
+    const musicUsed = snapMusic.some(m => bgmBuf(m.bgm));
+    if (snapMusic.some(m => !bgmBuf(m.bgm))) notes.push('일부 배경음악을 보관함에서 찾지 못해 그 음악은 빼고 저장');
+    if (firstAudio || sfxCaps.length || musicUsed) {
       const keep = !cfg.ach && firstAudio;
       const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : (cfg.ach || 2);
       const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
@@ -2984,20 +3171,49 @@ $('#btnExport').onclick = async () => {
     // 효과음 PCM과 섞는 함수. data는 평면(planar) Float32Array(n×ch), gameStart는 그 조각의 첫 샘플의 경기 시각.
     const sfxBuf = audioSource && sfxCaps.length ? await sfxPCM(audioFormat.sampleRate, audioFormat.numberOfChannels) : null;
     const sfxGain = (snapCfg.cap?.sfxGain ?? 80) / 100;
-    const mixSfx = (data, n, ch, sr, gameStart) => {
-      if (!sfxBuf) return false;
+    // 영상 소리 위에 얹을 것들: 자막 효과음 + 매치업 카드 음악 (멈춤 카드의 음악은 emitCard에서 따로 넣어요)
+    const mixItems = [];
+    if (sfxBuf) for (const c of sfxCaps) mixItems.push({ t: c.t, len: sfxBuf.len, data: sfxBuf.data, gain: sfxGain });
+    // 배경음악은 출력 시각(out) 기준. 아직 자리가 안 정해진 것은 out = null.
+    const musItems = [];
+    if (audioSource) for (const m of snapMusic) { const pcm = await musPCM(m, audioFormat.sampleRate, audioFormat.numberOfChannels); if (pcm) musItems.push({ m, out: null, len: pcm.len, data: pcm.data, solo: m.mode === 'solo' }); }
+    const placeMusic = (gameT0, gameT1, outT0) => { for (const it of musItems) if (it.out == null && it.m.t >= gameT0 - 0.02 && it.m.t < gameT1) it.out = outT0 + Math.max(0, it.m.t - gameT0); };
+    // data(평면 Float32Array n×ch, 출력 시각 outStart부터)에 배경음악을 섞어요. '음악만'이면 그 구간의 원래 소리를 0.15초 램프로 끄고 섞어요.
+    const sr0 = audioFormat?.sampleRate || 48000;
+    const mixMusic = (data, n, ch, sr, outStart) => {
       let hit = false;
-      for (const c of sfxCaps) {
-        const i0 = Math.round((c.t - gameStart) * sr);
-        if (i0 >= n || i0 + sfxBuf.len <= 0) continue;
-        const a = Math.max(0, i0), z = Math.min(n, i0 + sfxBuf.len);
-        for (let k = 0; k < ch; k++) { const src = sfxBuf.data[Math.min(k, sfxBuf.data.length - 1)], off = k * n; for (let i = a; i < z; i++) data[off + i] += src[i - i0] * sfxGain; }
+      for (const it of musItems) {
+        if (it.out == null) continue;
+        const i0 = Math.round((it.out - outStart) * sr);
+        if (i0 >= n || i0 + it.len <= 0) continue;
+        const a = Math.max(0, i0), z = Math.min(n, i0 + it.len), ramp = Math.round(0.15 * sr);
+        for (let k = 0; k < ch; k++) {
+          const src = it.data[Math.min(k, it.data.length - 1)], off = k * n;
+          for (let i = a; i < z; i++) {
+            const j = i - i0;
+            if (it.solo) { const e = Math.min(1, j / ramp, (it.len - j) / ramp); data[off + i] *= 1 - Math.max(0, e); }
+            data[off + i] += src[j];
+          }
+        }
         hit = true;
       }
       if (hit) for (let i = 0; i < data.length; i++) data[i] = data[i] > 1 ? 1 : data[i] < -1 ? -1 : data[i];
       return hit;
     };
-    const sfxNear = (gameStart, len) => !!sfxBuf && sfxCaps.some(c => c.t < gameStart + len && c.t + sfxBuf.len / audioFormat.sampleRate > gameStart);
+    const musicNear = (outStart, len) => musItems.some(it => it.out != null && it.out < outStart + len && it.out + it.len / sr0 > outStart);
+    const mixSfx = (data, n, ch, sr, gameStart) => {
+      let hit = false;
+      for (const m of mixItems) {
+        const i0 = Math.round((m.t - gameStart) * sr);
+        if (i0 >= n || i0 + m.len <= 0) continue;
+        const a = Math.max(0, i0), z = Math.min(n, i0 + m.len);
+        for (let k = 0; k < ch; k++) { const src = m.data[Math.min(k, m.data.length - 1)], off = k * n; for (let i = a; i < z; i++) data[off + i] += src[i - i0] * m.gain; }
+        hit = true;
+      }
+      if (hit) for (let i = 0; i < data.length; i++) data[i] = data[i] > 1 ? 1 : data[i] < -1 ? -1 : data[i];
+      return hit;
+    };
+    const sfxNear = (gameStart, len) => mixItems.some(m => m.t < gameStart + len && m.t + m.len / audioFormat.sampleRate > gameStart);
     await output.start();
     const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
 
@@ -3022,11 +3238,14 @@ $('#btnExport').onclick = async () => {
         else { const ts = Math.max(base + i * dt, lastV + 0.001); await videoSource.add(ts, dt); lastV = ts; }
       }
       if (audioSource) {
+        // 무음 위에 (이 자리에 깔린) 배경음악만 얹어요.
         const { sampleRate: sr, numberOfChannels: ch } = audioFormat;
+        placeMusic(ins.t, ins.t + 1e-6, base);
         let cur = Math.max(lastA, base); const end = base + dur;
         while (cur < end - 1e-4) {
-          const len = Math.min(0.5, end - cur), n = Math.round(len * sr);
-          const smp = new MB.AudioSample({ data: new Float32Array(n * ch), format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: cur });
+          const len = Math.min(0.5, end - cur), n = Math.round(len * sr), data = new Float32Array(n * ch);
+          mixMusic(data, n, ch, sr, cur);
+          const smp = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: cur });
           await audioSource.add(smp); smp.close();
           cur += n / sr;
         }
@@ -3080,6 +3299,7 @@ $('#btnExport').onclick = async () => {
       const audioJob = (async () => {
         if (!audioSource) return;
         const { sampleRate: sr, numberOfChannels: ch } = audioFormat;
+        placeMusic(o + from, o + to, base);
         if (!at) {
           // 소리 없는 영상: 무음을 채우고 그 위에 효과음만 얹어요.
           for (let cur = from; cur < to - 1e-4;) {
@@ -3087,6 +3307,7 @@ $('#btnExport').onclick = async () => {
             const len = Math.min(0.5, to - cur), n = Math.round(len * sr), data = new Float32Array(n * ch);
             mixSfx(data, n, ch, sr, o + cur);
             const ts = Math.max(base + (cur - from), lastA);
+            mixMusic(data, n, ch, sr, ts);
             const smp = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: ts });
             await audioSource.add(smp); smp.close();
             lastA = ts + n / sr; cur += n / sr;
@@ -3102,11 +3323,13 @@ $('#btnExport').onclick = async () => {
           const gameStart = o + (s.timestamp - t0);
           const ts = base + (s.timestamp - t0) - from;
           if (ts < lastA - 0.02) { s.close(); continue; }
-          if (sfxNear(gameStart, s.duration)) {
-            // 이 조각에 자막 시작이 걸쳐 있으면 효과음을 섞은 새 조각으로 바꿔요.
+          const outTs = Math.max(ts, lastA);
+          if (sfxNear(gameStart, s.duration) || musicNear(outTs, s.duration)) {
+            // 이 조각에 자막 효과음이나 배경음악이 걸쳐 있으면 섞은 새 조각으로 바꿔요.
             const n = s.numberOfFrames, data = new Float32Array(n * ch);
             for (let k = 0; k < ch; k++) s.copyTo(data.subarray(k * n, (k + 1) * n), { planeIndex: k, format: 'f32-planar' });
             mixSfx(data, n, ch, sr, gameStart);
+            mixMusic(data, n, ch, sr, outTs);
             const mixed = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: s.timestamp });
             s.close(); s = mixed;
           }
@@ -3232,7 +3455,7 @@ function tick() {
     checkInserts(player.time());
     renderLive();
     const t = player.time(), D = player.duration();
-    highlightCap(t); tickSfx(t);
+    highlightCap(t); tickSfx(t); tickMusic(t);
     const tl = `${fmt(t, 2)} / ${fmt(D)}`;
     if (tl !== lastTimeLabel) { lastTimeLabel = tl; $('#timeLabel').textContent = tl; }
     renderPlayhead(t, D);
@@ -3254,7 +3477,7 @@ setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 window.addEventListener('pagehide', flushSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 loadGame(lsGet('mm-box:last'));
-loadSfx();
+loadSfx(); loadBgm();
 setMode(opts.mode);
 requestAnimationFrame(tick);
 </script>
