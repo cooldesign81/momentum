@@ -47,7 +47,7 @@
   header .yt-in input { width: 100%; min-width: 0; }
   /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
   @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
-  @media (max-width: 1350px) { header #btnUndo kbd, header .src { display: none; } }
+  @media (max-width: 1350px) { header #btnUndo kbd, header #btnRedo kbd, header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
@@ -322,6 +322,7 @@
     <div class="modebar">
       <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="grid">표</button><button data-mode="pick">선수 선택</button></span>
       <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
+      <button id="btnRedo" class="mini">앞돌리기 <kbd>Ctrl+Y</kbd></button>
     </div>
     <div class="yt-in">
       <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
@@ -558,6 +559,7 @@
           </div>
           <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="sbSize" min="15" max="55" step="1"></div>
           <label class="check" style="margin-bottom:8px" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="sbFlash"> 득점 강조</label>
+          <label class="check" style="margin-bottom:8px" title="아래 '기록 카드' 칸의 팀 로고를 점수판 팀 이름 옆에 보여줘요"><input type="checkbox" id="sbLogo"> 팀 로고 표시</label>
         </div>
       </section>
       <section>
@@ -730,7 +732,7 @@ const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
-const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor', 'music'];
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor', 'music', 'logo'];
 const INTRO_COLOR = '#e8761a';
 const MUSIC_DEFAULT = { mode: 'mix', dur: 10, gain: 60, fade: 2 };   // 배경음악 기본값: 섞기 · 10초 · 60% · 끝 2초 전부터 페이드
 // 코멘트 자막 모양 기본값
@@ -739,7 +741,7 @@ function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT },
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: true,
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
@@ -784,7 +786,7 @@ function loadGame(id) {
   game.sb.cap = { ...CAP_DEFAULT, ...(game.sb.cap || {}) };
   cutStart = null;
   touch();
-  undoStack = [];
+  undoStack = []; redoStack = [];
   selected = null; astPending = null;
   renderAll();
 }
@@ -994,7 +996,8 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 // ---------- 입력 ----------
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
-let undoStack = [];
+let undoStack = [], redoStack = [];   // redoStack: 되돌린 항목 {kind, obj} — 새 입력을 하면 비워요
+const pushUndo = id => { undoStack.push(id); redoStack = []; };
 let nextId = () => ([...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
@@ -1003,7 +1006,7 @@ function record(k, who = selected) {
   const e = { id: nextId(), t: Math.round(t * 10) / 10, team: who.team, player: who.name, k };
   game.events.push(e);
   game.events.sort((a, b) => a.t - b.t || a.id - b.id);
-  undoStack.push(e.id);
+  pushUndo(e.id);
   if (k !== 'ast') clearAst();
   toast(`${who.name} · ${STAT[k].short}`);
   if (opts.askAst && opts.mode === 'pick' && (k === 'p2' || k === 'p3')) askAssist(who, e.t);
@@ -1025,7 +1028,7 @@ $('#astBar').addEventListener('click', ev => {
   if (!name) return;
   const e = { id: nextId(), t: p.t, team: p.team, player: name, k: 'ast' };
   game.events.push(e); game.events.sort((a, b) => a.t - b.t || a.id - b.id);
-  undoStack.push(e.id);
+  pushUndo(e.id);
   toast(`${name} · 어시스트`);
   save(); renderEntry(); renderLog(); renderBox(); renderMarkers();
 });
@@ -1033,17 +1036,31 @@ function undo() {
   const all = [...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music];
   const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
   if (id == null) return;
-  if (game.music.find(x => x.id === id)) { removeMusic(id); toast('되돌림: 배경음악'); return; }
+  const keep = (kind, obj) => redoStack.push({ kind, obj: JSON.parse(JSON.stringify(obj)) });
+  const mu = game.music.find(x => x.id === id);
+  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악 (Ctrl+Y로 다시)'); return; }
   const ins = game.inserts.find(x => x.id === id);
-  if (ins) { removeInsert(id); toast('되돌림: 삽입 카드'); return; }
+  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드 (Ctrl+Y로 다시)'); return; }
   const cm = game.comments.find(x => x.id === id);
-  if (cm) { removeComment(id); toast('되돌림: 코멘트'); return; }
+  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트 (Ctrl+Y로 다시)'); return; }
   const q = game.quarters.find(x => x.id === id);
-  if (q) { removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
+  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터 (Ctrl+Y로 다시)'); return; }
   const e = game.events.find(x => x.id === id);
   if (!e) return undo();
+  keep('event', e);
   removeEvent(id);
-  toast(`되돌림: ${e.player} · ${STAT[e.k].short}`);
+  toast(`되돌림: ${e.player} · ${STAT[e.k].short} (Ctrl+Y로 다시)`);
+}
+// 앞돌리기: 마지막으로 되돌린 항목을 다시 넣어요 (되돌린 뒤 새 입력이 없을 때만).
+function redo() {
+  const r = redoStack.pop();
+  if (!r) { toast('앞돌릴 게 없어요.'); return; }
+  const o = r.obj;
+  if (r.kind === 'event') { game.events.push(o); game.events.sort((a, b) => a.t - b.t || a.id - b.id); undoStack.push(o.id); save(); renderEntry(); renderLog(); renderBox(); renderMarkers(); toast(`다시: ${o.player} · ${STAT[o.k].short}`); return; }
+  if (r.kind === 'quarter') { game.quarters.push(o); game.quarters.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderMarkers(); renderLog(); lastBoardKey = ''; toast('다시: 다음 쿼터'); return; }
+  if (r.kind === 'comment') { game.comments.push(o); game.comments.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; toast('다시: 코멘트'); return; }
+  if (r.kind === 'insert') { game.inserts.push(o); game.inserts.sort(insOrder); undoStack.push(o.id); save(); renderInserts(); renderMarkers(); lastBoardKey = ''; toast('다시: 삽입 카드'); return; }
+  if (r.kind === 'music') { game.music.push(o); game.music.sort((a, b) => a.t - b.t); undoStack.push(o.id); save(); renderMusic(); renderMarkers(); toast('다시: 배경음악'); }
 }
 function removeEvent(id) {
   game.events = game.events.filter(e => e.id !== id);
@@ -1434,7 +1451,7 @@ $('#keepSel').addEventListener('change', ev => { opts.keepSel = ev.target.checke
 $('#gameSel').addEventListener('change', ev => loadGame(ev.target.value));
 function startNewGame(src) {
   flushSave();
-  game = newGame(); game.played = {}; undoStack = []; selected = null; clearAst();
+  game = newGame(); game.played = {}; undoStack = []; redoStack = []; selected = null; clearAst();
   cutStart = null;
   game.source = src;
   save(); renderAll();
@@ -1603,7 +1620,7 @@ function clearRecords() {
   const n = game.events.length + game.quarters.length;
   if (!n) { toast('지울 기록이 없어요.'); return; }
   if (!confirm(`'${gameTitle()}' 경기의 기록 ${game.events.length}개${game.quarters.length ? `와 쿼터 표시 ${game.quarters.length}개` : ''}를 모두 지울까요? 되돌릴 수 없어요.\n(팀·로스터·영상 설정은 그대로 남아요)`)) return;
-  game.events = []; game.quarters = []; game.played = {}; undoStack = []; selected = null; clearAst();
+  game.events = []; game.quarters = []; game.played = {}; undoStack = []; redoStack = []; selected = null; clearAst();
   save(); renderAll(); toast('기록을 모두 지웠어요.');
 }
 $('#btnClear').addEventListener('click', clearRecords);
@@ -1683,6 +1700,7 @@ document.addEventListener('drop', ev => {
   else if (txt && ytIdOf(txt)) { $('#ytUrl').value = txt; openYt(txt); }
 });
 $('#btnUndo').addEventListener('click', ev => { undo(); ev.currentTarget.blur(); });
+$('#btnRedo').addEventListener('click', ev => { redo(); ev.currentTarget.blur(); });
 $('#ytNoticeClose').addEventListener('click', () => { $('#ytNotice').classList.add('hidden'); fitStage(); });
 $('#btnPlay').addEventListener('click', () => player.toggle());
 $('#shield').addEventListener('click', () => player.toggle());
@@ -1706,6 +1724,7 @@ $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('[data-
 
 document.addEventListener('keydown', ev => {
   if (ev.target.closest('input, textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement?.tagName === 'BUTTON') document.activeElement.blur(); player.toggle(); return; }
@@ -1782,7 +1801,7 @@ function addQuarter() {
   const t = Math.round(Math.max(0, player.time() - (+opts.lag || 0)) * 10) / 10;
   const q = { id: nextId(), t };
   game.quarters.push(q);
-  undoStack.push(q.id);
+  pushUndo(q.id);
   save();
   toast(`다음 쿼터 → ${quarterLabel(stateAt(t).q)}`);
   renderMarkers(); renderLog();
@@ -1880,7 +1899,7 @@ function editClips(fn) {
   }).map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
   // 내보낼 시작·끝도 자기 영상을 따라가요. 그 영상을 뺐으면 지워요.
   ['trimStart', 'trimEnd'].forEach((k, i) => { const x = oldTrim[i]; game.sb[k] = x && idx(x.key) >= 0 ? offset(idx(x.key)) + x.t : null; });
-  cutStart = null; undoStack = [];
+  cutStart = null; undoStack = []; redoStack = [];
   game.source = { type: 'file', names: clips.map(c => c.name) };
   const k = idx(key0);
   cur = -1;
@@ -2001,6 +2020,14 @@ function scoreBadge(ctx, st, i, x, y, u, align, size = 18) {
   ctx.fillText(txt, bx + tw / 2, y + 1 * u);
   ctx.restore();
 }
+// 팀 로고(기록 카드 칸에서 올린 것)를 size 정사각형 안에 맞춰 그려요. 옵션이 꺼져 있거나 로고가 없으면 0을 돌려줘요 (이름이 그 자리로 당겨져요).
+function boardLogo(ctx, i, x, y, size) {
+  if (cfg.logo === false) return 0;
+  const img = imgFor(logoOf(cfg.teams[i].name)); if (!img) return 0;
+  const sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
+  ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
+  return size;
+}
 function foulDots(ctx, st, i, x, y, w, u, { on = '#f7d54a', off = 'rgba(255,255,255,.22)', h = 5 } = {}) {
   const n = foulCount(), gap = 3 * u;
   const seg = (w - gap * (n - 1)) / n;
@@ -2036,10 +2063,11 @@ function drawBar(ctx, W, H, st, u) {
     ctx.textAlign = 'center';
     ctx.font = `700 ${56 * u}px ${NUM}`;
     ctx.fillText(String(st.score[i]), sx + sw / 2, y + h * u / 2 + 3 * u);
+    const lw = boardLogo(ctx, i, tx + 10 * u, y + 7 * u, 52 * u), nx = tx + (lw ? 10 * u + lw + 8 * u : 16 * u);
     ctx.fillStyle = teamInk(i);
     ctx.textAlign = 'left';
-    fitText(ctx, cfg.teams[i].name, 700, 28 * u, teamW * u - sw - 26 * u);
-    ctx.fillText(cfg.teams[i].name, tx + 16 * u, y + h * u / 2 + 1 * u);
+    fitText(ctx, cfg.teams[i].name, 700, 28 * u, tx + teamW * u - sw - 10 * u - nx);
+    ctx.fillText(cfg.teams[i].name, nx, y + h * u / 2 + 1 * u);
     // foul strip
     const fy = y + h * u;
     ctx.fillStyle = '#15181f';
@@ -2106,10 +2134,11 @@ function drawStack(ctx, W, H, st, u) {
     ctx.textAlign = 'center';
     ctx.font = `700 ${48 * u}px ${NUM}`;
     ctx.fillText(String(st.score[i]), sx + sw / 2, ry + row / 2 + 3 * u);
+    const lw = boardLogo(ctx, i, x + 10 * u, ry + 5 * u, row - 10 * u), nx = x + (lw ? 10 * u + lw + 8 * u : 16 * u);
     ctx.textAlign = 'left';
     ctx.fillStyle = teamInk(i);
-    fitText(ctx, cfg.teams[i].name, 700, 26 * u, w - sw - 130 * u);
-    ctx.fillText(cfg.teams[i].name, x + 16 * u, ry + row / 2 + 1 * u);
+    fitText(ctx, cfg.teams[i].name, 700, 26 * u, x + w - sw - 114 * u - nx);
+    ctx.fillText(cfg.teams[i].name, nx, ry + row / 2 + 1 * u);
     const fw = 90 * u, fx = sx - fw - 14 * u;
     ctx.fillStyle = 'rgba(0,0,0,.35)';
     rr(ctx, fx - 6 * u, ry + row / 2 - 4 * u, fw + 12 * u, 20 * u, 4 * u); ctx.fill();
@@ -2157,17 +2186,21 @@ function drawGlass(ctx, W, H, st, u) {
     ctx.fillText(String(st.score[i]), scx, y + h / 2 + 3 * u);
     // name + colour chip
     const nameEdge = scx + dir * (sw / 2 + 10 * u);
-    const outer = i === 0 ? x + 28 * u : x + w - 28 * u;
-    const avail = Math.abs(nameEdge - outer) - 22 * u;
+    const outer = i === 0 ? x + 22 * u : x + w - 22 * u;
+    const ls = h - 16 * u, lw = boardLogo(ctx, i, i === 0 ? outer : outer - ls, y + 8 * u, ls);   // 로고가 있으면 색 칩 대신
+    const inner = outer - dir * (lw ? lw + 8 * u : 0);
+    const avail = Math.abs(nameEdge - inner) - (lw ? 6 * u : 22 * u);
     ctx.textAlign = i === 0 ? 'left' : 'right';
     fitText(ctx, cfg.teams[i].name, 700, 26 * u, avail);
     ctx.fillStyle = '#fff';
-    const tx = i === 0 ? outer + 18 * u : outer - 18 * u;
+    const tx = lw ? inner : (i === 0 ? outer + 18 * u : outer - 18 * u);
     ctx.fillText(cfg.teams[i].name, tx, y + h / 2 + 1 * u);
-    ctx.fillStyle = c;
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1 * u;
-    const chipX = i === 0 ? outer : outer - 10 * u;
-    rr(ctx, chipX, y + h / 2 - 12 * u, 10 * u, 24 * u, 3 * u); ctx.fill(); ctx.stroke();
+    if (!lw) {
+      ctx.fillStyle = c;
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1 * u;
+      const chipX = i === 0 ? outer : outer - 10 * u;
+      rr(ctx, chipX, y + h / 2 - 12 * u, 10 * u, 24 * u, 3 * u); ctx.fill(); ctx.stroke();
+    }
     // fouls under the pill
     const fw = 150 * u;
     const fx = i === 0 ? cx - cw / 2 - fw - 20 * u : cx + cw / 2 + 20 * u;
@@ -2217,10 +2250,11 @@ function drawClassic(ctx, W, H, st, s) {
     const sw = ctx.measureText(score).width;
     ctx.fillText(score, bx + bw - 4 * s, by + h2 / 2 + 3 * s);
 
+    const lw = boardLogo(ctx, i, bx + 6 * s, by + 8 * s, h2 - 16 * s), nx = bx + (lw ? 6 * s + lw + 8 * s : 4 * s);
     ctx.fillStyle = teamInk(i);
     ctx.textAlign = 'left';
-    fitText(ctx, cfg.teams[i].name, 400, 42 * s, bw - sw - 12 * s);
-    ctx.fillText(cfg.teams[i].name, bx + 4 * s, by + h2 / 2 + 2 * s);
+    fitText(ctx, cfg.teams[i].name, 400, 42 * s, bx + bw - sw - 8 * s - nx);
+    ctx.fillText(cfg.teams[i].name, nx, by + h2 / 2 + 2 * s);
 
     const n = foulCount();
     const fy = by + h2 + pad * 0.6;
@@ -2426,7 +2460,7 @@ function addInsert(kind, extra = {}, quiet = false) {
   const t = at != null ? at : insTime(player.time());
   const ins = { id: nextId(), t, dur: kind === 'intro' ? 4 : +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : '', ...extra };
   game.inserts.push(ins); game.inserts.sort(insOrder);
-  undoStack.push(ins.id);
+  pushUndo(ins.id);
   save(); renderInserts(); renderMarkers(); lastBoardKey = '';
   if (quiet) return ins;
   if (kind === 'intro') { toast(`매치업 카드를 ${fmt(t)}부터 ${ins.dur}초 동안 영상 위에 보여줘요. 재생해서 확인해 보세요.`); player.pause(); player.seek(t + 0.8); return ins; }
@@ -2563,7 +2597,7 @@ function addMusic() {
   if (!bgmLib.length) { toast('먼저 아래 보관함에 음악 파일을 넣어주세요.', true); $('#bgmAdd').focus(); return; }
   const d = musDefaults();
   const m = { id: nextId(), t: Math.round(player.time() * 100) / 100, bgm: d.bgm && bgmLib.some(b => b.id === d.bgm) ? d.bgm : bgmLib[0].id, mode: d.mode, dur: +d.dur || 10, gain: +d.gain || 60, fade: +d.fade || 0 };
-  game.music.push(m); game.music.sort((a, b) => a.t - b.t); undoStack.push(m.id);
+  game.music.push(m); game.music.sort((a, b) => a.t - b.t); pushUndo(m.id);
   save(); renderMusic(); renderMarkers();
   toast(`'${musName(m)}'을(를) ${fmt(m.t)}부터 ${m.dur}초 동안 깔아요. 재생해서 들어보세요.`);
 }
@@ -2662,7 +2696,7 @@ function renderOverlay(st) {
   if (!w || !h) return;
   const fl = [0, 1].map(i => Math.round(flash(st, i) * 20));
   const caps = [...activeCaptions(st.t), ...previewCaption()], intro = activeIntro(st.t);
-  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}|${intro ? `in${intro.ins.id}:${Math.round(intro.a * 60)}:${imgReadyKey()}` : ''}`;
+  const key = `${w}x${h}|${rev}|${cfg.show}|${st.q}|${st.score}|${st.fouls}|${fl}|${caps.map(x => `${x.c.id}:${Math.round(x.a * 24)}:${Math.round(x.rise * 24)}`).join(',')}|${cfg.logo !== false && cfg.show ? 'lg' + imgReadyKey() : ''}|${hold ? 'hold' + hold.ins.id + imgReadyKey() : ''}|${intro ? `in${intro.ins.id}:${Math.round(intro.a * 60)}:${imgReadyKey()}` : ''}`;
   if (key === lastBoardKey) return;
   lastBoardKey = key;
   if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
@@ -2904,7 +2938,7 @@ function renderVideoPane() {
   $('#sbShow').checked = sb.show !== false;
   $('#sbMatch').value = sb.match || ''; $('#sbMatch').placeholder = `${game.teams[0].name} vs ${game.teams[1].name}`;
   $('#sbStartQ').value = sb.startQ; $('#sbFoulSlots').value = sb.foulSlots;
-  $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash;
+  $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash; $('#sbLogo').checked = sb.logo !== false;
   $('#sbSize').value = sb.size; $('#sizeVal').textContent = sb.size;
   $('#autoQ').checked = sb.autoQ !== false; $('#skipCuts').checked = sb.skipCuts !== false;
   $('#trimStart').value = sb.trimStart != null ? fmt(sb.trimStart, true) : '';
@@ -2928,7 +2962,7 @@ function readVideoPane() {
   sb.match = $('#sbMatch').value;
   sb.startQ = +$('#sbStartQ').value;
   sb.foulSlots = Math.min(10, Math.max(1, +$('#sbFoulSlots').value || 5));
-  sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked;
+  sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked; sb.logo = $('#sbLogo').checked;
   sb.size = +$('#sbSize').value; $('#sizeVal').textContent = sb.size;
   sb.autoQ = $('#autoQ').checked; sb.skipCuts = $('#skipCuts').checked;
   sb.trimStart = parseTime($('#trimStart').value); sb.trimEnd = parseTime($('#trimEnd').value);
@@ -2960,7 +2994,7 @@ function addCaption() {
   const t = Math.round((capAnchor ?? player.time()) * 10) / 10;
   const c = { id: nextId(), t, dur: +game.sb.cap.dur || 4, text };
   game.comments.push(c); game.comments.sort((a, b) => a.t - b.t);
-  undoStack.push(c.id);
+  pushUndo(c.id);
   $('#capText').value = ''; setCapAnchor(null);
   save(); renderCaps(); renderMarkers(); lastBoardKey = '';
   toast(`코멘트 넣음 · ${fmt(t)} "${text.slice(0, 20)}${text.length > 20 ? '…' : ''}"`);
