@@ -559,8 +559,14 @@
           </div>
           <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="sbSize" min="15" max="55" step="1"></div>
           <label class="check" style="margin-bottom:8px" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="sbFlash"> 득점 강조</label>
-          <div class="field"><label>팀 로고</label><select id="sbLogo" title="아래 '기록 카드' 칸의 팀 로고를 점수판에 보여줘요"><option value="back">팀 칸 배경에 겹치기</option><option value="side">이름 옆에 작게</option><option value="off">안 보이기</option></select></div>
-          <div class="hint" id="logoStatus" style="grid-column:1 / -1;margin:-4px 0 6px"></div>
+          <div class="field"><label>팀 로고</label><select id="sbLogo" title="점수판에 팀 로고를 어떻게 보여줄지"><option value="back">팀 칸 배경에 겹치기</option><option value="side">이름 옆에 작게</option><option value="off">안 보이기</option></select></div>
+          <div class="field" id="logoScaleBox"><label>로고 크기 <span id="logoScaleVal"></span>%</label><input type="range" id="logoScale" min="40" max="250" step="5"></div>
+          <div class="field" id="logoAlphaBox"><label>로고 진하기 <span id="logoAlphaVal"></span>%</label><input type="range" id="logoAlpha" min="10" max="100" step="5"></div>
+          <div class="field" style="grid-column:1 / -1" id="sbLogoBox"><label>점수판용 로고 (작게 보여도 알아볼 수 있는 단순한 로고 · 팀 이름별로 기억)</label>
+            <div class="logos" id="sbLogos"></div>
+            <div class="hint" id="logoStatus" style="margin-top:4px"></div>
+          </div>
+          <input type="file" id="sbLogoFile" accept="image/*" class="hidden">
         </div>
       </section>
       <section>
@@ -573,7 +579,7 @@
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
           <div class="field"><label>매치업 가운데 색</label><input type="color" id="introColor" title="매치업 카드 가운데 띠 색"></div>
 
-          <div class="field" style="grid-column:1 / -1"><label>팀 로고 (카드에 들어가요 · 팀 이름별로 기억)</label><div class="logos" id="logos"></div></div>
+          <div class="field" style="grid-column:1 / -1"><label>팀 로고 (기록 카드·매치업 카드에 들어가요 · 팀 이름별로 기억 · 점수판 로고는 점수판 설정에서 따로)</label><div class="logos" id="logos"></div></div>
         </div>
         <input type="file" id="logoFile" accept="image/*" class="hidden">
       </section>
@@ -733,7 +739,7 @@ const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
 // 점수판·영상 편집 설정 (경기마다 저장). 모양과 내보내기 설정은 마지막에 쓴 것을 새 경기에 이어 써요.
 const SB_LAST = 'mm-box:sb-last';
-const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor', 'music', 'logo'];
+const SB_CARRY = ['style', 'pos', 'size', 'flash', 'foulSlots', 'show', 'quality', 'format', 'res', 'fps', 'vcodec', 'mbps', 'abr', 'ach', 'skipCuts', 'autoQ', 'cap', 'insDur', 'introColor', 'music', 'logo', 'logoScale', 'logoAlpha'];
 const INTRO_COLOR = '#e8761a';
 const MUSIC_DEFAULT = { mode: 'mix', dur: 10, gain: 60, fade: 2 };   // 배경음악 기본값: 섞기 · 10초 · 60% · 끝 2초 전부터 페이드
 // 코멘트 자막 모양 기본값
@@ -742,7 +748,7 @@ function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: 'back',
+    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: 'back', logoScale: 100, logoAlpha: 35,
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
@@ -2026,16 +2032,17 @@ function scoreBadge(ctx, st, i, x, y, u, align, size = 18) {
 const logoMode = sb => sb.logo === false || sb.logo === 'off' ? 'off' : sb.logo === 'side' ? 'side' : 'back';
 function boardLogo(ctx, i, x, y, size) {
   if (logoMode(cfg) !== 'side') return 0;
-  const img = imgFor(logoOf(cfg.teams[i].name)); if (!img) return 0;
+  const img = imgFor(sbLogoOf(cfg.teams[i].name)); if (!img) return 0;
   const sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
   ctx.drawImage(img, x + (size - dw) / 2, y + (size - dh) / 2, dw, dh);
   return size;
 }
 // 팀 칸(x,y,w,h) 배경에 로고를 크게 반투명으로 겹쳐요 (글씨 뒤 레이어). align: 'l'이면 왼쪽, 'r'이면 오른쪽에.
-function boardLogoBack(ctx, i, x, y, w, h, align = 'l', alpha = 0.34) {
+function boardLogoBack(ctx, i, x, y, w, h, align = 'l') {
   if (logoMode(cfg) !== 'back') return;
-  const img = imgFor(logoOf(cfg.teams[i].name)); if (!img) return;
-  const size = h * 1.3, sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
+  const img = imgFor(sbLogoOf(cfg.teams[i].name)); if (!img) return;
+  const alpha = (cfg.logoAlpha ?? 35) / 100;
+  const size = h * 1.3 * ((+cfg.logoScale || 100) / 100), sc = Math.min(size / img.naturalWidth, size / img.naturalHeight), dw = img.naturalWidth * sc, dh = img.naturalHeight * sc;
   const lx = align === 'l' ? x + w * 0.04 : x + w - w * 0.04 - dw, ly = y + (h - dh) / 2;
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.globalAlpha = alpha; ctx.drawImage(img, lx, ly, dw, dh); ctx.restore();
 }
@@ -2200,7 +2207,7 @@ function drawGlass(ctx, W, H, st, u) {
     // name + colour chip
     const nameEdge = scx + dir * (sw / 2 + 10 * u);
     const outer = i === 0 ? x + 22 * u : x + w - 22 * u;
-    { ctx.save(); rr(ctx, x, y, w, h, h / 2); ctx.clip(); const L = i === 0 ? x + 14 * u : nameEdge, R = i === 0 ? nameEdge : x + w - 14 * u; boardLogoBack(ctx, i, L, y, R - L, h, i === 0 ? 'l' : 'r', 0.3); ctx.restore(); }
+    { ctx.save(); rr(ctx, x, y, w, h, h / 2); ctx.clip(); const L = i === 0 ? x + 14 * u : nameEdge, R = i === 0 ? nameEdge : x + w - 14 * u; boardLogoBack(ctx, i, L, y, R - L, h, i === 0 ? 'l' : 'r'); ctx.restore(); }
     const ls = h - 16 * u, lw = boardLogo(ctx, i, i === 0 ? outer : outer - ls, y + 8 * u, ls);   // 로고가 있으면 색 칩 대신
     const inner = outer - dir * (lw ? lw + 8 * u : 0);
     const avail = Math.abs(nameEdge - inner) - (lw ? 6 * u : 22 * u);
@@ -2291,11 +2298,15 @@ const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'image' ? `�
 const logoStore = () => lsGet('mm-box:logos') || {};
 // 이름이 정확히 같은 로고가 없으면 띄어쓰기만 다른 이름도 찾아봐요.
 const normName = n => String(n || '').replace(/\s+/g, '').toLowerCase();
-function logoOf(name) {
-  const st = logoStore(); if (st[name]) return st[name];
+function logoOf(name, store = logoStore()) {
+  const st = store; if (st[name]) return st[name];
   const k = Object.keys(st).find(n => normName(n) === normName(name));
   return k ? st[k] : null;
 }
+// 점수판용 로고는 따로 저장해요 (단순한 로고). 없으면 기록 카드 로고를 대신 써요.
+const sbLogoStore = () => lsGet('mm-box:sblogos') || {};
+const sbLogoOwn = name => logoOf(name, sbLogoStore());
+const sbLogoOf = name => sbLogoOwn(name) || logoOf(name);
 const imgCache = {};
 function imgFor(src) {
   if (!src) return null;
@@ -2532,6 +2543,18 @@ $('#logos').addEventListener('click', ev => {
 $('#logoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
   try { const st = logoStore(); st[game.teams[logoTeam].name] = await shrinkImage(f, 400, 'image/png'); lsSet('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[logoTeam].name} 로고를 저장했어요.`); }
+  catch (e) { toast(e.message, true); }
+});
+let sbLogoTeam = 0;
+$('#sbLogos').addEventListener('click', ev => {
+  const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
+  sbLogoTeam = +box.dataset.team;
+  if (act === 'up') $('#sbLogoFile').click();
+  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
+});
+$('#sbLogoFile').addEventListener('change', async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  try { const st = sbLogoStore(); st[game.teams[sbLogoTeam].name] = await shrinkImage(f, 300, 'image/png'); lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[sbLogoTeam].name} 점수판 로고를 저장했어요.`); }
   catch (e) { toast(e.message, true); }
 });
 $('#insDur').addEventListener('change', () => { game.sb.insDur = Math.max(1, +$('#insDur').value || 6); save(); });
@@ -2960,7 +2983,13 @@ function renderVideoPane() {
   $('#sbMatch').value = sb.match || ''; $('#sbMatch').placeholder = `${game.teams[0].name} vs ${game.teams[1].name}`;
   $('#sbStartQ').value = sb.startQ; $('#sbFoulSlots').value = sb.foulSlots;
   $('#sbPos').value = sb.pos; $('#sbFlash').checked = !!sb.flash; $('#sbLogo').value = logoMode(sb);
-  $('#logoStatus').textContent = logoMode(sb) === 'off' ? '' : '로고: ' + [0, 1].map(i => `${game.teams[i].name} ${logoOf(game.teams[i].name) ? '✓' : '없음'}`).join(' · ') + ([0, 1].some(i => !logoOf(game.teams[i].name)) ? ' → 아래 기록 카드 칸의 [팀 로고]에서 올려주세요' : '');
+  $('#logoScale').value = sb.logoScale ?? 100; $('#logoScaleVal').textContent = sb.logoScale ?? 100;
+  $('#logoAlpha').value = sb.logoAlpha ?? 35; $('#logoAlphaVal').textContent = sb.logoAlpha ?? 35;
+  const lm = logoMode(sb);
+  $('#logoScaleBox').style.display = $('#logoAlphaBox').style.display = lm === 'back' ? '' : 'none';
+  $('#sbLogoBox').style.display = lm === 'off' ? 'none' : '';
+  $('#sbLogos').innerHTML = [0, 1].map(i => { const n = game.teams[i].name, own = sbLogoOwn(n), src = own || logoOf(n); return `<div class="logo" data-team="${i}"><span class="th" style="${src ? `background-image:url(${src})` : ''}">${src ? '' : '없음'}</span><span class="nm" title="${esc(n)}">${esc(n)}</span><button class="mini" data-act="up">올리기</button>${own ? '<button class="mini" data-act="rm">지우기</button>' : ''}</div>`; }).join('');
+  $('#logoStatus').textContent = lm === 'off' ? '' : [0, 1].map(i => { const n = game.teams[i].name; return `${n}: ${sbLogoOwn(n) ? '점수판 로고 ✓' : logoOf(n) ? '기록 카드 로고 사용 중' : '없음'}`; }).join(' · ') + ([0, 1].some(i => !sbLogoOf(game.teams[i].name)) ? ' → [올리기]로 넣어주세요' : '');
   $('#sbSize').value = sb.size; $('#sizeVal').textContent = sb.size;
   $('#autoQ').checked = sb.autoQ !== false; $('#skipCuts').checked = sb.skipCuts !== false;
   $('#trimStart').value = sb.trimStart != null ? fmt(sb.trimStart, true) : '';
@@ -2985,6 +3014,8 @@ function readVideoPane() {
   sb.startQ = +$('#sbStartQ').value;
   sb.foulSlots = Math.min(10, Math.max(1, +$('#sbFoulSlots').value || 5));
   sb.pos = $('#sbPos').value; sb.flash = $('#sbFlash').checked; sb.logo = $('#sbLogo').value;
+  sb.logoScale = +$('#logoScale').value || 100; sb.logoAlpha = +$('#logoAlpha').value || 35;
+  $('#logoScaleVal').textContent = sb.logoScale; $('#logoAlphaVal').textContent = sb.logoAlpha;
   sb.size = +$('#sbSize').value; $('#sizeVal').textContent = sb.size;
   sb.autoQ = $('#autoQ').checked; sb.skipCuts = $('#skipCuts').checked;
   sb.trimStart = parseTime($('#trimStart').value); sb.trimEnd = parseTime($('#trimEnd').value);
@@ -3063,7 +3094,7 @@ $('#capList').addEventListener('change', ev => {
   save(); renderMarkers(); lastBoardKey = '';
 });
 $$('#pane-video input, #pane-video select').forEach(el => {
-  if (['format', 'capText', 'insDur', 'sfxFile', 'insImageFile', 'logoFile'].includes(el.id)) return;
+  if (['format', 'capText', 'insDur', 'sfxFile', 'insImageFile', 'logoFile', 'sbLogoFile', 'bgmFile'].includes(el.id)) return;
   el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
     // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
     if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
@@ -3155,7 +3186,7 @@ $('#btnExport').onclick = async () => {
       const k = parts.findIndex(pt => pt.o + pt.from < ins.t - 0.02 && pt.o + pt.to > ins.t + 0.02);
       if (k >= 0) { const pt = parts[k]; parts.splice(k, 1, { ...pt, to: ins.t - pt.o }, { ...pt, from: ins.t - pt.o }); }
     }
-    await Promise.all([...pending.flatMap(i => [i.src, ...(i.data.logos || [])]), ...snapCfg.teams.map(t => logoOf(t.name))].filter(Boolean).map(loadImg));
+    await Promise.all([...pending.flatMap(i => [i.src, ...(i.data.logos || [])]), ...snapCfg.teams.flatMap(t => [logoOf(t.name), sbLogoOf(t.name)])].filter(Boolean).map(loadImg));
 
     // One decoder input per clip, shared by every part cut from it.
     const inputs = new Map();
