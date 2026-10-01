@@ -985,6 +985,7 @@ function showStage() {
   $('#drop').classList.add('hidden');
   ['#stageRow', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
   tlZoom = 1; tlStart = 0;
+  if (typeof musStop === 'function') musStop(0); video.muted = false;   // 새 영상을 열면 음악은 끊고, '음악만' 모드로 꺼 둔 영상 소리는 되살려요
   video.classList.toggle('hidden', mode !== 'file');
   $('#yt') && $('#yt').classList.toggle('hidden', mode !== 'yt');
   // 유튜브 화면을 누르면 키보드 포커스가 영상 안으로 들어가 단축키가 안 먹어서, 투명 막으로 덮어요.
@@ -2295,7 +2296,11 @@ function drawClassic(ctx, W, H, st, s) {
 // ---------- 기록 카드 · 이미지 삽입 ----------
 const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
 // 팀 로고는 팀 이름별로 브라우저에 기억해요 (다음 경기에서도 같은 팀이면 그대로).
-const logoStore = () => lsGet('mm-box:logos') || {};
+// 로고 저장소는 메모리에 캐시해요 (내보내기 중 매 프레임 localStorage를 파싱하지 않게). 쓸 때는 saveLogos()로.
+const logoCache = {};
+const storeOf = key => logoCache[key] || (logoCache[key] = lsGet(key) || {});
+const saveLogos = (key, st) => { logoCache[key] = st; lsSet(key, st); };
+const logoStore = () => storeOf('mm-box:logos');
 // 이름이 정확히 같은 로고가 없으면 띄어쓰기만 다른 이름도 찾아봐요.
 const normName = n => String(n || '').replace(/\s+/g, '').toLowerCase();
 function logoOf(name, store = logoStore()) {
@@ -2304,7 +2309,7 @@ function logoOf(name, store = logoStore()) {
   return k ? st[k] : null;
 }
 // 점수판용 로고는 따로 저장해요 (단순한 로고). 없으면 기록 카드 로고를 대신 써요.
-const sbLogoStore = () => lsGet('mm-box:sblogos') || {};
+const sbLogoStore = () => storeOf('mm-box:sblogos');
 const sbLogoOwn = name => logoOf(name, sbLogoStore());
 const sbLogoOf = name => sbLogoOwn(name) || logoOf(name);
 const imgCache = {};
@@ -2538,11 +2543,11 @@ $('#logos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   logoTeam = +box.dataset.team;
   if (act === 'up') $('#logoFile').click();
-  else if (act === 'rm') { const st = logoStore(); delete st[game.teams[logoTeam].name]; lsSet('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = logoStore(); delete st[game.teams[logoTeam].name]; saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#logoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try { const st = logoStore(); st[game.teams[logoTeam].name] = await shrinkImage(f, 400, 'image/png'); lsSet('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[logoTeam].name} 로고를 저장했어요.`); }
+  try { const st = logoStore(); st[game.teams[logoTeam].name] = await shrinkImage(f, 400, 'image/png'); saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[logoTeam].name} 로고를 저장했어요.`); }
   catch (e) { toast(e.message, true); }
 });
 let sbLogoTeam = 0;
@@ -2550,11 +2555,11 @@ $('#sbLogos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   sbLogoTeam = +box.dataset.team;
   if (act === 'up') $('#sbLogoFile').click();
-  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#sbLogoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try { const st = sbLogoStore(); st[game.teams[sbLogoTeam].name] = await shrinkImage(f, 300, 'image/png'); lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[sbLogoTeam].name} 점수판 로고를 저장했어요.`); }
+  try { const st = sbLogoStore(); st[game.teams[sbLogoTeam].name] = await shrinkImage(f, 300, 'image/png'); saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[sbLogoTeam].name} 점수판 로고를 저장했어요.`); }
   catch (e) { toast(e.message, true); }
 });
 $('#insDur').addEventListener('change', () => { game.sb.insDur = Math.max(1, +$('#insDur').value || 6); save(); });
@@ -2709,11 +2714,11 @@ function tickMusic(t) {
   const running = hold ? true : (!player.paused() && !pendingSeek);
   if (musCur && (!running || capSeekedMus)) musStop();
   capSeekedMus = false;
-  if (running && !hold) {
+  if (running) {   // 카드로 멈춘 순간(t가 카드 시각에 머무름)에도 그 자리의 음악은 시작해요
     const m = game.music.find(m => lastMusT < m.t && t >= m.t && t - m.t < 1 && m.bgm && bgmBuf(m.bgm));
     if (m && !(musCur && musCur.id === m.id)) { musStop(0.05); musStart(m, 0); }
   }
-  if (!hold) lastMusT = t;
+  lastMusT = t;
 }
 let capSeekedMus = false;
 // 내보내기용: 음악을 출력 형식에 맞춰 dur초만큼(볼륨·페이드 적용) PCM으로
@@ -3537,7 +3542,7 @@ function tick() {
     if (game.sb.skipCuts && !player.paused() && !pendingSeek) {
       const c = cutAt(player.time());
       if (c && c.e >= player.duration() - 0.1) { player.pause(); player.seek(c.s); }
-      else if (c) player.seek(c.e);
+      else if (c) { player.seek(c.e); capSeeked = false; capSeekedMus = false; }   // 잘라낸 구간을 건너뛰는 건 사용자가 옮긴 게 아니니 음악·효과음은 계속
     }
     checkInserts(player.time());
     renderLive();
