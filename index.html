@@ -1316,7 +1316,7 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
       <small>세 팀이 매주 서로 붙으니 팀마다 다른 색을 골라주세요.</small></div>`;
     if (f.type === 'pdf') return `<div class="field"><span>${esc(f.label)}${f.required && !v ? ' *' : ''}</span>
       <label class="pdf-drop" id="pdz"><input type="file" accept=".html,.htm,text/html" id="pdf-in" hidden><span id="pdf-name">${v ? '📰 지금 올라가 있는 기사 파일이 있어요. 바꾸려면 새 파일을 고르세요.' : '📰 여기를 눌러 HTML 기사 파일을 고르거나 끌어다 놓으세요'}</span></label>
-      <small>HTML 파일만 올릴 수 있어요. 제목과 날짜가 자동으로 채워져요. 최대 ${PDF_MAX_MB}MB.</small></div>`;
+      <small>HTML 파일만 올릴 수 있어요. 제목과 날짜가 자동으로 채워져요. 최대 ${PDF_MAX_MB}MB, 안에 든 사진은 자동으로 줄여서 올려요.</small></div>`;
     if (f.type === 'photo') return `<div class="field"><span>${esc(f.label)}</span>
       <div class="photo-row"><img class="photo-prev" id="pp" ${v ? `src="${esc(v)}"` : 'hidden'} alt="">
         <div class="paste-zone" id="pz" contenteditable="true" role="textbox" aria-label="사진 붙여넣기 영역" data-ph="📋 여기를 누르고 붙여넣기 (Ctrl+V)&#10;또는 사진을 끌어다 놓기"></div></div>
@@ -1364,7 +1364,11 @@ function openForm({ title, fields, data = {}, onSave, onDelete, saveLabel = '저
       if (!isHtml) { $('#merr').textContent = isPdf ? 'PDF는 올릴 수 없어요. HTML 기사 파일로 올려주세요.' : 'HTML 기사 파일만 올릴 수 있어요.'; return; }
       if (file.size > PDF_MAX_MB * 1024 * 1024) { $('#merr').textContent = `파일이 너무 커요 (${(file.size / 1048576).toFixed(1)}MB). ${PDF_MAX_MB}MB 이하로 줄여주세요.`; return; }
       pdfFile = file; $('#merr').textContent = '';
-      $('#pdf-name').textContent = `${isHtml ? '📰' : '📄'} ${file.name} (${(file.size / 1048576).toFixed(1)}MB)`; $('#pdz').classList.add('picked');
+      const label = `📰 ${file.name} (${mb(file.size)})`;
+      $('#pdf-name').textContent = label + ' · 사진 줄이는 중…'; $('#pdz').classList.add('picked');
+      file._packed = packArticle(file);
+      file._packed.then(pk => { if (pdfFile === file) $('#pdf-name').textContent = `${label} → 올릴 크기 ${mb(pk.bytes.length)}${pk.shrunk ? ` (사진 ${pk.shrunk}장 줄임)` : ''}`; },
+        e => { if (pdfFile === file) { pdfFile = null; $('#pdz').classList.remove('picked'); $('#pdf-name').textContent = '📰 다른 파일을 골라주세요.'; $('#merr').textContent = errMsg(e); } });
       if (isHtml) file.text().then(t => {
         const doc = new DOMParser().parseFromString(t, 'text/html');
         const title = (doc.querySelector('meta[property="og:title"]')?.content || doc.title || doc.querySelector('h1')?.textContent || '').trim();
@@ -1578,19 +1582,60 @@ const editLeague = (date, title, seasonId) => withAuth('schedule', () => {
     onDelete: note ? () => store.remove('events', note.id) : undefined });
 });
 /* ---------- MOMENTUM ESPN (기사 PDF) ---------- */
-const PDF_MAX_MB = 15, CHUNK = 700000; // Firestore 문서 하나에 약 0.7MB씩 나눠 저장
+// 기사 파일 저장: 올릴 때 안에 든 사진을 줄이고(가로·세로 최대 1600px, WebP) gzip으로 압축해서
+// Firestore 문서 하나에 약 0.9MB씩 바이트 그대로 나눠 저장해요 (enc: 'gz').
+// 예전 기사(enc 없음)는 글자(base64)로 0.7MB씩 저장돼 있어서 그 방식으로 읽어요.
+const PDF_MAX_MB = 60, STORE_MAX_MB = 15, CHUNK = 700000, BIN_CHUNK = 900000, IMG_MAX = 1600;
+const mb = n => (n / 1048576).toFixed(1) + 'MB';
 const pdfCache = {};
-const fileToB64 = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+// 사진 한 장(data: 주소) 줄이기. 더 작아지지 않으면 원래 그대로 둬요.
+async function shrinkDataUri(uri) {
+  const img = await loadImg(uri);
+  const k = Math.min(1, IMG_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+  const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
+  let out = c.toDataURL('image/webp', .82);
+  if (!out.startsWith('data:image/webp')) { // WebP로 못 만드는 브라우저(예전 사파리): 투명한 부분이 없으면 JPEG
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return null;
+    out = c.toDataURL('image/jpeg', .85);
+  }
+  return out.length < uri.length * .9 ? out : null;
+}
+async function gzipBytes(bytes) {
+  if (typeof CompressionStream === 'undefined') return null;
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+}
+async function gunzipBytes(bytes) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+}
+async function packArticle(file) {
+  let html = await file.text(), shrunk = 0;
+  const re = /data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+/g;
+  const map = new Map();
+  for (const uri of new Set(html.match(re) || [])) {
+    if (uri.length < 120000) continue; // 작은 그림(아이콘 등)은 그대로
+    try { const out = await shrinkDataUri(uri); if (out) { map.set(uri, out); shrunk++; } } catch (e) { /* 못 읽는 그림은 그대로 */ }
+  }
+  if (map.size) html = html.replace(re, m => map.get(m) || m);
+  const raw = new TextEncoder().encode(html), gz = await gzipBytes(raw);
+  const bytes = gz || raw;
+  if (bytes.length > STORE_MAX_MB * 1048576) throw { message: `사진을 줄여도 ${mb(bytes.length)}라 너무 커요. 사진 수를 줄여서 ${STORE_MAX_MB}MB 이하로 만들어주세요.` };
+  return { bytes, enc: gz ? 'gz' : 'bin', shrunk };
+}
+// 저장하고 기사 문서에 넣을 정보({ parts, enc })를 돌려줘요
 async function savePdf(articleId, file, progress) {
-  const b64 = await fileToB64(file), parts = Math.ceil(b64.length / CHUNK);
+  const { bytes, enc } = await (file._packed || packArticle(file));
+  const parts = Math.max(1, Math.ceil(bytes.length / BIN_CHUNK));
   for (let i = 0; i < parts; i++) {
     progress && progress(i + 1, parts);
-    const doc = { article: articleId, i, data: b64.slice(i * CHUNK, (i + 1) * CHUNK) };
-    if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).set(doc);
-    else (demo.articleFiles = demo.articleFiles || {})[`${articleId}_${i}`] = doc; // 데모: 이 창에서만 유지
+    const chunk = bytes.slice(i * BIN_CHUNK, (i + 1) * BIN_CHUNK);
+    if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).set({ article: articleId, i, bin: firebase.firestore.Blob.fromUint8Array(chunk) });
+    else (demo.articleFiles = demo.articleFiles || {})[`${articleId}_${i}`] = { article: articleId, i, bin: chunk }; // 데모: 이 창에서만 유지
   }
   pdfCache[articleId] = null;
-  return parts;
+  return { parts, enc };
 }
 async function deletePdf(articleId, parts) {
   for (let i = 0; i < (parts || 0); i++) {
@@ -1598,33 +1643,31 @@ async function deletePdf(articleId, parts) {
     else if (demo.articleFiles) delete demo.articleFiles[`${articleId}_${i}`];
   }
 }
-async function loadB64(a) {
-  let b64 = '';
+async function loadBytes(a) {
+  const docs = [];
   for (let i = 0; i < (a.parts || 0); i++) {
     const d = FB ? (await fdb.collection('articleFiles').doc(`${a.id}_${i}`).get()).data() : (demo.articleFiles || {})[`${a.id}_${i}`];
     if (!d) throw new Error('기사 파일 일부를 찾지 못했어요.');
-    b64 += d.data;
+    docs.push(d);
   }
-  return b64;
+  if (a.enc) { // 새 방식: 바이트 조각을 이어 붙이고, gz면 압축을 풀어요
+    const parts = docs.map(d => d.bin instanceof Uint8Array ? d.bin : d.bin.toUint8Array());
+    const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0; parts.forEach(p => { all.set(p, o); o += p.length; });
+    return a.enc === 'gz' ? gunzipBytes(all) : all;
+  }
+  const bin = atob(docs.map(d => d.data).join('')), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 const htmlCache = {};
 async function loadHtml(a) {
   if (htmlCache[a.id]) return htmlCache[a.id];
-  const bin = atob(await loadB64(a)), bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return (htmlCache[a.id] = new TextDecoder('utf-8').decode(bytes));
+  return (htmlCache[a.id] = new TextDecoder('utf-8').decode(await loadBytes(a)));
 }
 async function loadPdf(a) {
   if (pdfCache[a.id]) return pdfCache[a.id];
-  let b64 = '';
-  for (let i = 0; i < (a.parts || 0); i++) {
-    const d = FB ? (await fdb.collection('articleFiles').doc(`${a.id}_${i}`).get()).data() : (demo.articleFiles || {})[`${a.id}_${i}`];
-    if (!d) throw new Error('기사 파일 일부를 찾지 못했어요.');
-    b64 += d.data;
-  }
-  const bin = atob(b64), bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return (pdfCache[a.id] = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
+  return (pdfCache[a.id] = URL.createObjectURL(new Blob([await loadBytes(a)], { type: 'application/pdf' })));
 }
 function openArticle(id) {
   const a = state.articles.find(x => x.id === id); if (!a) return;
@@ -1657,15 +1700,15 @@ const addArticle = () => withAuth('admin', () => openForm({ title: 'MOMENTUM ESP
   onSave: async v => {
     const id = newId();
     $('#merr').style.color = 'var(--accent-ink)';
-    const parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; });
-    const doc = { title: v.title, date: v.date, parts, size: v.pdf.size, type: fileKind(v.pdf), createdAt: new Date().toISOString() };
+    const saved = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; });
+    const doc = { title: v.title, date: v.date, ...saved, size: v.pdf.size, type: fileKind(v.pdf), createdAt: new Date().toISOString() };
     if (FB) await fdb.collection('articles').doc(id).set(doc); else { demo.articles.push({ id, ...doc }); demoSave(); demoSync(); }
   } }));
 const editArticle = id => withAuth('admin', () => { const a = state.articles.find(x => x.id === id); if (!a) return;
   openForm({ title: '기사 수정', fields: ARTICLE_FIELDS, data: { ...a, pdf: a.parts ? 'yes' : '' },
     onSave: async v => {
       const patch = { title: v.title, date: v.date };
-      if (v.pdf) { await deletePdf(id, a.parts); patch.parts = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `PDF 올리는 중… ${Math.round(i / n * 100)}%`; }); patch.size = v.pdf.size; patch.type = fileKind(v.pdf); htmlCache[id] = null; }
+      if (v.pdf) { await deletePdf(id, a.parts); Object.assign(patch, await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; })); patch.size = v.pdf.size; patch.type = fileKind(v.pdf); htmlCache[id] = null; }
       return store.set('articles', id, patch);
     },
     onDelete: async () => { await deletePdf(id, a.parts); return store.remove('articles', id); } }); });
@@ -1808,9 +1851,9 @@ const editAbout = () => withAuth('admin', () => {
     onSave: async v => {
       if (!v.pdf) return;
       if (a) await deletePdf('about', a.parts);
-      const parts = await savePdf('about', v.pdf, (i, n) => { $('#merr').textContent = `올리는 중… ${Math.round(i / n * 100)}%`; });
+      const saved = await savePdf('about', v.pdf, (i, n) => { $('#merr').textContent = `올리는 중… ${Math.round(i / n * 100)}%`; });
       htmlCache.about = null;
-      const doc = { title: 'ABOUT MOMENTUM', type: 'html', about: true, parts, size: v.pdf.size, date: ymd(new Date()), updatedAt: new Date().toISOString() };
+      const doc = { title: 'ABOUT MOMENTUM', type: 'html', about: true, ...saved, size: v.pdf.size, date: ymd(new Date()), updatedAt: new Date().toISOString() };
       if (FB) await fdb.collection('articles').doc('about').set(doc);
       else { demo.articles = demo.articles.filter(x => x.id !== 'about'); demo.articles.push({ id: 'about', ...doc }); demoSave(); demoSync(); }
     },
