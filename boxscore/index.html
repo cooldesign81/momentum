@@ -47,7 +47,7 @@
   header .yt-in input { width: 100%; min-width: 0; }
   /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
   @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
-  @media (max-width: 1350px) { header #btnUndo kbd, header #btnRedo kbd, header .src { display: none; } }
+  @media (max-width: 1350px) { header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
@@ -321,8 +321,8 @@
   <div class="hr">
     <div class="modebar">
       <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="grid">표</button><button data-mode="pick">선수 선택</button></span>
-      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
-      <button id="btnRedo" class="mini">앞돌리기 <kbd>Ctrl+Y</kbd></button>
+      <button id="btnUndo" class="mini" title="마지막 입력 취소 (Ctrl+Z)">Undo</button>
+      <button id="btnRedo" class="mini" title="취소한 입력 다시 넣기 (Ctrl+Y)">Redo</button>
     </div>
     <div class="yt-in">
       <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
@@ -468,7 +468,7 @@
           선수를 누른 뒤 기록 키를 누르세요.<br>
           <kbd>2</kbd> 2점 성공 <kbd>W</kbd> 2점 실패 · <kbd>3</kbd> 3점 성공 <kbd>E</kbd> 3점 실패 · <kbd>1</kbd> 자유투 성공 <kbd>Q</kbd> 자유투 실패<br>
           <kbd>R</kbd> 공격 리바 <kbd>D</kbd> 수비 리바 · <kbd>A</kbd> 어시스트 <kbd>S</kbd> 스틸 <kbd>B</kbd> 블록 <kbd>T</kbd> 턴오버 <kbd>F</kbd> 파울<br>
-          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 (Shift: 1초) · <kbd>,</kbd><kbd>.</kbd> 한 프레임 · <kbd>N</kbd> 다음 쿼터 · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> 되돌리기
+          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 (Shift: 1초) · <kbd>,</kbd><kbd>.</kbd> 한 프레임 · <kbd>N</kbd> 다음 쿼터 · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> Undo · <kbd>Ctrl+Y</kbd> Redo
         </div>
       </section>
       <section>
@@ -1046,18 +1046,18 @@ function undo() {
   if (id == null) return;
   const keep = (kind, obj) => redoStack.push({ kind, obj: JSON.parse(JSON.stringify(obj)) });
   const mu = game.music.find(x => x.id === id);
-  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악 (Ctrl+Y로 다시)'); return; }
+  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악'); return; }
   const ins = game.inserts.find(x => x.id === id);
-  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드 (Ctrl+Y로 다시)'); return; }
+  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드'); return; }
   const cm = game.comments.find(x => x.id === id);
-  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트 (Ctrl+Y로 다시)'); return; }
+  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트'); return; }
   const q = game.quarters.find(x => x.id === id);
-  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터 (Ctrl+Y로 다시)'); return; }
+  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
   const e = game.events.find(x => x.id === id);
   if (!e) return undo();
   keep('event', e);
   removeEvent(id);
-  toast(`되돌림: ${e.player} · ${STAT[e.k].short} (Ctrl+Y로 다시)`);
+  toast(`되돌림: ${e.player} · ${STAT[e.k].short}`);
 }
 // 앞돌리기: 마지막으로 되돌린 항목을 다시 넣어요 (되돌린 뒤 새 입력이 없을 때만).
 function redo() {
