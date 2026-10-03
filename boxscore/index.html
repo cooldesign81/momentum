@@ -47,7 +47,7 @@
   header .yt-in input { width: 100%; min-width: 0; }
   /* 화면이 좁으면 제목 쪽을 줄이고, 점수는 남은 공간 가운데에 */
   @media (max-width: 1700px) { header { grid-template-columns: auto minmax(0, 1fr) auto; } header .src { max-width: 160px; } }
-  @media (max-width: 1350px) { header #btnUndo kbd, header #btnRedo kbd, header .src { display: none; } }
+  @media (max-width: 1350px) { header .src { display: none; } }
   header h1 { font-size: 16px; margin: 0; font-weight: 900; letter-spacing: .5px; white-space: nowrap; }
   header h1 span { color: var(--accent); }
   header .src { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 80px; }
@@ -246,7 +246,19 @@
   /* 오른쪽 설정 창의 항목: 굵은 구분 띠 + 민트 막대가 붙은 또렷한 제목 */
   section { padding: 14px 14px 14px; border-bottom: 6px solid var(--bg); }
   section:last-child { border-bottom: 0; }
-  section h2 { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 14px; margin: 0 0 10px; color: var(--text); font-weight: 800; letter-spacing: .01em; padding-left: 10px; border-left: 3px solid var(--accent); line-height: 1.3; }
+  section h2 { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 0 0 10px; color: var(--text); font-weight: 800; letter-spacing: .01em; padding-left: 10px; border-left: 3px solid var(--accent); line-height: 1.3; }
+  /* 섹션 접기: 제목을 누르면 접히고(▸) 펼쳐져요(▾). 접힌 상태는 브라우저에 기억. */
+  section[data-sec] h2 { cursor: pointer; user-select: none; }
+  section[data-sec] h2::after { content: '▾'; margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+  section.cl h2::after { content: '▸'; }
+  section.cl h2 { margin-bottom: 0; }
+  section.cl > :not(h2) { display: none !important; }
+  /* 설명(ⓘ): 평소에는 숨기고 제목 옆 i 버튼을 누르면 펼쳐요 */
+  section h2 .i { flex: none; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--muted); font: italic 700 11px/16px Georgia, serif; cursor: help; }
+  section h2 .i:hover, section.info-open h2 .i { color: var(--accent); border-color: var(--accent); }
+  .info { display: none; color: var(--muted); font-size: 12px; line-height: 1.65; padding: 8px 10px; margin: 0 0 10px; border-left: 2px solid var(--line); background: rgba(255,255,255,.03); border-radius: 0 6px 6px 0; }
+  section.info-open .info { display: block; }
+  .hint { font-size: 11.5px; }
   section h2 > span:first-child, section h2 > :not(button):not(label) { font-weight: inherit; }
   section h2 button.mini, section h2 label { font-weight: 400; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -321,8 +333,8 @@
   <div class="hr">
     <div class="modebar">
       <span class="seg" id="modeSeg" title="입력 방식"><button data-mode="grid">표</button><button data-mode="pick">선수 선택</button></span>
-      <button id="btnUndo" class="mini">되돌리기 <kbd>Ctrl+Z</kbd></button>
-      <button id="btnRedo" class="mini">앞돌리기 <kbd>Ctrl+Y</kbd></button>
+      <button id="btnUndo" class="mini" title="마지막 입력 취소 (Ctrl+Z)">Undo</button>
+      <button id="btnRedo" class="mini" title="취소한 입력 다시 넣기 (Ctrl+Y)">Redo</button>
     </div>
     <div class="yt-in">
       <input type="text" id="ytUrl" placeholder="유튜브 주소 붙여넣기">
@@ -350,11 +362,11 @@
         <button id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
         <button id="btnBack" title="뒤로 (←)">−5초</button>
         <button id="btnFwd" title="앞으로 (→)">+5초</button>
-        <button id="btnFrameBack" title="한 프레임 뒤로 (,)  ·  Shift+←는 1초">−1f <kbd>,</kbd></button>
-        <button id="btnFrameFwd" title="한 프레임 앞으로 (.)  ·  Shift+→는 1초">+1f <kbd>.</kbd></button>
+        <button id="btnFrameBack" title="한 프레임 뒤로 (,)">−1f <kbd>,</kbd></button>
+        <button id="btnFrameFwd" title="한 프레임 앞으로 (.)">+1f <kbd>.</kbd></button>
         <span class="vsep"></span>
         <span class="q" id="curQuarter" title="현재 쿼터">1ST</span>
-        <button id="btnNextQ" title="현재 위치부터 다음 쿼터 (N)">다음 쿼터 <kbd>N</kbd></button>
+        <button id="btnNextQ" title="다음 쿼터 (N)">다음 쿼터 <kbd>N</kbd></button>
         <span class="time" id="timeLabel">0:00 / 0:00</span>
       </div>
       <div class="stage" id="stage">
@@ -366,12 +378,12 @@
       <div class="vcol speed" id="speed">
         <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button><button data-r="3">3×</button>
         <span class="vsep"></span>
-        <button id="btnCutIn" title="잘라낼 구간 시작을 현재 위치로 ([ 키)">✂ 시작 <kbd>[</kbd></button>
-        <button id="btnCutOut" title="잘라낼 구간 끝을 현재 위치로 (] 키)">✂ 끝 <kbd>]</kbd></button>
+        <button id="btnCutIn" title="잘라낼 구간 시작 ([)">✂ 시작 <kbd>[</kbd></button>
+        <button id="btnCutOut" title="잘라낼 구간 끝 (])">✂ 끝 <kbd>]</kbd></button>
       </div>
     </div>
-    <div class="tlmini hidden off" id="tlmini" title="전체 보기 · 클릭하면 그 부분으로"><div class="win" id="tlwin"></div><div class="ph" id="tlph"></div></div>
-    <div class="timeline hidden" id="timeline" title="클릭: 이동 · 휠: 확대/축소 · 드래그: 좌우 이동 · 더블클릭: 전체 보기">
+    <div class="tlmini hidden off" id="tlmini" title="전체 보기"><div class="win" id="tlwin"></div><div class="ph" id="tlph"></div></div>
+    <div class="timeline hidden" id="timeline" title="휠: 확대 · 더블클릭: 전체">
       <div class="trim" id="trimBox"></div>
       <div id="markers"></div>
       <div class="head" id="playhead"></div>
@@ -401,7 +413,7 @@
     </div>
 
     <div class="pane" id="pane-setup">
-      <section>
+      <section data-sec="game">
         <h2>경기</h2>
         <select id="gameSel" title="저장된 경기 목록"></select>
         <div class="btns" style="margin-top:8px">
@@ -409,23 +421,18 @@
           <button id="btnClearHere">기록 지우기</button>
           <button id="btnDelGame" style="color:var(--danger)">경기 삭제</button>
         </div>
-        <div class="hint" style="margin-top:6px">
-          <b>새 경기</b>: 지금 경기는 목록에 남겨두고 빈 경기로 시작해요.<br>
-          <b>기록 지우기</b>: 팀·로스터·영상 설정은 두고 선수 기록과 쿼터 표시만 비워요.<br>
-          <b>경기 삭제</b>: 이 경기를 목록에서 완전히 지워요.<br>
-          입력한 기록은 이 브라우저에 자동 저장돼요.
-        </div>
+        <div class="info"><b>새 경기</b>: 지금 경기는 목록에 남기고 빈 경기로 시작. <b>기록 지우기</b>: 팀·로스터·영상 설정은 두고 선수 기록과 쿼터만 비움. <b>경기 삭제</b>: 목록에서 완전히 삭제. 기록은 이 브라우저에 자동 저장돼요.</div>
       </section>
-      <section>
-        <h2>리그 시트에서 팀·로스터 가져오기</h2>
+      <section data-sec="sheet">
+        <h2>시트에서 팀·로스터 가져오기</h2>
+        <div class="info">리그 시트의 주차·경기를 고르면 팀 이름과 로스터가 들어와요. 시트가 바뀌면 아래 '읽어올 시트 설정'에 새 주소를 넣으세요. 기록을 시트로 <b>보내는</b> 쪽은 시트에 설치한 Apps Script가 담당해서, 시트를 바꾸면 새 시트에도 스크립트를 설치하고 [박스스코어] 탭의 웹 앱 URL도 바꿔야 해요. 모멘텀 사이트가 읽는 시트는 index.html의 CONFIG.league.sheetId예요.</div>
         <div class="btns" style="margin-bottom:8px"><button id="btnSheet">시트 읽기</button><span class="hint" id="sheetMsg"></span></div>
         <details id="sheetSetup" style="margin-bottom:8px">
           <summary class="hint" style="cursor:pointer">읽어올 시트 설정 · <span id="sheetNow"></span></summary>
           <div class="field" style="margin-top:8px"><label>리그 기록 시트 주소 (또는 시트 ID)</label>
             <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit"></div>
           <div class="btns"><button class="mini" id="sheetSave">저장</button><button class="mini" id="sheetReset">기본 시트로</button><a class="mini hint" id="sheetOpen" target="_blank" rel="noopener" style="align-self:center">시트 열기 ↗</a></div>
-          <div class="hint" id="sheetSetMsg" style="margin-top:6px">시트가 바뀌면 여기에 새 주소를 넣으세요. 시트 [공유]가 "링크가 있는 모든 사용자: 뷰어"여야 읽을 수 있어요. 이 브라우저에만 저장돼요.<br>
-            시트로 기록을 <b>보내는</b> 기능은 시트에 설치한 Apps Script가 담당해서, 시트를 바꾸면 새 시트에도 스크립트를 설치하고 [박스스코어] 탭의 웹 앱 URL을 바꿔야 해요. 모멘텀 사이트가 읽는 시트는 index.html의 CONFIG.league.sheetId예요.</div>
+          <div class="hint" id="sheetSetMsg" style="margin-top:6px">시트 공유가 '링크가 있는 모든 사용자: 뷰어'여야 읽을 수 있어요.</div>
         </details>
         <div class="grid2 hidden" id="sheetPick">
           <div class="field"><label>주차</label><select id="weekSel"></select></div>
@@ -433,14 +440,14 @@
         </div>
         <button id="btnApplyMatch" class="primary hidden" style="width:100%">이 경기로 설정</button>
       </section>
-      <section>
-        <h2>팀 · 로스터 <button id="btnSwap" class="mini" title="왼쪽/오른쪽 팀 바꾸기">⇄ 좌우 바꾸기</button></h2>
+      <section data-sec="roster">
+        <h2>팀 · 로스터 <button id="btnSwap" class="mini">⇄ 좌우 바꾸기</button></h2>
+        <div class="info">로스터 위 5명이 지금 코트에서 뛰는 선수예요. 입력 화면에는 이 5명만 나오고, 박스스코어와 시트에도 이 순서대로 들어가요. ▲▼ 버튼이나 끌어서 순서를 바꾸세요. 게스트는 로스터에 없는 선수를 임시로 넣을 때 써요.</div>
         <div class="field"><label>경기 이름</label><input type="text" id="title" placeholder="예: Week 03 AB"></div>
         <div class="grid2">
           <div class="field"><label style="color:var(--ta)">왼쪽 팀 (시트 A열)</label><input type="text" id="t0name"></div>
           <div class="field"><label style="color:var(--tb)">오른쪽 팀 (시트 U열)</label><input type="text" id="t1name"></div>
         </div>
-        <div class="hint" style="margin-bottom:8px">위에서 5명이 지금 코트에서 뛰는 선수예요. 입력 화면에는 이 5명만 나와요. ▲▼ 버튼이나 끌어서 순서를 바꾸세요. 박스스코어와 시트에도 이 순서대로 들어가요.</div>
         <div id="rosterEdit" style="display:flex;flex-direction:column;gap:6px">
           <div class="field"><label style="color:var(--ta)">왼쪽 로스터</label><div class="roster" id="roster0"></div>
             <div class="radd"><input type="text" id="add0" placeholder="선수 이름" list="allNames"><button class="mini" data-radd="0">추가</button></div>
@@ -453,26 +460,27 @@
         </div>
         <datalist id="allNames"></datalist>
       </section>
-      <section>
+      <section data-sec="opts">
         <h2>입력 옵션</h2>
+        <div class="info">시간 보정: 버튼을 늦게 누르는 만큼 기록 시각을 앞당겨요. 되감기 간격: ← → 키로 움직이는 초 단위예요.</div>
         <div class="grid2">
-          <div class="field"><label title="버튼을 늦게 누르는 만큼 앞당겨 기록">시간 보정(초)</label><input type="number" id="lag" step="0.5" min="0"></div>
+          <div class="field"><label>시간 보정(초)</label><input type="number" id="lag" step="0.5" min="0"></div>
           <div class="field"><label>되감기 간격(초)</label><input type="number" id="skip" step="1" min="1"></div>
         </div>
         <label class="check" style="margin-bottom:6px"><input type="checkbox" id="askAst"> 득점하면 어시스트 준 선수 물어보기 (선수 선택 방식)</label>
         <label class="check"><input type="checkbox" id="keepSel"> 기록 후에도 선수 선택 유지</label>
       </section>
-      <section>
+      <section data-sec="keys" class="cl">
         <h2>단축키</h2>
         <div class="hint">
-          선수를 누른 뒤 기록 키를 누르세요.<br>
+          선수를 고른 뒤 기록 키를 누르세요.<br>
           <kbd>2</kbd> 2점 성공 <kbd>W</kbd> 2점 실패 · <kbd>3</kbd> 3점 성공 <kbd>E</kbd> 3점 실패 · <kbd>1</kbd> 자유투 성공 <kbd>Q</kbd> 자유투 실패<br>
           <kbd>R</kbd> 공격 리바 <kbd>D</kbd> 수비 리바 · <kbd>A</kbd> 어시스트 <kbd>S</kbd> 스틸 <kbd>B</kbd> 블록 <kbd>T</kbd> 턴오버 <kbd>F</kbd> 파울<br>
-          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 (Shift: 1초) · <kbd>,</kbd><kbd>.</kbd> 한 프레임 · <kbd>N</kbd> 다음 쿼터 · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> 되돌리기
+          <kbd>Space</kbd> 재생/정지 · <kbd>←</kbd><kbd>→</kbd> 되감기/빨리감기 (Shift: 1초) · <kbd>,</kbd><kbd>.</kbd> 한 프레임 · <kbd>N</kbd> 다음 쿼터 · <kbd>[</kbd><kbd>]</kbd> 잘라낼 구간 · <kbd>Esc</kbd> 선택 해제 · <kbd>Ctrl+Z</kbd> Undo · <kbd>Ctrl+Y</kbd> Redo
         </div>
       </section>
-      <section>
-        <h2>기록 규칙 (리그 시트 기준)</h2>
+      <section data-sec="rules" class="cl">
+        <h2>기록 규칙</h2>
         <div class="hint">
           · 3점슛은 필드골(FGM·FGA)에도 자동으로 들어가요.<br>
           · 슛하다 파울 당해 안 들어가면 슛 시도는 기록하지 않아요. 들어가면(앤드원) 성공으로 기록하세요.<br>
@@ -501,29 +509,25 @@
         <div class="box" id="boxB"></div>
         <div class="btns"><button id="copyB" class="primary">시트용 복사</button></div>
       </section>
-      <section>
+      <section data-sec="sync">
         <h2>구글 시트로 보내기</h2>
+        <div class="info">왼쪽/오른쪽 팀 이름으로 그 주 탭의 경기 블록을 찾아 선수 칸을 채워요. 시트가 수식으로 계산하는 칸(PTS·REB·%·TEAM·점수 줄)은 건드리지 않아요. 처음 한 번 리그 시트에 <a href="apps-script.gs" target="_blank" style="color:var(--accent)">apps-script.gs</a>를 설치해야 하고, 방법은 파일 맨 위에 있어요.</div>
         <div class="grid2">
           <div class="field"><label>주차</label><select id="syncWeek"></select></div>
           <div class="field"><label>&nbsp;</label><button id="btnSync" class="primary">시트에 기록 넣기</button></div>
         </div>
-        <div class="hint" id="syncMsg">왼쪽/오른쪽 팀 이름으로 그 주 탭의 경기 블록을 찾아서 선수 칸을 채워요. 수식 칸(PTS·REB·%·TEAM·점수 줄)은 그대로 둬요.</div>
+        <div class="hint" id="syncMsg"></div>
         <details id="syncSetup" style="margin-top:8px">
           <summary class="hint" style="cursor:pointer">연동 설정</summary>
           <div class="field" style="margin-top:8px"><label>Apps Script 웹 앱 URL</label><input type="text" id="syncUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
           <div class="field"><label>기록 입력 비밀번호 (스크립트 속성 BOX_KEY)</label><input type="text" id="syncKey" autocomplete="off"></div>
           <div class="btns"><button id="btnSyncTest">연결 확인</button></div>
-          <div class="hint" style="margin-top:6px">처음 한 번 리그 시트에 <a href="apps-script.gs" target="_blank" style="color:var(--accent)">apps-script.gs</a>를 설치해야 해요. 방법은 파일 맨 위에 적혀 있어요. URL과 비밀번호는 이 브라우저에만 저장돼요.</div>
+          <div class="hint" style="margin-top:6px">URL과 비밀번호는 이 브라우저에만 저장돼요.</div>
         </details>
       </section>
-      <section>
-        <h2>직접 붙여넣기</h2>
-        <div class="hint">
-          1. 리그 시트의 해당 주(Week) 탭에서 이 경기 블록을 찾아요.<br>
-          2. 왼쪽 팀은 A열, 오른쪽 팀은 U열의 <b>PLAYER 바로 아래 칸</b>을 클릭하고 [시트용 복사] → 붙여넣기(Ctrl+V).<br>
-          3. 선수 이름부터 PF까지 19칸이 순서대로 들어가요. 체크를 끈 선수(결장)는 빠져요. PTS·%·REB 칸에는 숫자 대신 자동 계산 수식이 들어가서 붙여넣은 뒤에도 계속 계산돼요.<br>
-          4. 점수 줄(예: <i>팀A 35 : 33 팀B</i>)은 아래 버튼으로 복사해서 블록 두 번째 줄에 넣어요.
-        </div>
+      <section data-sec="paste">
+        <h2>직접 붙여넣기 · 파일</h2>
+        <div class="info">1. 리그 시트의 해당 주 탭에서 경기 블록을 찾아요. 2. 왼쪽 팀은 A열, 오른쪽 팀은 U열의 <b>PLAYER 바로 아래 칸</b>을 클릭하고 [시트용 복사] → Ctrl+V. 3. 이름부터 PF까지 19칸이 들어가요. 결장(체크 해제) 선수는 빠지고, PTS·%·REB 칸에는 자동 계산 수식이 들어가요. 4. 점수 줄은 [점수 줄 복사]로 블록 두 번째 줄에 넣어요.</div>
         <div class="btns" style="margin-top:8px">
           <button id="copyScore">점수 줄 복사</button>
           <button id="btnCsv">CSV 저장</button>
@@ -535,15 +539,16 @@
       </section>
     </div>
     <div class="pane hidden" id="pane-video">
-      <section>
+      <section data-sec="clips">
         <h2>영상 <span id="clipCount"></span> <button id="btnAddClip" class="mini">+ 영상 추가</button></h2>
+        <div class="info">영상 파일을 여러 개 열면 순서대로 이어 붙어요 (쿼터별 영상). ▲▼로 순서를 바꾸면 기록·카드·자막이 자기 영상을 따라가요. 유튜브 영상은 미리보기만 되고 내보내기는 안 돼요.</div>
         <div class="clips" id="clips"></div>
-        <div class="hint" id="clipHint">영상 파일을 열면 여기에 나와요. 쿼터별 영상은 ▲▼로 순서를 바꿀 수 있어요.</div>
+        <div class="hint" id="clipHint">영상 파일을 열면 여기에 나와요.</div>
         <label class="check" style="margin-top:6px"><input type="checkbox" id="autoQ"> 다음 영상으로 넘어가면 자동으로 다음 쿼터</label>
       </section>
-      <section>
+      <section data-sec="board">
         <h2>점수판 <label class="check" style="font-weight:400"><input type="checkbox" id="sbShow"> 영상에 보이기</label></h2>
-        <div class="hint" style="margin-bottom:8px">선수 기록의 1·2·3점 성공이 팀 점수로, 파울이 팀파울로 자동으로 들어가요.</div>
+        <div class="info">선수 기록의 1·2·3점 성공이 팀 점수로, 파울이 팀파울로 자동 반영돼요. 점수판 로고는 작게 보여도 알아볼 수 있는 단순한 로고가 좋아요. 점수판 로고를 안 올리면 기록 카드 로고를 대신 써요. 로고는 팀 이름별로 이 브라우저에 저장돼요.</div>
         <div class="team-row head"><span>팀</span><span>유니폼 색</span><span>바탕</span><span>글씨</span></div>
         <div class="team-row"><span id="sbName0" style="color:var(--ta)"></span><span class="swatches" data-team="0"></span><input type="color" id="sbColor0" title="바탕색 직접 고르기"><input type="color" id="sbText0" title="팀 이름 글씨색"></div>
         <div class="team-row"><span id="sbName1" style="color:var(--tb)"></span><span class="swatches" data-team="1"></span><input type="color" id="sbColor1" title="바탕색 직접 고르기"><input type="color" id="sbText1" title="팀 이름 글씨색"></div>
@@ -559,45 +564,44 @@
           </div>
           <div class="field"><label>크기 <span id="sizeVal"></span>%</label><input type="range" id="sbSize" min="15" max="55" step="1"></div>
           <label class="check" style="margin-bottom:8px" title="득점 순간 2초 동안 점수 칸 강조 + '+2' 배지"><input type="checkbox" id="sbFlash"> 득점 강조</label>
-          <div class="field"><label>팀 로고</label><select id="sbLogo" title="점수판에 팀 로고를 어떻게 보여줄지"><option value="back">팀 칸 배경에 겹치기</option><option value="side">이름 옆에 작게</option><option value="off">안 보이기</option></select></div>
+          <div class="field"><label>팀 로고</label><select id="sbLogo"><option value="back">팀 칸 배경에 겹치기</option><option value="side">이름 옆에 작게</option><option value="off">안 보이기</option></select></div>
           <div class="field" id="logoScaleBox"><label>로고 크기 <span id="logoScaleVal"></span>%</label><input type="range" id="logoScale" min="40" max="250" step="5"></div>
           <div class="field" id="logoAlphaBox"><label>로고 진하기 <span id="logoAlphaVal"></span>%</label><input type="range" id="logoAlpha" min="10" max="100" step="5"></div>
-          <div class="field" style="grid-column:1 / -1" id="sbLogoBox"><label>점수판용 로고 (작게 보여도 알아볼 수 있는 단순한 로고 · 팀 이름별로 기억)</label>
+          <div class="field" style="grid-column:1 / -1" id="sbLogoBox"><label>점수판 로고</label>
             <div class="logos" id="sbLogos"></div>
             <div class="hint" id="logoStatus" style="margin-top:4px"></div>
           </div>
           <input type="file" id="sbLogoFile" accept="image/*" class="hidden">
         </div>
       </section>
-      <section>
-        <h2>기록 카드 · 이미지 삽입 <span id="insCount"></span></h2>
-        <div class="hint" style="margin-bottom:8px">영상 사이에 몇 초짜리 정지 화면을 끼워 넣어요. 기록 카드는 그 시점까지의 팀 기록(점수·FG%·3점·자유투·리바운드·어시스트·턴오버)으로 페이지가 직접 그려요. 미리보기에서는 그 지점에서 잠깐 멈춰 보여주고, 내보낸 영상에는 실제로 그 길이만큼 들어가요.</div>
+      <section data-sec="cards" class="cl">
+        <h2>기록 카드 · 이미지 <span id="insCount"></span></h2>
+        <div class="info"><b>매치업</b>: 영상을 멈추지 않고 그 위에 양 팀 로고 패널이 펼쳐졌다 접혀요 (영문 이름은 목록에서). <b>전반 기록</b>: 2쿼터 끝 표시가 있으면 그 자리에. <b>최종 기록·선수별·이미지</b>: 현재 위치에. 선수별 카드는 1팀 → 2팀 두 장이 이어서 들어가요. 멈춤 카드는 미리보기에서 그 자리에 잠깐 멈춰 보여주고, 내보낸 영상에는 그 길이만큼 실제로 들어가요. 시간·길이는 목록에서 고쳐요.</div>
         <div class="btns" style="margin-bottom:6px"><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
-        <div class="hint" style="margin-bottom:8px">전반 카드는 2쿼터 끝 표시가 있으면 그 자리에, 없으면 현재 위치에 들어가요. 최종 카드·선수별 카드·이미지는 현재 위치에 들어가요. 선수별 기록 카드는 위에 두 팀 점수, 아래에 한 팀의 선수별 표가 나오고, 1팀 → 2팀 순서로 두 장이 이어서 들어가요. 매치업 카드는 영상을 멈추지 않고 그 위에 겹쳐서 양 팀 로고 패널이 가운데에서 펼쳐졌다가 접혀요 (팀 색·로고 사용, 영문 이름은 목록에서 입력). 시간은 목록에서 고칠 수 있어요.</div>
         <div class="caps" id="insList"></div>
         <div class="grid3" style="margin-top:10px">
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
           <div class="field"><label>매치업 가운데 색</label><input type="color" id="introColor" title="매치업 카드 가운데 띠 색"></div>
 
-          <div class="field" style="grid-column:1 / -1"><label>팀 로고 (기록 카드·매치업 카드에 들어가요 · 팀 이름별로 기억 · 점수판 로고는 점수판 설정에서 따로)</label><div class="logos" id="logos"></div></div>
+          <div class="field" style="grid-column:1 / -1"><label>카드 로고 (점수판 로고는 점수판 설정에서)</label><div class="logos" id="logos"></div></div>
         </div>
         <input type="file" id="logoFile" accept="image/*" class="hidden">
       </section>
-      <section>
+      <section data-sec="music" class="cl">
         <h2>배경음악 <span id="musCount"></span></h2>
-        <div class="hint" style="margin-bottom:8px">원하는 위치에 음악을 깔아요. 카드와 상관없이 따로 넣고, 영상 소리 위에 섞을지 영상 소리를 끄고 음악만 들리게 할지, 몇 초 동안, 어느 크기로, 끝나기 몇 초 전부터 작아질지 정해요. 미리보기에서도 들리고 내보낸 영상에도 들어가요. 그 자리에 카드가 있으면 카드가 나오는 시간도 음악 시간에 포함돼요.</div>
+        <div class="info">현재 위치에 음악 항목을 넣고, 보관함의 음악·섞기 방식(영상 소리 위에 / 영상 소리 끄고 음악만)·길이·볼륨·페이드를 정해요. 마지막 설정이 다음 항목의 기본값이 돼요. 그 자리에 카드가 있으면 카드 시간도 음악 시간에 포함돼요. 보관함은 이 브라우저에만 저장되니 다른 컴퓨터에서는 다시 넣어야 해요.</div>
         <div class="btns" style="margin-bottom:6px"><button id="btnMusAdd">음악 넣기 (현재 위치)</button></div>
         <div class="caps" id="musList"></div>
         <div class="field" style="margin-top:10px"><label>음악 보관함 (이 브라우저에 저장)</label>
           <div class="bgms" id="bgmList"></div>
-          <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button id="bgmAdd" class="mini">음악 파일 추가</button><input type="file" id="bgmFile" accept="audio/*" multiple class="hidden"><span class="hint" id="bgmHint" style="margin:0">MP3·WAV·M4A, 파일당 15MB까지. 다른 컴퓨터에서 열면 보관함이 비어 있으니 다시 넣어주세요.</span></div>
+          <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button id="bgmAdd" class="mini">음악 파일 추가</button><input type="file" id="bgmFile" accept="audio/*" multiple class="hidden"><span class="hint" id="bgmHint" style="margin:0">MP3·WAV·M4A · 15MB까지</span></div>
         </div>
       </section>
-      <section>
+      <section data-sec="caps" class="cl">
         <h2>코멘트 자막 <span id="capCount"></span></h2>
-        <div class="hint" style="margin-bottom:8px">영상을 보다가 글을 쓰고 [넣기]를 누르면, 글을 쓰기 시작한 순간에 자막 바가 스르르 떴다가 사라져요. 미리보기와 내보낸 영상 둘 다에 들어가요.</div>
+        <div class="info">글을 쓰고 [넣기]를 누르면 글을 쓰기 시작한 순간에 자막 바가 스르르 떴다가 사라져요. 효과음은 자막이 나타날 때 울리고, 바꾼 소리 파일(2MB까지)은 이 브라우저에 저장돼요. 미리보기와 내보낸 영상 둘 다에 들어가요.</div>
         <div class="row" style="margin-bottom:6px"><input type="text" id="capText" placeholder="예: 3쿼터 시작 · 파손주의 5점 차 추격" maxlength="120" autocomplete="off"><button id="btnCapAdd" class="primary" style="white-space:nowrap">넣기</button></div>
-        <div class="row hint" style="margin-bottom:10px"><span>넣을 위치: <b id="capAt">현재 위치</b></span><button id="btnCapNow" class="mini" title="지금 영상 위치로 바꾸기">⌖ 현재 위치로</button><span class="sp" style="flex:1"></span><button id="btnCapPreview" class="mini">모양 미리보기</button></div>
+        <div class="row hint" style="margin-bottom:10px"><span>넣을 위치: <b id="capAt">현재 위치</b></span><button id="btnCapNow" class="mini">⌖ 현재 위치로</button><span class="sp" style="flex:1"></span><button id="btnCapPreview" class="mini">모양 미리보기</button></div>
         <div class="caps" id="capList"></div>
         <details class="adv" style="margin-top:8px" open>
           <summary>자막 모양</summary>
@@ -617,11 +621,11 @@
             <div class="field" style="margin:0;flex:1;min-width:140px"><label>소리 크기 <span id="sfxGainVal"></span>%</label><input type="range" id="sfxGain" min="0" max="100" step="5"></div>
           </div>
           <div class="row hint" style="gap:6px;flex-wrap:wrap;margin-top:6px"><span id="sfxName" style="flex:1;min-width:120px"></span><button id="sfxPlay" class="mini">들어보기</button><button id="sfxPick" class="mini">소리 파일 바꾸기</button><button id="sfxReset" class="mini">기본 소리로</button><input type="file" id="sfxFile" accept="audio/*" class="hidden"></div>
-          <div class="hint">효과음은 미리보기에서도 나고, 내보낸 영상 소리에도 섞여 들어가요. 바꾼 소리 파일은 이 브라우저에 저장돼요 (2MB까지).</div>
         </details>
       </section>
-      <section>
+      <section data-sec="trim" class="cl">
         <h2>길이 편집</h2>
+        <div class="info">시작·끝 밖은 내보내기에서 빠져요. 잘라낼 구간은 영상 옆 [✂ 시작] [✂ 끝] 버튼이나 [ ] 키로 지정하고, '재생할 때 건너뛰기'를 켜면 미리보기도 건너뛰어요.</div>
         <div class="grid2">
           <div class="field"><label>시작</label><div class="team-in"><input type="text" id="trimStart" placeholder="처음부터"><button id="btnTrimStart" title="현재 위치">⌖</button></div></div>
           <div class="field"><label>끝</label><div class="team-in"><input type="text" id="trimEnd" placeholder="끝까지"><button id="btnTrimEnd" title="현재 위치">⌖</button></div></div>
@@ -632,11 +636,12 @@
         </div>
         <div class="cuts" id="cuts"></div>
       </section>
-      <section>
+      <section data-sec="export" class="cl">
         <h2>내보내기</h2>
+        <div class="info">크롬·엣지 권장. 영상 파일로 연 경우에만 내보낼 수 있어요 (유튜브는 미리보기만). 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요. '형식'이 해상도·프레임·코덱을 정하고 '화질'이 비트레이트를 정해요. 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.</div>
         <div class="grid2">
           <div class="field"><label>형식</label>
-            <select id="format" title="YouTube: 1920×1080 · H.264 · 30fps · AAC 스테레오">
+            <select id="format">
               <option value="youtube">YouTube 1080p 30fps</option>
               <option value="youtube4k">YouTube 4K 30fps</option>
               <option value="light">가볍게 720p 30fps</option>
@@ -645,7 +650,7 @@
             </select>
           </div>
           <div class="field"><label>화질</label>
-            <select id="quality" title="원본과 같게: 불러온 영상의 비트레이트에 맞춰 내보내요">
+            <select id="quality">
               <option value="source">원본과 같게</option>
               <option value="high">높음</option>
               <option value="very_high">매우 높음</option>
@@ -660,7 +665,7 @@
             <div class="field"><label>해상도</label><select id="xRes"><option value="orig">원본</option><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K (2160p)</option></select></div>
             <div class="field"><label>프레임</label><select id="xFps"><option value="0">원본</option><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="50">50</option><option value="60">60</option></select></div>
             <div class="field"><label>영상 코덱</label><select id="xCodec"><option value="avc">H.264</option><option value="hevc">H.265 (HEVC)</option><option value="av1">AV1</option></select></div>
-            <div class="field"><label>영상 Mbps</label><input type="number" id="xMbps" min="1" max="150" step="0.5" title="화질을 '직접 입력'으로 고르면 적용돼요"></div>
+            <div class="field"><label>영상 Mbps</label><input type="number" id="xMbps" min="1" max="150" step="0.5"></div>
             <div class="field"><label>오디오 음질</label><select id="xAbr"><option value="128">128 kbps</option><option value="192">192 kbps</option><option value="256">256 kbps</option><option value="320">320 kbps</option></select></div>
             <div class="field"><label>오디오 채널</label><select id="xAch"><option value="2">스테레오</option><option value="1">모노</option><option value="0">원본</option></select></div>
           </div>
@@ -674,7 +679,6 @@
           </div>
         </div>
         <div class="msg" id="exportMsg"></div>
-        <div class="hint" style="margin-top:6px">크롬·엣지 권장. 영상 파일로 연 경우에만 내보낼 수 있어요 (유튜브 영상은 미리보기만 돼요). 영상은 서버로 올라가지 않고 이 브라우저 안에서만 처리돼요.</div>
       </section>
     </div>
   </aside>
@@ -985,6 +989,7 @@ function showStage() {
   $('#drop').classList.add('hidden');
   ['#stageRow', '#timeline'].forEach(s => $(s).classList.remove('hidden'));
   tlZoom = 1; tlStart = 0;
+  if (typeof musStop === 'function') musStop(0); video.muted = false;   // 새 영상을 열면 음악은 끊고, '음악만' 모드로 꺼 둔 영상 소리는 되살려요
   video.classList.toggle('hidden', mode !== 'file');
   $('#yt') && $('#yt').classList.toggle('hidden', mode !== 'yt');
   // 유튜브 화면을 누르면 키보드 포커스가 영상 안으로 들어가 단축키가 안 먹어서, 투명 막으로 덮어요.
@@ -1045,18 +1050,18 @@ function undo() {
   if (id == null) return;
   const keep = (kind, obj) => redoStack.push({ kind, obj: JSON.parse(JSON.stringify(obj)) });
   const mu = game.music.find(x => x.id === id);
-  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악 (Ctrl+Y로 다시)'); return; }
+  if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악'); return; }
   const ins = game.inserts.find(x => x.id === id);
-  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드 (Ctrl+Y로 다시)'); return; }
+  if (ins) { keep('insert', ins); removeInsert(id); toast('되돌림: 삽입 카드'); return; }
   const cm = game.comments.find(x => x.id === id);
-  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트 (Ctrl+Y로 다시)'); return; }
+  if (cm) { keep('comment', cm); removeComment(id); toast('되돌림: 코멘트'); return; }
   const q = game.quarters.find(x => x.id === id);
-  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터 (Ctrl+Y로 다시)'); return; }
+  if (q) { keep('quarter', q); removeQuarter(id); toast('되돌림: 다음 쿼터'); return; }
   const e = game.events.find(x => x.id === id);
   if (!e) return undo();
   keep('event', e);
   removeEvent(id);
-  toast(`되돌림: ${e.player} · ${STAT[e.k].short} (Ctrl+Y로 다시)`);
+  toast(`되돌림: ${e.player} · ${STAT[e.k].short}`);
 }
 // 앞돌리기: 마지막으로 되돌린 항목을 다시 넣어요 (되돌린 뒤 새 입력이 없을 때만).
 function redo() {
@@ -1126,7 +1131,7 @@ function renderGrid() {
         GRID_COLS.map(([k]) => `<td><button data-g="${ti}" data-name="${esc(n)}" data-k="${k}">${cnt[ti + '|' + n + '|' + k] || ''}</button></td>`).join('') + '</tr>').join('')
         : `<tr><td colspan="${GRID_COLS.length + 2}" class="hint" style="padding:8px">오른쪽 [경기 설정]에서 로스터를 넣어주세요.</td></tr>`) +
       `</tbody></table>`;
-  }).join('') + `<div class="hint">칸을 누르면 1씩 올라가요. 잘못 눌렀으면 그 칸을 오른쪽 클릭(휴대폰은 길게 누르기)하면 1 내려가요. 코트 위 5명은 [경기 설정] 로스터 순서로 바꿔요.</div>`;
+  }).join('') + `<div class="hint">칸 클릭 +1 · 오른쪽 클릭(길게 누르기) −1</div>`;
 }
 let lastHit = null;
 // 마우스가 올라간 칸의 열 제목과 같은 열 칸도 강조해요.
@@ -1849,7 +1854,7 @@ function renderCuts() {
   $('#cutCount').textContent = cuts.length ? `(${cuts.length}개 · ${fmt(cuts.reduce((n, c) => n + c.e - c.s, 0))})` : '';
   $('#cuts').innerHTML = cuts.length
     ? cuts.map((c, i) => `<span class="cut-chip" data-i="${i}" title="클릭: 구간 시작으로 이동">${fmt(c.s)}–${fmt(c.e)}<button data-act="rm" title="잘라내기 취소">✕</button></span>`).join('')
-    : `<span class="hint">${cutStart != null ? `${fmt(cutStart)}부터 자르는 중… 끝 위치에서 ] 를 누르세요` : '영상 오른쪽 [✂ 시작] [✂ 끝] 버튼이나 [ ] 키로 잘라낼 부분을 지정하세요 (작전타임, 쉬는 시간 등)'}</span>`;
+    : `<span class="hint">${cutStart != null ? `${fmt(cutStart)}부터 자르는 중… 끝 위치에서 ] 를 누르세요` : '[✂ 시작] [✂ 끝] 또는 [ ] 키로 지정'}</span>`;
 }
 $('#cuts').addEventListener('click', ev => {
   const chip = ev.target.closest('.cut-chip');
@@ -2295,7 +2300,11 @@ function drawClassic(ctx, W, H, st, s) {
 // ---------- 기록 카드 · 이미지 삽입 ----------
 const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
 // 팀 로고는 팀 이름별로 브라우저에 기억해요 (다음 경기에서도 같은 팀이면 그대로).
-const logoStore = () => lsGet('mm-box:logos') || {};
+// 로고 저장소는 메모리에 캐시해요 (내보내기 중 매 프레임 localStorage를 파싱하지 않게). 쓸 때는 saveLogos()로.
+const logoCache = {};
+const storeOf = key => logoCache[key] || (logoCache[key] = lsGet(key) || {});
+const saveLogos = (key, st) => { logoCache[key] = st; lsSet(key, st); };
+const logoStore = () => storeOf('mm-box:logos');
 // 이름이 정확히 같은 로고가 없으면 띄어쓰기만 다른 이름도 찾아봐요.
 const normName = n => String(n || '').replace(/\s+/g, '').toLowerCase();
 function logoOf(name, store = logoStore()) {
@@ -2304,7 +2313,7 @@ function logoOf(name, store = logoStore()) {
   return k ? st[k] : null;
 }
 // 점수판용 로고는 따로 저장해요 (단순한 로고). 없으면 기록 카드 로고를 대신 써요.
-const sbLogoStore = () => lsGet('mm-box:sblogos') || {};
+const sbLogoStore = () => storeOf('mm-box:sblogos');
 const sbLogoOwn = name => logoOf(name, sbLogoStore());
 const sbLogoOf = name => sbLogoOwn(name) || logoOf(name);
 const imgCache = {};
@@ -2538,11 +2547,11 @@ $('#logos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   logoTeam = +box.dataset.team;
   if (act === 'up') $('#logoFile').click();
-  else if (act === 'rm') { const st = logoStore(); delete st[game.teams[logoTeam].name]; lsSet('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = logoStore(); delete st[game.teams[logoTeam].name]; saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#logoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try { const st = logoStore(); st[game.teams[logoTeam].name] = await shrinkImage(f, 400, 'image/png'); lsSet('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[logoTeam].name} 로고를 저장했어요.`); }
+  try { const st = logoStore(); st[game.teams[logoTeam].name] = await shrinkImage(f, 400, 'image/png'); saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[logoTeam].name} 로고를 저장했어요.`); }
   catch (e) { toast(e.message, true); }
 });
 let sbLogoTeam = 0;
@@ -2550,11 +2559,11 @@ $('#sbLogos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   sbLogoTeam = +box.dataset.team;
   if (act === 'up') $('#sbLogoFile').click();
-  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#sbLogoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try { const st = sbLogoStore(); st[game.teams[sbLogoTeam].name] = await shrinkImage(f, 300, 'image/png'); lsSet('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[sbLogoTeam].name} 점수판 로고를 저장했어요.`); }
+  try { const st = sbLogoStore(); st[game.teams[sbLogoTeam].name] = await shrinkImage(f, 300, 'image/png'); saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; toast(`${game.teams[sbLogoTeam].name} 점수판 로고를 저장했어요.`); }
   catch (e) { toast(e.message, true); }
 });
 $('#insDur').addEventListener('change', () => { game.sb.insDur = Math.max(1, +$('#insDur').value || 6); save(); });
@@ -2598,7 +2607,7 @@ async function loadBgm() {
   renderInserts();
 }
 function renderBgmList() {
-  $('#bgmList').innerHTML = bgmLib.length ? bgmLib.map(m => `<div class="bgm-row" data-id="${m.id}"><span class="nm" title="${esc(m.name)}">${esc(m.name)}</span><span class="d">${m.error ? '읽기 실패' : m.buf ? fmt(m.dur) : '읽는 중…'}</span><button class="mini" data-act="play">들어보기</button><button class="mini" data-act="rm">지우기</button></div>`).join('') : '<div class="hint" style="margin:0">아직 넣은 음악이 없어요. MP3·WAV·M4A 파일을 넣어주세요 (파일당 15MB까지).</div>';
+  $('#bgmList').innerHTML = bgmLib.length ? bgmLib.map(m => `<div class="bgm-row" data-id="${m.id}"><span class="nm" title="${esc(m.name)}">${esc(m.name)}</span><span class="d">${m.error ? '읽기 실패' : m.buf ? fmt(m.dur) : '읽는 중…'}</span><button class="mini" data-act="play">들어보기</button><button class="mini" data-act="rm">지우기</button></div>`).join('') : '<div class="hint" style="margin:0">아직 넣은 음악이 없어요.</div>';
 }
 $('#bgmAdd').addEventListener('click', () => $('#bgmFile').click());
 $('#bgmFile').addEventListener('change', async ev => {
@@ -2709,11 +2718,11 @@ function tickMusic(t) {
   const running = hold ? true : (!player.paused() && !pendingSeek);
   if (musCur && (!running || capSeekedMus)) musStop();
   capSeekedMus = false;
-  if (running && !hold) {
+  if (running) {   // 카드로 멈춘 순간(t가 카드 시각에 머무름)에도 그 자리의 음악은 시작해요
     const m = game.music.find(m => lastMusT < m.t && t >= m.t && t - m.t < 1 && m.bgm && bgmBuf(m.bgm));
     if (m && !(musCur && musCur.id === m.id)) { musStop(0.05); musStart(m, 0); }
   }
-  if (!hold) lastMusT = t;
+  lastMusT = t;
 }
 let capSeekedMus = false;
 // 내보내기용: 음악을 출력 형식에 맞춰 dur초만큼(볼륨·페이드 적용) PCM으로
@@ -2989,7 +2998,7 @@ function renderVideoPane() {
   $('#logoScaleBox').style.display = $('#logoAlphaBox').style.display = lm === 'back' ? '' : 'none';
   $('#sbLogoBox').style.display = lm === 'off' ? 'none' : '';
   $('#sbLogos').innerHTML = [0, 1].map(i => { const n = game.teams[i].name, own = sbLogoOwn(n), src = own || logoOf(n); return `<div class="logo" data-team="${i}"><span class="th" style="${src ? `background-image:url(${src})` : ''}">${src ? '' : '없음'}</span><span class="nm" title="${esc(n)}">${esc(n)}</span><button class="mini" data-act="up">올리기</button>${own ? '<button class="mini" data-act="rm">지우기</button>' : ''}</div>`; }).join('');
-  $('#logoStatus').textContent = lm === 'off' ? '' : [0, 1].map(i => { const n = game.teams[i].name; return `${n}: ${sbLogoOwn(n) ? '점수판 로고 ✓' : logoOf(n) ? '기록 카드 로고 사용 중' : '없음'}`; }).join(' · ') + ([0, 1].some(i => !sbLogoOf(game.teams[i].name)) ? ' → [올리기]로 넣어주세요' : '');
+  $('#logoStatus').textContent = lm === 'off' ? '' : [0, 1].map(i => { const n = game.teams[i].name; return `${n}: ${sbLogoOwn(n) ? '✓' : logoOf(n) ? '카드 로고 사용' : '없음'}`; }).join(' · ');
   $('#sbSize').value = sb.size; $('#sizeVal').textContent = sb.size;
   $('#autoQ').checked = sb.autoQ !== false; $('#skipCuts').checked = sb.skipCuts !== false;
   $('#trimStart').value = sb.trimStart != null ? fmt(sb.trimStart, true) : '';
@@ -3537,7 +3546,7 @@ function tick() {
     if (game.sb.skipCuts && !player.paused() && !pendingSeek) {
       const c = cutAt(player.time());
       if (c && c.e >= player.duration() - 0.1) { player.pause(); player.seek(c.s); }
-      else if (c) player.seek(c.e);
+      else if (c) { player.seek(c.e); capSeeked = false; capSeekedMus = false; }   // 잘라낸 구간을 건너뛰는 건 사용자가 옮긴 게 아니니 음악·효과음은 계속
     }
     checkInserts(player.time());
     renderLive();
@@ -3563,6 +3572,23 @@ setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 
 window.addEventListener('pagehide', flushSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+// 설정 패널 섹션 접기(제목 클릭)와 설명 버튼(ⓘ). 접힌 상태는 브라우저에 기억해요.
+{
+  const key = 'mm-box:fold', st = lsGet(key) || {};
+  $$('section[data-sec]').forEach(sec => {
+    const id = sec.dataset.sec, h = sec.querySelector('h2'); if (!h) return;
+    sec.classList.toggle('cl', id in st ? !!st[id] : sec.classList.contains('cl'));
+    if (sec.querySelector('.info')) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'i'; b.textContent = 'i'; b.title = '설명 보기';
+      b.addEventListener('click', ev => { ev.stopPropagation(); sec.classList.remove('cl'); sec.classList.toggle('info-open'); });
+      h.appendChild(b);
+    }
+    h.addEventListener('click', ev => {
+      if (ev.target.closest('button, input, select, a, label')) return;   // 제목 안의 버튼·체크는 그대로 동작
+      sec.classList.toggle('cl'); st[id] = sec.classList.contains('cl'); lsSet(key, st);
+    });
+  });
+}
 loadGame(lsGet('mm-box:last'));
 loadSfx(); loadBgm();
 setMode(opts.mode);
