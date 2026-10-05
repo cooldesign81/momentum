@@ -110,7 +110,7 @@
   .timeline.zoomed { cursor: grab; } .timeline.dragging { cursor: grabbing; }
   .timeline .tk { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.08); pointer-events: none; }
   .timeline .tk span { position: absolute; left: 3px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
-  .tlmini { flex: none; position: relative; height: 8px; margin: 0 0 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; overflow: hidden; }
+  .tlmini { flex: none; position: relative; height: 8px; margin: 0 0 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; overflow: hidden; touch-action: none; }
   .tlmini .win { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.25); border: 1px solid var(--accent); border-radius: 3px; min-width: 4px; pointer-events: none; }
   .tlmini .ph { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--danger); pointer-events: none; }
   .tlmini.off { visibility: hidden; }   /* 자리를 차지한 채 숨겨요 (확대할 때 타임라인이 아래로 밀리지 않게) */
@@ -734,10 +734,14 @@ const KEYMAP = Object.fromEntries(STATS.flatMap(s => /\d/.test(s.key) ? [['Digit
 
 // ---------- 저장 ----------
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
-let quotaWarned = false;
+let quotaWarnedAt = 0;
+// 저장 성공 여부를 돌려줘요. 실패하면(저장 공간 부족) 10초에 한 번씩 알려요.
 function lsSet(k, v) {
-  try { localStorage.setItem(k, JSON.stringify(v)); }
-  catch (e) { if (!quotaWarned && typeof toast === 'function') { quotaWarned = true; toast('브라우저 저장 공간이 부족해서 저장하지 못했어요. 삽입한 이미지를 줄이거나 [기록 파일 저장]으로 백업하세요.', true); } }
+  try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+  catch (e) {
+    if (typeof toast === 'function' && performance.now() - quotaWarnedAt > 10000) { quotaWarnedAt = performance.now(); toast('브라우저 저장 공간이 부족해서 저장하지 못했어요. 삽입한 이미지를 줄이거나 [기록 파일 저장]으로 백업하세요.', true); }
+    return false;
+  }
 }
 const OPT_KEY = 'mm-box:opts';
 const opts = Object.assign({ lag: 1, skip: 5, askAst: true, keepSel: true, mode: 'grid' }, lsGet(OPT_KEY));
@@ -764,11 +768,14 @@ let game = null;
 let saveTimer = null, pendingSave = null;
 // 저장은 잠깐 모았다가 한 번에 써요. 경기를 바꾸기 전에는 flushSave()로 먼저 끝내요.
 function writeGame(g) {
-  lsSet('mm-box:g:' + g.id, g);
+  if (!lsSet('mm-box:g:' + g.id, g)) return false;   // 못 썼으면 목록에도 올리지 않아요 (빈 경기를 가리키지 않게)
   const idx = gameIndex().filter(x => x.id !== g.id);
   idx.unshift({ id: g.id, title: gameTitle(g), updated: g.updated });
+  // 목록은 60개까지. 목록에서 빠지는 오래된 경기는 데이터도 지워요 (열 수 없는 데이터가 공간만 차지하지 않게)
+  idx.slice(60).forEach(x => { try { localStorage.removeItem('mm-box:g:' + x.id); } catch {} });
   lsSet('mm-box:index', idx.slice(0, 60));
   lsSet('mm-box:last', g.id);
+  return true;
 }
 function flushSave() {
   clearTimeout(saveTimer);
@@ -798,7 +805,7 @@ function loadGame(id) {
   cutStart = null;
   touch();
   undoStack = []; redoStack = [];
-  selected = null; astPending = null;
+  selected = null; clearAst();
   renderAll();
 }
 
@@ -874,7 +881,7 @@ const player = {
     if (mode !== 'file' || !clips.length) return;
     const [k, t] = clipAt(T);
     if (k !== cur) {
-      const play = !video.paused;
+      const play = pendingSeek ? pendingSeek.play : !video.paused;   // 앞 영상 전환이 아직 진행 중이면 그때의 재생 여부를 이어받아요
       cur = k; pendingSeek = { t, play };
       video.src = clips[k].url;
     } else if (pendingSeek) pendingSeek.t = t;
@@ -1162,7 +1169,9 @@ let pressTimer = null, pressed = false;
 $('#gridEntry').addEventListener('contextmenu', ev => {
   const b = ev.target.closest('[data-g]'); if (!b) return;
   ev.preventDefault();
+  clearTimeout(pressTimer);   // 안드로이드는 길게 누르면 contextmenu가 먼저 와요. 타이머까지 돌면 두 번 지워지니 여기서 끝내요.
   if (!pressed) gridDecrement(b);   // 길게 누르기로 이미 지웠으면 한 번 더 지우지 않아요
+  pressed = true;
 });
 $('#gridEntry').addEventListener('touchstart', ev => {
   const b = ev.target.closest('[data-g]'); if (!b) return;
@@ -1452,6 +1461,8 @@ $('#btnSwap').addEventListener('click', () => {
   game.sb.colors.reverse();
   game.events.forEach(e => e.team = 1 - e.team);
   game.played = Object.fromEntries(Object.entries(game.played).map(([k, v]) => [(1 - +k[0]) + k.slice(1), v]));
+  game.inserts.forEach(i => { if (i.kind === 'box') i.team = 1 - i.team; if (i.kind === 'intro' && Array.isArray(i.en)) i.en.reverse(); });   // 선수별 카드·매치업 영문 이름도 따라감
+  redoStack.forEach(r => { if (r.obj && typeof r.obj.team === 'number' && (r.kind === 'event' || r.kind === 'insert')) r.obj.team = 1 - r.obj.team; });
   if (selected) selected = { ...selected, team: 1 - selected.team };
   clearAst(); save(); renderAll();
 });
@@ -1623,7 +1634,7 @@ $('#jsonInput').addEventListener('change', async ev => {
     flushSave();
     // 새 경기로 저장해서 불러와요 (같은 id의 기존 경기를 덮어쓰지 않게). loadGame이 빠진 설정을 채워요.
     const id = Date.now().toString(36);
-    lsSet('mm-box:g:' + id, { ...newGame(), ...g, id, updated: Date.now() });
+    if (!lsSet('mm-box:g:' + id, { ...newGame(), ...g, id, updated: Date.now() })) return;   // 저장 공간 부족 안내는 lsSet이 띄워요
     loadGame(id); clearAst();
     save(); toast('기록 파일을 새 경기로 불러왔어요.');
   } catch { toast('기록 파일이 아니에요.', true); }
@@ -1734,8 +1745,11 @@ function showTab(tab) {
 }
 $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
 
+document.addEventListener('change', ev => { if (ev.target.matches('select, input[type=checkbox]') && !ev.target.closest('#capText')) ev.target.blur(); });   // 고른 뒤 포커스가 남아 단축키를 먹는 일이 없게
 document.addEventListener('keydown', ev => {
-  if (ev.target.closest('input, textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  // 글자를 치는 칸에서만 단축키를 끄고, 체크박스·슬라이더에 포커스가 남아 있어도 단축키는 그대로 돼요.
+  if (ev.target.closest('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  if (ev.repeat && !['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;   // 키를 누르고 있어도 기록이 여러 번 들어가지 않게
   if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -1895,7 +1909,7 @@ function editClips(fn) {
   const cms = game.comments.map(c => ({ e: c, ...loc(c.t) }));
   const inss = game.inserts.map(c => ({ e: c, ...loc(c.t) }));
   const muss = game.music.map(c => ({ e: c, ...loc(c.t) }));
-  const oldCuts = game.sb.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
+  const oldCuts = game.sb.cuts.map(c => { const ks = clipAt(c.s)[0], ke = clipAt(c.e - 0.001)[0]; return { s: loc(c.s), e: loc(c.e - 0.001), span: clips.slice(ks, ke + 1).map(x => x.key) }; });
   const oldTrim = ['trimStart', 'trimEnd'].map(k => game.sb[k] == null ? null : loc(game.sb[k]));
   fn();
   const idx = key => clips.findIndex(c => c.key === key);
@@ -1905,10 +1919,9 @@ function editClips(fn) {
   game.comments = back(cms).sort((a, b) => a.t - b.t);
   game.inserts = back(inss).sort(insOrder);
   game.music = back(muss).sort((a, b) => a.t - b.t);
-  game.sb.cuts = normCuts(oldCuts.filter(c => {
-    const ks = idx(c.s.key), ke = idx(c.e.key);
-    return ks >= 0 && ke >= 0 && (ke === ks || (ke === ks + 1 && c.s.key !== c.e.key));
-  }).map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
+  // 잘라낸 구간은 걸친 영상들이 같은 순서로 붙어 있을 때만 남겨요 (하나라도 빠지거나 순서가 바뀌면 지워요)
+  game.sb.cuts = normCuts(oldCuts.filter(c => { const is = c.span.map(idx); return is.every((v, i) => v >= 0 && (i === 0 || v === is[i - 1] + 1)); })
+    .map(c => ({ s: offset(idx(c.s.key)) + c.s.t, e: offset(idx(c.e.key)) + c.e.t + 0.001 })));
   // 내보낼 시작·끝도 자기 영상을 따라가요. 그 영상을 뺐으면 지워요.
   ['trimStart', 'trimEnd'].forEach((k, i) => { const x = oldTrim[i]; game.sb[k] = x && idx(x.key) >= 0 ? offset(idx(x.key)) + x.t : null; });
   cutStart = null; undoStack = []; redoStack = [];
@@ -2314,20 +2327,23 @@ function logoOf(name, store = logoStore()) {
 }
 // 점수판용 로고는 따로 저장해요 (단순한 로고). 없으면 기록 카드 로고를 대신 써요.
 const sbLogoStore = () => storeOf('mm-box:sblogos');
+// 지우기: 띄어쓰기만 다른 이름으로 맞춰진 로고도 같이 지워요
+const dropLogo = (st, name) => Object.keys(st).filter(n => n === name || normName(n) === normName(name)).forEach(n => delete st[n]);
 const sbLogoOwn = name => logoOf(name, sbLogoStore());
 const sbLogoOf = name => sbLogoOwn(name) || logoOf(name);
 const imgCache = {};
 function imgFor(src) {
   if (!src) return null;
   let e = imgCache[src];
-  if (!e) { e = imgCache[src] = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; lastBoardKey = ''; }; e.img.src = src; }
+  if (!e) { e = imgCache[src] = { img: new Image(), ok: false, err: false }; e.img.onload = () => { e.ok = true; lastBoardKey = ''; }; e.img.onerror = () => { e.err = true; }; e.img.src = src; }
   return e.ok ? e.img : null;
 }
 const imgReadyKey = () => Object.values(imgCache).filter(e => e.ok).length;
 function loadImg(src) {
   return new Promise(res => {
-    const e = imgCache[src] || (imgCache[src] = { img: new Image(), ok: false });
+    const e = imgCache[src] || (imgCache[src] = { img: new Image(), ok: false, err: false });
     if (e.ok) return res(e.img);
+    if (e.err) return res(null);   // 이미 못 읽은 그림은 기다리지 않아요 (내보내기가 '준비 중'에서 멈추지 않게)
     e.img.addEventListener('load', () => { e.ok = true; res(e.img); }, { once: true });
     e.img.addEventListener('error', () => res(null), { once: true });
     if (!e.img.src) e.img.src = src;
@@ -2547,7 +2563,7 @@ $('#logos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   logoTeam = +box.dataset.team;
   if (act === 'up') $('#logoFile').click();
-  else if (act === 'rm') { const st = logoStore(); delete st[game.teams[logoTeam].name]; saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = logoStore(); dropLogo(st, game.teams[logoTeam].name); saveLogos('mm-box:logos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#logoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -2559,7 +2575,7 @@ $('#sbLogos').addEventListener('click', ev => {
   const box = ev.target.closest('.logo'); if (!box) return; const act = ev.target.closest('[data-act]')?.dataset.act;
   sbLogoTeam = +box.dataset.team;
   if (act === 'up') $('#sbLogoFile').click();
-  else if (act === 'rm') { const st = sbLogoStore(); delete st[game.teams[sbLogoTeam].name]; saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
+  else if (act === 'rm') { const st = sbLogoStore(); dropLogo(st, game.teams[sbLogoTeam].name); saveLogos('mm-box:sblogos', st); renderVideoPane(); lastBoardKey = ''; }
 });
 $('#sbLogoFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -2590,7 +2606,7 @@ let bgmLib = [];   // [{id, name, dur, buf}]
 const bgmBuf = id => bgmLib.find(m => m.id === id)?.buf || null;
 const bgmDB = {
   open() { return new Promise((res, rej) => { if (!window.indexedDB) return rej(new Error('no idb')); const r = indexedDB.open('mm-box-media', 1); r.onupgradeneeded = () => r.result.createObjectStore('bgm', { keyPath: 'id', autoIncrement: true }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
-  async run(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('bgm', mode), req = fn(tx.objectStore('bgm')); tx.oncomplete = () => { res(req?.result); db.close(); }; tx.onerror = () => rej(tx.error); }); },
+  async run(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('bgm', mode), req = fn(tx.objectStore('bgm')); tx.oncomplete = () => { res(req?.result); db.close(); }; tx.onerror = tx.onabort = () => { db.close(); rej(tx.error || new Error('저장 공간이 부족해요')); }; }); },
   all() { return this.run('readonly', st => st.getAll()); },
   put(rec) { return this.run('readwrite', st => st.put(rec)); },
   del(id) { return this.run('readwrite', st => st.delete(id)); },
@@ -2607,7 +2623,7 @@ async function loadBgm() {
   renderInserts();
 }
 function renderBgmList() {
-  $('#bgmList').innerHTML = bgmLib.length ? bgmLib.map(m => `<div class="bgm-row" data-id="${m.id}"><span class="nm" title="${esc(m.name)}">${esc(m.name)}</span><span class="d">${m.error ? '읽기 실패' : m.buf ? fmt(m.dur) : '읽는 중…'}</span><button class="mini" data-act="play">들어보기</button><button class="mini" data-act="rm">지우기</button></div>`).join('') : '<div class="hint" style="margin:0">아직 넣은 음악이 없어요.</div>';
+  $('#bgmList').innerHTML = bgmLib.length ? bgmLib.map(m => `<div class="bgm-row" data-id="${m.id}"><span class="nm" title="${esc(m.name)}">${esc(m.name)}</span><span class="d">${m.error ? '읽기 실패' : m.buf ? fmt(m.dur) : '읽는 중…'}</span><button class="mini" data-act="play">${bgmTry && bgmTry.__id === m.id ? '멈춤' : '들어보기'}</button><button class="mini" data-act="rm">지우기</button></div>`).join('') : '<div class="hint" style="margin:0">아직 넣은 음악이 없어요.</div>';
 }
 $('#bgmAdd').addEventListener('click', () => $('#bgmFile').click());
 $('#bgmFile').addEventListener('change', async ev => {
@@ -2628,11 +2644,11 @@ let bgmTry = null;
 $('#bgmList').addEventListener('click', async ev => {
   const row = ev.target.closest('.bgm-row'); if (!row) return; const id = +row.dataset.id, act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'play') {
-    if (bgmTry) { bgmTry.stop(); bgmTry = null; ev.target.textContent = '들어보기'; return; }
+    if (bgmTry) { const same = bgmTry.__id === id; bgmTry.stop(); bgmTry = null; renderBgmList(); if (same) return; }
     const buf = bgmBuf(id); if (!buf) { toast('아직 읽는 중이에요.', true); return; }
     const c = audioCtx(); if (c.state === 'suspended') c.resume();
     const src = c.createBufferSource(); src.buffer = buf; const g = c.createGain(); g.gain.value = (musDefaults().gain || 60) / 100; src.connect(g).connect(c.destination); src.start(0, 0, 8);
-    bgmTry = src; ev.target.textContent = '멈춤'; src.onended = () => { if (bgmTry === src) { bgmTry = null; renderBgmList(); } };
+    bgmTry = src; src.__id = id; renderBgmList(); src.onended = () => { if (bgmTry === src) { bgmTry = null; renderBgmList(); } };
   } else if (act === 'rm') {
     if (!confirm('이 음악을 보관함에서 지울까요? 이 음악을 고른 항목은 음악 없음이 돼요.')) return;
     try { await bgmDB.del(id); } catch {}
@@ -2722,7 +2738,7 @@ function tickMusic(t) {
     const m = game.music.find(m => lastMusT < m.t && t >= m.t && t - m.t < 1 && m.bgm && bgmBuf(m.bgm));
     if (m && !(musCur && musCur.id === m.id)) { musStop(0.05); musStart(m, 0); }
   }
-  lastMusT = t;
+  if (!pendingSeek) lastMusT = t;
 }
 let capSeekedMus = false;
 // 내보내기용: 음악을 출력 형식에 맞춰 dur초만큼(볼륨·페이드 적용) PCM으로
@@ -2862,7 +2878,7 @@ $('#sfxFile').addEventListener('change', ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
   if (f.size > 2 * 1024 * 1024) { toast('소리 파일은 2MB까지만 넣을 수 있어요. 짧게 잘라서 넣어주세요.', true); return; }
   const r = new FileReader();
-  r.onload = () => { lsSet('mm-box:capsfx', { name: f.name, data: r.result }); loadSfx().then(() => { if (sfx.buf) { toast(`효과음을 '${f.name}'(으)로 바꿨어요.`); playSfx(true); } else toast(sfx.error, true); }); };
+  r.onload = () => { if (!lsSet('mm-box:capsfx', { name: f.name, data: r.result })) return; loadSfx().then(() => { if (sfx.buf) { toast(`효과음을 '${f.name}'(으)로 바꿨어요.`); playSfx(true); } else toast(sfx.error, true); }); };
   r.readAsDataURL(f);
 });
 $('#sfxReset').addEventListener('click', () => { try { localStorage.removeItem('mm-box:capsfx'); } catch {} loadSfx().then(() => toast('기본 소리로 돌아갔어요.')); });
@@ -2955,7 +2971,7 @@ function checkInserts(t) {
     }
     return;
   }
-  if (player.paused() || pendingSeek) { lastTickT = t; return; }
+  if (player.paused() || pendingSeek) { if (!pendingSeek) lastTickT = t; return; }   // 다음 영상을 읽는 동안은 시각을 건너뛰지 않아요 (경계에 둔 카드가 빠지지 않게)
   const list = game.inserts.filter(i => i.kind !== 'intro' && lastTickT < i.t && t >= i.t && t - i.t < 1 && !nearEnd(i.t));   // 끝 카드는 영상이 끝난 뒤에
   lastTickT = t;
   showHold(list, false);
@@ -3027,7 +3043,8 @@ function readVideoPane() {
   $('#logoScaleVal').textContent = sb.logoScale; $('#logoAlphaVal').textContent = sb.logoAlpha;
   sb.size = +$('#sbSize').value; $('#sizeVal').textContent = sb.size;
   sb.autoQ = $('#autoQ').checked; sb.skipCuts = $('#skipCuts').checked;
-  sb.trimStart = parseTime($('#trimStart').value); sb.trimEnd = parseTime($('#trimEnd').value);
+  const keep = (v, old) => (v != null && old != null && Math.abs(v - old) < 0.1) ? old : v;   // 칸에 0.1초 단위로 보여주느라 정밀도가 깎이지 않게
+  sb.trimStart = keep(parseTime($('#trimStart').value), sb.trimStart); sb.trimEnd = keep(parseTime($('#trimEnd').value), sb.trimEnd);
   sb.quality = $('#quality').value;
   sb.res = $('#xRes').value; sb.fps = +$('#xFps').value; sb.vcodec = $('#xCodec').value;
   sb.mbps = Math.min(150, Math.max(1, +$('#xMbps').value || 12));
@@ -3103,7 +3120,7 @@ $('#capList').addEventListener('change', ev => {
   save(); renderMarkers(); lastBoardKey = '';
 });
 $$('#pane-video input, #pane-video select').forEach(el => {
-  if (['format', 'capText', 'insDur', 'sfxFile', 'insImageFile', 'logoFile', 'sbLogoFile', 'bgmFile'].includes(el.id)) return;
+  if (['format', 'capText', 'insDur', 'sfxFile', 'insImageFile', 'logoFile', 'sbLogoFile', 'bgmFile', 'introColor'].includes(el.id)) return;
   el.addEventListener(el.type === 'text' ? 'change' : 'input', () => {
     // 세부 설정을 건드리면 형식은 '사용자 지정'이 돼요.
     if (el.closest('#adv') && el.id !== 'xMbps') game.sb.format = $('#format').value = 'custom';
@@ -3313,7 +3330,7 @@ $('#btnExport').onclick = async () => {
     await output.start();
     const brNote = ` · ${W}×${H} ${FPS ? `${FPS}fps` : '원본 fps'} · ${CODEC_NAME[codec] || codec}${typeof quality === 'number' ? ` · ${(quality / 1e6).toFixed(1)} Mbps` : ''}`;
 
-    const span = parts.reduce((n, p) => n + p.to - p.from, 0) + pending.reduce((n, i) => n + (+i.dur || 0), 0);
+    const span = parts.reduce((n, p) => n + p.to - p.from, 0) + pending.reduce((n, i) => n + (+i.dur || 6), 0);
     let base = 0, done = 0, lastV = -1, lastA = 0, nextF = 0;
     const report = t => {
       const p = Math.min(1, (done + t) / span);
@@ -3352,7 +3369,7 @@ $('#btnExport').onclick = async () => {
       setProgress(Math.min(1, done / span), `${Math.round(done / span * 100)}% · 카드 넣는 중`);
     };
     for (const part of opened) {
-      while (pending.length && pending[0].t <= part.o + part.from + 1e-3) await emitCard(pending.shift());
+      while (pending.length && pending[0].t <= part.o + part.from + 0.02) await emitCard(pending.shift());   // 나누는 기준(0.02)과 같은 여유
       curClip = part.k + 1;
       const { vt, at, t0, o, from, to } = part;
       const len = to - from;
@@ -3401,9 +3418,9 @@ $('#btnExport').onclick = async () => {
           for (let cur = from; cur < to - 1e-4;) {
             if (job.canceled) throw new Error('canceled');
             const len = Math.min(0.5, to - cur), n = Math.round(len * sr), data = new Float32Array(n * ch);
-            mixSfx(data, n, ch, sr, o + cur);
             const ts = Math.max(base + (cur - from), lastA);
-            mixMusic(data, n, ch, sr, ts);
+            mixMusic(data, n, ch, sr, ts);   // 음악(과 '음악만' 줄이기) 먼저, 효과음은 그 위에
+            mixSfx(data, n, ch, sr, o + cur);
             const smp = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: ts });
             await audioSource.add(smp); smp.close();
             lastA = ts + n / sr; cur += n / sr;
@@ -3424,8 +3441,8 @@ $('#btnExport').onclick = async () => {
             // 이 조각에 자막 효과음이나 배경음악이 걸쳐 있으면 섞은 새 조각으로 바꿔요.
             const n = s.numberOfFrames, data = new Float32Array(n * ch);
             for (let k = 0; k < ch; k++) s.copyTo(data.subarray(k * n, (k + 1) * n), { planeIndex: k, format: 'f32-planar' });
-            mixSfx(data, n, ch, sr, gameStart);
             mixMusic(data, n, ch, sr, outTs);
+            mixSfx(data, n, ch, sr, gameStart);
             const mixed = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: ch, sampleRate: sr, timestamp: s.timestamp });
             s.close(); s = mixed;
           }
@@ -3452,6 +3469,7 @@ $('#btnExport').onclick = async () => {
     else { console.error(err); showMsg('내보내기에 실패했어요: ' + (err?.message || err), true); }
     try { await writable?.abort(); } catch {}
   } finally {
+    bgmPcmCache.clear();   // 음악 PCM(수백 MB까지 갈 수 있음)은 내보내기가 끝나면 비워요
     exporting = null;
     $('#btnExport').disabled = mode !== 'file';
     setTimeout(() => $('#exportBox').classList.add('hidden'), 1500);
@@ -3545,7 +3563,7 @@ function tick() {
   if (mode) {
     if (game.sb.skipCuts && !player.paused() && !pendingSeek) {
       const c = cutAt(player.time());
-      if (c && c.e >= player.duration() - 0.1) { player.pause(); player.seek(c.s); }
+      if (c && c.e >= player.duration() - 0.1) { player.pause(); player.seek(c.s); endInserts(); }   // 끝까지 잘라낸 경우에도 끝 카드는 보여줘요
       else if (c) { player.seek(c.e); capSeeked = false; capSeekedMus = false; }   // 잘라낸 구간을 건너뛰는 건 사용자가 옮긴 게 아니니 음악·효과음은 계속
     }
     checkInserts(player.time());
@@ -3580,7 +3598,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
     sec.classList.toggle('cl', id in st ? !!st[id] : sec.classList.contains('cl'));
     if (sec.querySelector('.info')) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'i'; b.textContent = 'i'; b.title = '설명 보기';
-      b.addEventListener('click', ev => { ev.stopPropagation(); sec.classList.remove('cl'); sec.classList.toggle('info-open'); });
+      b.addEventListener('click', ev => { ev.stopPropagation(); if (sec.classList.contains('cl')) { sec.classList.remove('cl'); st[id] = false; lsSet(key, st); } sec.classList.toggle('info-open'); });
       h.appendChild(b);
     }
     h.addEventListener('click', ev => {
