@@ -168,6 +168,7 @@ details.week .games{padding:0 14px 14px}
 .back{display:inline-block;margin-top:24px;color:var(--muted);text-decoration:none;font-weight:500}
 .wl-W{color:var(--brand);font-weight:700}
 .wl-L{color:var(--muted)}
+.wl-D{color:var(--ink)}
 
 /* calendar */
 .cal-head{display:flex;align-items:center;gap:10px}
@@ -675,7 +676,7 @@ const CONFIG = {
   // 비밀번호용 계정 (Firebase Authentication에 이 두 이메일로 계정을 만들고, 비밀번호를 각각 정하세요)
   auth: {
     scheduleEmail: 'schedule@momentum.team',   // 비밀번호 = 일정 관리 비번
-    adminEmail: 'admin@momentum.team',         // 비밀번호 = 관리자 비번 (영상, 공지, 일정 모두 가능)
+    adminEmail: 'cooldesign81@naver.com',         // 비밀번호 = 관리자 비번 (영상, 공지, 일정 모두 가능)
   },
 
   // 일정 등록할 때 고를 수 있는 장소 (추가·삭제 가능)
@@ -797,6 +798,8 @@ function parseWeek(g, weekNo, seasonId) {
     const m = str(cell(start + 1, 0)).match(/(\d+)\s*:\s*(\d+)/);
     const sa = m ? +m[1] : a.reduce((s, p) => s + p.pts, 0);
     const sb = m ? +m[2] : b.reduce((s, p) => s + p.pts, 0);
+    // 경기 전에 명단만 미리 넣어둔 블록(0:0, 기록 없음)은 아직 경기가 아니에요
+    if (!sa && !sb && ![...a, ...b].some(p => KEYS.some(k => p[k]))) return;
     games.push({ id: `${seasonId}-w${weekNo}-${bi}`, seasonId, week: weekNo, date, label: str(cell(start, 0)).replace(/\s*MATCH/i, ''), teamA, teamB, scoreA: sa, scoreB: sb, a, b });
   });
   return games;
@@ -864,7 +867,8 @@ async function loadSeason(cfg) {
       const lists = await fetchSheet(cfg.sheetId, 'LISTS', 'A1:F44');
       const weeks = await Promise.all(Array.from({ length: cfg.weeks || 12 }, (_, i) =>
         fetchSheet(cfg.sheetId, 'Week ' + pad(i + 1), 'A1:AM64').catch(() => null)));
-      const grids = {}; weeks.forEach((g, i) => grids[i + 1] = g);
+      // 없는 탭(예: Week 09)을 부르면 구글이 첫 번째 탭을 대신 돌려줘요. 앞 주와 똑같은 내용이면 버려요.
+      const grids = {}, seen = new Set(); weeks.forEach((g, i) => { const k = g && JSON.stringify(g); if (!g || seen.has(k)) return; seen.add(k); grids[i + 1] = g; });
       buildSeason(s, lists, grids);
       if (!s.teams.length) throw new Error('빈 데이터');
       s.source = 'live';
@@ -911,7 +915,7 @@ async function loadAllSeasons() {
   const [cur, frozen, arch] = await Promise.all([
     loadSeason({ id: 'current', sheetId: L.sheetId, weeks: 12, snapKey: L.currentSnapshot }),
     Promise.all(L.savedSeasons.map(id => loadSeason({ id, frozen: true }))),
-    L.archiveSheetId ? loadArchive(L.archiveSheetId).catch(e => { console.warn('보관소를 읽지 못했어요', e); return []; }) : [],
+    L.archiveSheetId ? loadArchive(L.archiveSheetId).catch(() => loadArchive(L.archiveSheetId)).catch(e => { console.warn('보관소를 읽지 못했어요', e); state.archiveFailed = true; return []; }) : [],
   ]);
   // 같은 시즌(시작 날짜가 같음)이 여러 곳에 있으면: 현재 시트 > 보관소 > 사이트 저장본
   const byStart = new Map();
@@ -1036,7 +1040,7 @@ function seasonSelect(includeCareer) {
 /* ===================== 조각 ===================== */
 function gameCard(g) {
   const aw = g.scoreA > g.scoreB, bw = g.scoreB > g.scoreA;
-  return `<button class="card game" data-game="${g.id}">
+  return `<button class="card game" data-game="${esc(g.id)}">
     <div class="meta">${g.week}주차${g.date ? `, ${fmtDate(g.date)}` : ''}</div>
     <div class="row ${aw ? 'win' : bw ? 'lose' : ''}"><span class="t">${esc(g.teamA)}</span><span class="s en num">${g.scoreA}</span></div>
     <div class="row ${bw ? 'win' : aw ? 'lose' : ''}"><span class="t">${esc(g.teamB)}</span><span class="s en num">${g.scoreB}</span></div>
@@ -1108,14 +1112,14 @@ function pagePlayer(name) {
   const logSeason = per.find(x => x.s.id === state.seasonId) || latest;
   return `<a class="back" href="#/players">‹ 선수 목록</a>${can('admin') && pr.id ? ` <button class="link-btn" data-edit-member="${esc(pr.id)}" style="margin-left:12px">선수 정보 수정</button>` : ''}
   <div class="pd"><div class="ph">${pr.photo ? `<img src="${esc(pr.photo)}" alt="">` : `<span class="ini ko">${esc(name.slice(-2))}</span>`}</div>
-    <div>${pr.number !== undefined ? `<span class="no en">#${esc(pr.number)}</span>` : ''}<h2 class="ko">${esc(name)}</h2>
+    <div>${pr.number !== undefined && pr.number !== '' ? `<span class="no en">#${esc(pr.number)}</span>` : ''}<h2 class="ko">${esc(name)}</h2>
     <div class="facts">${latest ? `<span>${esc(latest.s.name)} ${teamName(latest.s.id, latest.p.team)}</span>` : ''}${facts.map(f => `<span>${esc(f)}</span>`).join('')}</div></div></div>
   ${car ? `<div class="big4">${[['pts', '평균 득점'], ['reb', '평균 리바운드'], ['ast', '평균 어시스트'], ['mvp', 'MVP 지수']].map(([k, l]) => `<div class="card"><b class="en num">${f1(car.avg[k])}</b><span>통산 ${l}</span></div>`).join('')}</div>
   <section class="sec"><h3>시즌별 평균</h3><div class="tbl-wrap"><table><thead><tr><th class="l">시즌</th><th>경기</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>FG%</th><th>3P%</th><th>FT%</th><th>MVP</th></tr></thead>
     <tbody>${per.map(x => row(`${esc(x.s.name)} <span class="muted">${teamName(x.s.id, x.p.team)}</span>`, x.p)).join('')}${per.length > 1 ? row('<b>통산</b>', car) : ''}</tbody></table></div></section>
   <section class="sec"><div class="sec-head"><h3>경기별 기록, ${esc(logSeason.s.name)}</h3>${per.length > 1 ? `<select class="season" data-season aria-label="시즌 선택">${per.map(x => `<option value="${x.s.id}" ${x === logSeason ? 'selected' : ''}>${esc(x.s.name)}</option>`).join('')}</select>` : ''}</div>
     <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th class="l">주차</th><th class="l">상대</th><th>결과</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>야투</th><th>3점</th><th>자유투</th></tr></thead><tbody>
-    ${logSeason.p.log.map(l => `<tr><td class="l">${l.game.week}주차 <span class="muted">${esc(fmtDate(l.game.date, false))}</span></td><td class="l">${teamName(logSeason.s.id, l.opp)}</td><td class="wl-${l.won ? 'W' : 'L'}">${l.won ? '승' : '패'} ${l.team === l.game.teamA ? `${l.game.scoreA}:${l.game.scoreB}` : `${l.game.scoreB}:${l.game.scoreA}`}</td><td class="num"><b>${l.pts}</b></td><td class="num">${l.reb}</td><td class="num">${l.ast}</td><td class="num">${l.stl}</td><td class="num">${l.blk}</td><td class="num">${l.to}</td><td class="num">${l.fgm}/${l.fga}</td><td class="num">${l.tpm}/${l.tpa}</td><td class="num">${l.ftm}/${l.fta}</td></tr>`).join('')}
+    ${logSeason.p.log.map(l => `<tr><td class="l">${l.game.week}주차 <span class="muted">${esc(fmtDate(l.game.date, false))}</span></td><td class="l">${teamName(logSeason.s.id, l.opp)}</td><td class="wl-${l.won ? 'W' : l.game.scoreA === l.game.scoreB ? 'D' : 'L'}">${l.won ? '승' : l.game.scoreA === l.game.scoreB ? '무' : '패'} ${l.team === l.game.teamA ? `${l.game.scoreA}:${l.game.scoreB}` : `${l.game.scoreB}:${l.game.scoreA}`}</td><td class="num"><b>${l.pts}</b></td><td class="num">${l.reb}</td><td class="num">${l.ast}</td><td class="num">${l.stl}</td><td class="num">${l.blk}</td><td class="num">${l.to}</td><td class="num">${l.fgm}/${l.fga}</td><td class="num">${l.tpm}/${l.tpa}</td><td class="num">${l.ftm}/${l.fta}</td></tr>`).join('')}
     </tbody></table></div></section>` : '<p class="empty sec">아직 경기 기록이 없어요.</p>'}`;
 }
 
@@ -1179,13 +1183,14 @@ function videoForGame(g) {
   const direct = state.videos.find(v => v.game === key);
   if (direct) return { v: direct, auto: false };
   const A = normTeam(g.teamA), B = normTeam(g.teamB), gd = new Date(g.date + 'T00:00');
+  if (!g.date || isNaN(gd)) return null;
   let best = null;
   for (const v of [...state.videos, ...state.feed]) {
     if (v.game || !v.date || !ytId(v.url)) continue;
     const t = normTeam(v.title);
     if (!A || !B || !t.includes(A) || !t.includes(B)) continue;
     const days = (new Date(v.date + 'T00:00') - gd) / 864e5;
-    if (days < 0 || days > 7) continue;
+    if (!(days >= 0 && days < 7)) continue;
     if (!best || days < best.days) best = { v, days, auto: true };
   }
   return best;
@@ -1249,11 +1254,16 @@ function demoLoad() {
   return { events: [], videos: [], members: [], cheers: [], articles: [], news: [{ id: 'n0', title: '(예시) 모멘텀 웹사이트가 열렸어요', body: '공지는 관리자 비밀번호로 올릴 수 있어요. 이 글은 데모용 예시예요.', pinned: true, date: ymd(new Date()) }] };
 }
 function demoSave() { try { localStorage.setItem(DEMO_KEY, JSON.stringify(demo)); } catch (e) {} }
-function demoSync() { DYN.forEach(c => state[c] = (demo[c] || []).map(d => ({ ...d }))); render(); }
+// 날짜가 이상한 일정 하나 때문에 화면 전체가 멈추지 않게, 들어올 때 걸러요
+const VALID = { events: e => typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) };
+const clean = (c, list) => VALID[c] ? list.filter(VALID[c]) : list;
+function demoSync() { DYN.forEach(c => state[c] = clean(c, (demo[c] || []).map(d => ({ ...d })))); render(); }
 // 기사 조회수: articleViews/{기사 id} = { n: 숫자 }. 같은 브라우저에서는 기사마다 하루에 한 번만 올려요 (관리자는 안 셈).
 const VIEW_KEY = 'momentum-viewed-v1';
+const countedViews = new Set();
 function countView(id) {
-  if (!id || id === 'about' || can('admin')) return;
+  if (!id || id === 'about' || can('admin') || countedViews.has(id)) return;
+  countedViews.add(id);
   const today = ymd(new Date());
   let seen = {}; try { seen = JSON.parse(localStorage.getItem(VIEW_KEY)) || {}; } catch (e) {}
   if (seen[id] === today) return;
@@ -1587,7 +1597,7 @@ const editLeague = (date, title, seasonId) => withAuth('schedule', () => {
 // 예전 기사(enc 없음)는 글자(base64)로 0.7MB씩 저장돼 있어서 그 방식으로 읽어요.
 const PDF_MAX_MB = 60, STORE_MAX_MB = 15, CHUNK = 700000, BIN_CHUNK = 900000, IMG_MAX = 1600;
 const mb = n => (n / 1048576).toFixed(1) + 'MB';
-const pdfCache = {};
+const pdfCache = {}, demoFiles = {}; // demoFiles: 데모 모드의 기사 파일 (이 창에서만 유지, 저장소에 안 넣음)
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 // 사진 한 장(data: 주소) 줄이기. 더 작아지지 않으면 원래 그대로 둬요.
 async function shrinkDataUri(uri) {
@@ -1607,8 +1617,13 @@ async function gzipBytes(bytes) {
   if (typeof CompressionStream === 'undefined') return null;
   return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
 }
+let pakoReady;
 async function gunzipBytes(bytes) {
-  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  if (typeof DecompressionStream !== 'undefined') return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  // 예전 아이폰(iOS 16.4 미만)은 압축 풀기 기능이 없어서 작은 도구(pako)를 불러와서 풀어요
+  pakoReady = pakoReady || new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js'; sc.onload = res; sc.onerror = () => { pakoReady = null; rej(new Error('압축을 풀지 못했어요. 브라우저를 최신으로 업데이트해주세요.')); }; document.head.appendChild(sc); });
+  await pakoReady;
+  return window.pako.ungzip(bytes);
 }
 async function packArticle(file) {
   let html = await file.text(), shrunk = 0;
@@ -1632,21 +1647,23 @@ async function savePdf(articleId, file, progress) {
     progress && progress(i + 1, parts);
     const chunk = bytes.slice(i * BIN_CHUNK, (i + 1) * BIN_CHUNK);
     if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).set({ article: articleId, i, bin: firebase.firestore.Blob.fromUint8Array(chunk) });
-    else (demo.articleFiles = demo.articleFiles || {})[`${articleId}_${i}`] = { article: articleId, i, bin: chunk }; // 데모: 이 창에서만 유지
+    else demoFiles[`${articleId}_${i}`] = { article: articleId, i, bin: chunk };
   }
-  pdfCache[articleId] = null;
   return { parts, enc };
 }
 async function deletePdf(articleId, parts) {
   for (let i = 0; i < (parts || 0); i++) {
     if (FB) await fdb.collection('articleFiles').doc(`${articleId}_${i}`).delete().catch(() => {});
-    else if (demo.articleFiles) delete demo.articleFiles[`${articleId}_${i}`];
+    else { delete demoFiles[`${articleId}_${i}`]; if (demo.articleFiles) delete demo.articleFiles[`${articleId}_${i}`]; }
   }
 }
+// 기사 파일 조각의 이름 앞부분. 수정할 때는 새 이름으로 먼저 올리고, 기사 문서를 바꾼 뒤에 옛 조각을 지워요.
+const fileKeyOf = a => a.fileKey || a.id;
+const newFileKey = id => `${id}-${Date.now().toString(36)}`;
 async function loadBytes(a) {
-  const docs = [];
+  const docs = [], key = fileKeyOf(a);
   for (let i = 0; i < (a.parts || 0); i++) {
-    const d = FB ? (await fdb.collection('articleFiles').doc(`${a.id}_${i}`).get()).data() : (demo.articleFiles || {})[`${a.id}_${i}`];
+    const d = FB ? (await fdb.collection('articleFiles').doc(`${key}_${i}`).get()).data() : (demoFiles[`${key}_${i}`] || (demo.articleFiles || {})[`${key}_${i}`]);
     if (!d) throw new Error('기사 파일 일부를 찾지 못했어요.');
     docs.push(d);
   }
@@ -1660,14 +1677,16 @@ async function loadBytes(a) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
 }
+// 같은 기사(같은 버전)는 한 번만 내려받아요. 내려받는 중에 화면이 다시 그려져도 같은 약속(Promise)을 기다려요.
 const htmlCache = {};
-async function loadHtml(a) {
-  if (htmlCache[a.id]) return htmlCache[a.id];
-  return (htmlCache[a.id] = new TextDecoder('utf-8').decode(await loadBytes(a)));
+const verKey = a => `${fileKeyOf(a)}|${a.parts || 0}|${a.updatedAt || ''}`;
+function loadHtml(a) {
+  const k = verKey(a);
+  return htmlCache[k] || (htmlCache[k] = loadBytes(a).then(b => new TextDecoder('utf-8').decode(b)).catch(e => { delete htmlCache[k]; throw e; }));
 }
-async function loadPdf(a) {
-  if (pdfCache[a.id]) return pdfCache[a.id];
-  return (pdfCache[a.id] = URL.createObjectURL(new Blob([await loadBytes(a)], { type: 'application/pdf' })));
+function loadPdf(a) {
+  const k = verKey(a);
+  return pdfCache[k] || (pdfCache[k] = loadBytes(a).then(b => URL.createObjectURL(new Blob([b], { type: 'application/pdf' }))).catch(e => { delete pdfCache[k]; throw e; }));
 }
 function openArticle(id) {
   const a = state.articles.find(x => x.id === id); if (!a) return;
@@ -1700,18 +1719,20 @@ const addArticle = () => withAuth('admin', () => openForm({ title: 'MOMENTUM ESP
   onSave: async v => {
     const id = newId();
     $('#merr').style.color = 'var(--accent-ink)';
-    const saved = await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; });
-    const doc = { title: v.title, date: v.date, ...saved, size: v.pdf.size, type: fileKind(v.pdf), createdAt: new Date().toISOString() };
+    const fileKey = newFileKey(id), saved = await savePdf(fileKey, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; });
+    const doc = { title: v.title, date: v.date, fileKey, ...saved, size: v.pdf.size, type: fileKind(v.pdf), createdAt: new Date().toISOString() };
     if (FB) await fdb.collection('articles').doc(id).set(doc); else { demo.articles.push({ id, ...doc }); demoSave(); demoSync(); }
   } }));
 const editArticle = id => withAuth('admin', () => { const a = state.articles.find(x => x.id === id); if (!a) return;
   openForm({ title: '기사 수정', fields: ARTICLE_FIELDS, data: { ...a, pdf: a.parts ? 'yes' : '' },
     onSave: async v => {
       const patch = { title: v.title, date: v.date };
-      if (v.pdf) { await deletePdf(id, a.parts); Object.assign(patch, await savePdf(id, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; })); patch.size = v.pdf.size; patch.type = fileKind(v.pdf); htmlCache[id] = null; }
-      return store.set('articles', id, patch);
+      const old = { key: fileKeyOf(a), parts: a.parts };
+      if (v.pdf) { patch.fileKey = newFileKey(id); Object.assign(patch, await savePdf(patch.fileKey, v.pdf, (i, n) => { $('#merr').textContent = `기사 올리는 중… ${Math.round(i / n * 100)}%`; })); patch.size = v.pdf.size; patch.type = fileKind(v.pdf); patch.updatedAt = new Date().toISOString(); }
+      await store.set('articles', id, patch);
+      if (v.pdf) await deletePdf(old.key, old.parts);
     },
-    onDelete: async () => { await deletePdf(id, a.parts); return store.remove('articles', id); } }); });
+    onDelete: async () => { await store.remove('articles', id); await deletePdf(fileKeyOf(a), a.parts); } }); });
 function pageArticle(id) {
   const a = state.articles.find(x => x.id === id);
   if (!a) return `<div class="wv-top"><a class="back-btn" href="#/league">‹ 리그로</a></div><p class="loading">${state.articlesLoaded ? '기사를 찾지 못했어요. 지워졌을 수 있어요.' : '📰 기사를 불러오는 중이에요…'}</p>`;
@@ -1735,12 +1756,13 @@ function htmlFrame(html, title, cls) {
       d.head.appendChild(st);
       new ResizeObserver(fit).observe(d.body);
       d.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
-      d.querySelectorAll('a[href^="http"]').forEach(l => l.target = '_blank');
+      d.querySelectorAll('a[href^="http"]').forEach(l => { l.target = '_blank'; l.rel = 'noopener noreferrer'; });
       if (d.fonts) d.fonts.ready.then(fit);
     } catch (e) {}
     fit(); [300, 1000, 2500].forEach(t => setTimeout(fit, t));
   };
-  window.addEventListener('resize', fit);
+  const onResize = () => f.isConnected ? fit() : window.removeEventListener('resize', onResize);
+  window.addEventListener('resize', onResize);
   return f;
 }
 async function mountAbout() {
@@ -1850,14 +1872,13 @@ const editAbout = () => withAuth('admin', () => {
     fields: [{ key: 'pdf', label: '소개 글 파일 (HTML)', type: 'pdf', required: true }], data: { pdf: a ? 'yes' : '' },
     onSave: async v => {
       if (!v.pdf) return;
-      if (a) await deletePdf('about', a.parts);
-      const saved = await savePdf('about', v.pdf, (i, n) => { $('#merr').textContent = `올리는 중… ${Math.round(i / n * 100)}%`; });
-      htmlCache.about = null;
-      const doc = { title: 'ABOUT MOMENTUM', type: 'html', about: true, ...saved, size: v.pdf.size, date: ymd(new Date()), updatedAt: new Date().toISOString() };
+      const fileKey = newFileKey('about'), saved = await savePdf(fileKey, v.pdf, (i, n) => { $('#merr').textContent = `올리는 중… ${Math.round(i / n * 100)}%`; });
+      const doc = { title: 'ABOUT MOMENTUM', type: 'html', about: true, fileKey, ...saved, size: v.pdf.size, date: ymd(new Date()), updatedAt: new Date().toISOString() };
       if (FB) await fdb.collection('articles').doc('about').set(doc);
       else { demo.articles = demo.articles.filter(x => x.id !== 'about'); demo.articles.push({ id: 'about', ...doc }); demoSave(); demoSync(); }
+      if (a) await deletePdf(fileKeyOf(a), a.parts);
     },
-    onDelete: a ? async () => { await deletePdf('about', a.parts); htmlCache.about = null; return store.remove('articles', 'about'); } : undefined });
+    onDelete: a ? async () => { await store.remove('articles', 'about'); await deletePdf(fileKeyOf(a), a.parts); } : undefined });
 });
 async function mountArticle() {
   const holder = document.getElementById('art-holder'); if (!holder || holder.querySelector('iframe')) return;
@@ -1908,7 +1929,7 @@ function uniChips(u) {
   const list = Object.entries(u || {}).filter(([, c]) => c);
   return list.length ? `<div class="uni-chips">${list.map(([t, c]) => `<span class="uni-chip u-${esc(c)}"><i></i>${esc(t)} ${uniLabel(c)}</span>`).join('')}</div>` : '';
 }
-const uniformOf = (date, team) => ((state.events.find(e => e.leagueDate === date) || {}).uniforms || {})[team] || '';
+const uniformOf = (date, team) => { const c = ((state.events.find(e => e.leagueDate === date) || {}).uniforms || {})[team]; return UNIFORMS.some(u => u.k === c) ? c : ''; };
 const uniDot = (date, team) => { const c = uniformOf(date, team); return c ? `<i class="uni-dot u-${c}" title="${uniLabel(c)} 유니폼"></i>` : ''; };
 const PIN = '<svg class="pin-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
 const EXT = '<svg class="ext-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
@@ -1919,7 +1940,7 @@ function placeBlock(e, withMap = true) {
   return '';
 }
 function eventItem(e) {
-  const [, m, d] = e.date.split('-').map(Number);
+  const [, m, d] = String(e.date || '').split('-').map(Number);
   const dow = WD[new Date(e.date + 'T00:00').getDay()];
   const dd = `<div class="dd"><b class="en num">${d}</b><span>${m}월 ${dow}요일</span>${e.time ? `<em class="dd-time num">${esc(e.time)}</em>` : ''}</div>`;
   if (e.league) {
@@ -1968,7 +1989,7 @@ function miniUni(u) {
   return list.length ? `<span class="me-uni">${list.map(([t, c]) => `<span class="u-${esc(c)}" title="${esc(t)} ${uniLabel(c)}"><i></i>${esc(t)}</span>`).join('')}</span>` : '';
 }
 function miniEvent(e) {
-  const [, m, d] = e.date.split('-').map(Number);
+  const [, m, d] = String(e.date || '').split('-').map(Number);
   const dow = WD[new Date(e.date + 'T00:00').getDay()];
   const inner = `<span class="me-date"><b class="en num">${m}.${d}</b><span>${dow}</span></span>
     <span class="me-body"><b>${e.time ? `<span class="me-time num">${esc(e.time)}</span>` : ''}${esc(e.title)}</b>${e.place ? `<span class="me-place">${PIN}${esc(e.place)}</span>` : e.league && e.date >= ymd(new Date()) ? `<span class="me-place tbd">${PIN}장소 미정</span>` : (e.sub ? `<span>${esc(e.sub)}</span>` : '')}${miniUni(e.uniforms)}</span>${e.league ? '<span class="me-tag">LEAGUE</span>' : ''}`;
@@ -2017,14 +2038,14 @@ function topScorer(g) {
 }
 function scoreboard(g) {
   const aw = g.scoreA > g.scoreB, bw = g.scoreB > g.scoreA, ts = topScorer(g);
-  return `<button class="sb" data-game="${g.id}">
+  return `<button class="sb" data-game="${esc(g.id)}">
     <div class="sb-top"><span>${esc(g.label)} MATCH</span><span>${videoForGame(g) ? '<span class="sb-vid">▶ 영상</span> ' : ''}FINAL</span></div>
     <div class="sb-row ${aw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamA)}${teamLogo(g.seasonId, g.teamA)}${esc(g.teamA)}</span><span class="sc en num">${g.scoreA}</span></div>
     <div class="sb-row ${bw ? 'w' : 'l'}"><span class="tn">${uniDot(g.date, g.teamB)}${teamLogo(g.seasonId, g.teamB)}${esc(g.teamB)}</span><span class="sc en num">${g.scoreB}</span></div>
     ${ts ? `<div class="sb-foot">최다 득점 <b>${esc(ts.name)}</b> ${ts.pts}점<span class="go">박스스코어 ›</span></div>` : ''}</button>`;
 }
 function upcomingBoard(m, pl, i, sid) {
-  return `<div class="sb upcoming"><div class="sb-top"><span>${['AB', 'BC', 'AC'][i] || ''} MATCH</span><span>UPCOMING</span></div>
+  return `<div class="sb upcoming"><div class="sb-top"><span>${esc(m[2] || ['AB', 'BC', 'AC'][i] || '')} MATCH</span><span>UPCOMING</span></div>
     <div class="sb-row"><span class="tn">${uniDot(pl.date, m[0])}${teamLogo(sid, m[0])}${esc(m[0])}</span><span class="sc en">–</span></div>
     <div class="sb-row"><span class="tn">${uniDot(pl.date, m[1])}${teamLogo(sid, m[1])}${esc(m[1])}</span><span class="sc en">–</span></div>
     <div class="sb-foot">${(() => { const n = state.events.find(x => x.leagueDate === pl.date) || {}; return `${esc(fmtDate(pl.date))}${n.time ? ' ' + esc(n.time) : ''}${n.place ? ` <b class="sb-place">${PIN}${esc(n.place)}</b>` : ' 경기 예정'}`; })()}</div></div>`;
@@ -2261,26 +2282,47 @@ function renderHero() {
   hero.innerHTML = `${CONFIG.heroImage ? `<img class="hero-img" src="${esc(CONFIG.heroImage)}" alt="">` : ''}
     <div class="wrap"><a class="mark" href="#/home">${CONFIG.logo ? `<img class="logo" src="${esc(CONFIG.logo)}" alt="">` : ''}<div><h1 class="en">${esc(CONFIG.teamName)}</h1>${CONFIG.slogan ? `<p class="slogan">${esc(CONFIG.slogan)}</p>` : ''}</div></a></div>`;
 }
+// oldKeep는 그대로 두고(그 안의 iframe이 다시 불러와지지 않게), 그 바깥 내용을 새로 그린 것(newKeep 주변)으로 바꿔요
+function swapAround(oldKeep, newKeep, root) {
+  [...newKeep.attributes].forEach(at => oldKeep.setAttribute(at.name, at.value));
+  let o = oldKeep, n = newKeep;
+  while (o !== root) {
+    const op = o.parentNode, np = n.parentNode, before = document.createDocumentFragment(), after = document.createDocumentFragment();
+    let seen = false;
+    [...np.childNodes].forEach(c => { if (c === n) seen = true; else (seen ? after : before).appendChild(c); });
+    [...op.childNodes].forEach(c => { if (c !== o) op.removeChild(c); });
+    op.insertBefore(before, o); op.appendChild(after);
+    if (op !== root) { [...op.attributes].forEach(at => np.hasAttribute(at.name) || op.removeAttribute(at.name)); [...np.attributes].forEach(at => op.setAttribute(at.name, at.value)); }
+    o = op; n = np;
+  }
+}
+const baseTitle = document.title;
 function render() {
   if (!state.seasons.length) return;
   const parts = location.hash.split('/'), page = parts[1] || 'home', arg = parts[2];
+  const dec = v => { try { return decodeURIComponent(v); } catch (e) { return v; } };
   const pages = { home: pageHome, schedule: pageSchedule, league: pageLeague, players: pagePlayers, stats: pageStats, watch: pageWatch };
   const vid = page === 'watch' && arg === 'v' && parts[3] ? parts[3] : '';
-  const html = vid ? pageWatchVideo(vid) : page === 'news' && arg ? pageArticle(arg) : page === 'player' && arg ? pagePlayer(decodeURIComponent(arg)) : (pages[page] || pageHome)();
-  const keepArt = page === 'news' && document.querySelector(`#art-holder[data-id="${arg}"] iframe`);
+  const html = vid ? pageWatchVideo(vid) : page === 'news' && arg ? pageArticle(arg) : page === 'player' && arg ? pagePlayer(dec(arg)) : (pages[page] || pageHome)();
+  const keepArt = page === 'news' && arg && document.querySelector(`#art-holder[data-id="${CSS.escape(arg)}"] iframe`);
   const oldAbout = document.getElementById('about-holder'), keepAbout = oldAbout && oldAbout.querySelector('iframe') && { v: oldAbout.dataset.v, f: oldAbout.querySelector('iframe'), h: oldAbout.querySelector('iframe').style.height };
   // 영상 재생 중에 데이터가 새로 들어와도 플레이어를 다시 만들지 않아요 (재생이 끊기지 않게)
-  const keep = vid && document.querySelector(`#wv-frame iframe[data-id="${vid}"]`);
+  const keep = vid && document.querySelector(`#wv-frame iframe[data-id="${CSS.escape(vid)}"]`);
   const src = state.seasons.map(s => `${s.name}: ${s.source === 'live' ? '구글 시트에서 실시간' : s.source === 'archive' ? '보관된 기록' : `저장된 데이터 (${SNAP_DATE} 기준)`}`).join(' / ');
   const who = state.role ? `${state.role === 'admin' ? '관리자' : '일정 관리'}로 로그인됨 <button class="link-btn" data-logout>로그아웃</button>` : '';
   const kept = {}; document.querySelectorAll('#view [data-keep]').forEach(el => kept[el.dataset.keep] = el.value);
   const focusKey = document.activeElement?.dataset?.keep, caret = document.activeElement?.selectionStart;
-  $('#view').innerHTML = html + `<p class="status">${esc(src)}${FB ? '' : FB_EXPECTED ? ' / ⚠️ 저장 기능을 불러오지 못했어요. 새로고침해주세요' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
-  if (keep) { const f = document.getElementById('wv-frame'); f.innerHTML = ''; f.appendChild(keep); }
-  if (keepArt) { const hd = document.getElementById('art-holder'); if (hd) { hd.innerHTML = ''; hd.appendChild(keepArt); } }
-  else if (page === 'news') mountArticle();
-  const newAbout = document.getElementById('about-holder');
-  if (newAbout) { if (keepAbout && keepAbout.v === newAbout.dataset.v) { newAbout.innerHTML = ''; newAbout.appendChild(keepAbout.f); keepAbout.f.style.height = keepAbout.h; } else mountAbout(); }
+  const full = html + `<p class="status">${esc(src)}${FB ? '' : FB_EXPECTED ? ' / ⚠️ 저장 기능을 불러오지 못했어요. 새로고침해주세요' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
+  // 영상·기사·소개 iframe은 DOM에서 빼냈다 다시 넣기만 해도 처음부터 다시 불러와요. 그래서 그 칸은 그대로 두고 주변만 바꿔요.
+  const tmp = document.createElement('div'); tmp.innerHTML = full;
+  const holderSel = keep ? '#wv-frame' : keepArt ? '#art-holder' : keepAbout ? '#about-holder' : '';
+  const oldHolder = holderSel && document.querySelector('#view ' + holderSel), newHolder = holderSel && tmp.querySelector(holderSel);
+  const sameAbout = !keepAbout || !newHolder || keepAbout.v === newHolder.dataset.v;
+  if (oldHolder && newHolder && sameAbout) swapAround(oldHolder, newHolder, $('#view'));
+  else { $('#view').innerHTML = ''; while (tmp.firstChild) $('#view').appendChild(tmp.firstChild); }
+  if (page === 'news' && !keepArt) mountArticle();
+  if (document.getElementById('about-holder') && !(keepAbout && oldHolder && newHolder && sameAbout)) mountAbout();
+  if (page !== 'news' && document.title !== baseTitle) document.title = baseTitle;
   document.querySelectorAll('#view [data-keep]').forEach(el => { if (kept[el.dataset.keep] !== undefined) el.value = kept[el.dataset.keep]; if (el.dataset.keep === focusKey) { el.focus(); try { el.setSelectionRange(caret, caret); } catch (e) {} } });
   requestAnimationFrame(fitHomeSchedule);
   const navKey = page === 'player' ? 'players' : page === 'news' ? 'league' : (pages[page] ? page : 'home');
@@ -2396,6 +2438,7 @@ document.addEventListener('click', e => {
 // 유튜브 채널 최신 영상: 되는 방법을 차례로 시도해요 (① YouTube Data API ② rss2json ③ 유튜브 RSS 직접).
 // 마지막으로 받은 목록은 이 브라우저에 기억해 둬서, 다음에 모두 실패해도 목록이 비지 않아요.
 const FEED_CACHE = 'momentum-feed-v1';
+const kstDate = v => { const d = new Date(v); return isNaN(d) ? String(v || '').slice(0, 10) : d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }); };
 async function getJSON(url, asText) {
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
   try { const res = await fetch(url, { signal: ac.signal }); if (!res.ok) throw new Error(res.status); return asText ? res.text() : res.json(); }
@@ -2406,19 +2449,19 @@ const FEEDS = [
     const key = CONFIG.youtubeApiKey || FIREBASE.apiKey; if (!key || !/^UC/.test(ch)) return [];
     const d = await getJSON(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=15&playlistId=UU${ch.slice(2)}&key=${encodeURIComponent(key)}`);
     return (d.items || []).map(it => it.snippet || {}).filter(sn => sn.resourceId && !/^(Private|Deleted) video$/.test(sn.title))
-      .map(sn => ({ url: 'https://www.youtube.com/watch?v=' + sn.resourceId.videoId, title: sn.title || '', date: String(sn.publishedAt || '').slice(0, 10) }));
+      .map(sn => ({ url: 'https://www.youtube.com/watch?v=' + sn.resourceId.videoId, title: sn.title || '', date: kstDate(sn.publishedAt) }));
   },
   async ch => {
     const d = await getJSON('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id=' + ch));
     if (d.status !== 'ok' || !Array.isArray(d.items)) return [];
-    return d.items.map(it => ({ url: it.link || '', title: it.title || '', date: String(it.pubDate || '').slice(0, 10) }));
+    return d.items.map(it => ({ url: it.link || '', title: it.title || '', date: kstDate(String(it.pubDate || '').replace(' ', 'T') + (/Z|[+-]\d\d:?\d\d$/.test(it.pubDate || '') ? '' : 'Z')) }));
   },
   async ch => {
     const xml = await getJSON('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id=' + ch), true);
     const doc = new DOMParser().parseFromString(xml, 'text/xml');
     return [...doc.getElementsByTagName('entry')].map(e => {
       const id = (e.getElementsByTagName('yt:videoId')[0] || {}).textContent || '';
-      return { url: id ? 'https://www.youtube.com/watch?v=' + id : '', title: (e.getElementsByTagName('title')[0] || {}).textContent || '', date: ((e.getElementsByTagName('published')[0] || {}).textContent || '').slice(0, 10) };
+      return { url: id ? 'https://www.youtube.com/watch?v=' + id : '', title: (e.getElementsByTagName('title')[0] || {}).textContent || '', date: kstDate((e.getElementsByTagName('published')[0] || {}).textContent) };
     });
   },
 ];
@@ -2442,10 +2485,11 @@ async function loadFeed() {
   if (FB) {
     firebase.initializeApp(FIREBASE);
     fdb = firebase.firestore(); fauth = firebase.auth();
-    DYN.forEach(c => fdb.collection(c).onSnapshot(s => { state[c] = s.docs.map(x => ({ id: x.id, ...x.data() })); if (c === 'articles') state.articlesLoaded = true; render(); }, err => console.error(c, err)));
+    // 응원 글은 누구나 쓸 수 있어서, 최근 300개만 받아요 (누가 마구 써도 방문자가 전부 내려받지 않게)
+    DYN.forEach(c => (c === 'cheers' ? fdb.collection(c).orderBy('createdAt', 'desc').limit(300) : fdb.collection(c)).onSnapshot(s => { state[c] = clean(c, s.docs.map(x => ({ id: x.id, ...x.data() }))); if (c === 'articles') state.articlesLoaded = true; render(); }, err => console.error(c, err)));
     fdb.collection('articleViews').onSnapshot(s => { state.views = Object.fromEntries(s.docs.map(x => [x.id, x.data().n || 0])); render(); }, err => console.warn('조회수', err));
     fauth.onAuthStateChanged(u => { state.role = roleOf(u); render(); });
-  } else { demo = demoLoad(); DYN.forEach(c => state[c] = demo[c] = demo[c] || []); state.articlesLoaded = true; state.views = { ...(demo.views || {}) }; }
+  } else { demo = demoLoad(); DYN.forEach(c => { demo[c] = demo[c] || []; state[c] = clean(c, demo[c]); }); state.articlesLoaded = true; state.views = { ...(demo.views || {}) }; }
   state.seasons = await loadAllSeasons();
   state.seasonId = state.seasons[0]?.id;
   if (!state.seasons.length) { $('#view').innerHTML = '<p class="empty sec">기록 시트를 불러오지 못했어요. CONFIG의 sheetId와 시트 공유 설정을 확인하세요.</p>'; return; }

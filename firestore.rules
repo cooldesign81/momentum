@@ -2,14 +2,21 @@ rules_version = '2';
 
 // Momentum 사이트용 Firestore 규칙
 // Firebase 콘솔 > Firestore Database > 규칙 탭에 이 파일 내용을 통째로 붙여넣고 [게시]를 누르세요.
+// 여기 적히지 않은 컬렉션은 모두 막혀 있어요 (Firestore 기본값).
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 관리자: index.html의 CONFIG.auth.adminEmail과 같아야 해요
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'admin@momentum.team';
+      return request.auth != null && request.auth.token.email == 'cooldesign81@naver.com';
     }
+    // 일정 관리: CONFIG.auth.scheduleEmail과 같아야 해요 (관리자도 가능)
     function isSchedule() {
-      return request.auth != null && request.auth.token.email in ['schedule@momentum.team', 'admin@momentum.team'];
+      return isAdmin() || (request.auth != null && request.auth.token.email == 'schedule@momentum.team');
+    }
+    // 글자 칸: 없거나, 글자이고 n자 이하
+    function okStr(d, k, n) {
+      return !(k in d) || (d[k] is string && d[k].size() <= n);
     }
 
     // 관리자만 쓰는 것: 공지, 영상, 선수, 기사(+기사 파일), 시즌별 팀 로고, STATS에서 숨길 선수
@@ -21,23 +28,40 @@ service cloud.firestore {
     match /teamLogos/{id}    { allow read: if true; allow write: if isAdmin(); }
     match /statHidden/{id}   { allow read: if true; allow write: if isAdmin(); }
 
-    // 일정: 일정 관리 비번 또는 관리자 비번
-    match /events/{id} { allow read: if true; allow write: if isSchedule(); }
+    // 일정: 일정 관리 비번 또는 관리자 비번. 날짜 형식과 글자 길이를 검사해요.
+    function validEvent(d) {
+      return d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && okStr(d, 'title', 100) && okStr(d, 'place', 100) && okStr(d, 'time', 10)
+        && okStr(d, 'memo', 2000) && okStr(d, 'leagueDate', 10) && okStr(d, 'createdAt', 40)
+        && (!('uniforms' in d) || (d.uniforms is map && d.uniforms.size() <= 6));
+    }
+    match /events/{id} {
+      allow read: if true;
+      allow create, update: if isSchedule() && validEvent(request.resource.data);
+      allow delete: if isSchedule();
+    }
 
-    // 응원 글: 누구나 남길 수 있고(짧은 글만), 지우기·고치기는 관리자만
+    // 응원 글: 누구나 남길 수 있어요. 모든 칸의 종류와 길이를 검사해요. 지우기·고치기는 관리자만.
     match /cheers/{id} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasOnly(['target', 'season', 'player', 'name', 'text', 'createdAt'])
+        && request.resource.data.keys().hasAll(['target', 'season', 'player', 'text', 'createdAt'])
+        && request.resource.data.target in ['mvp', 'mip']
+        && request.resource.data.season is string && request.resource.data.season.size() <= 10
+        && request.resource.data.player is string && request.resource.data.player.size() <= 20
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 100
-        && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 20));
+        && okStr(request.resource.data, 'name', 20)
+        && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 30;
       allow update, delete: if isAdmin();
     }
 
-    // 기사 조회수: 누구나 1씩만 올릴 수 있어요. 지우거나 숫자를 마음대로 바꾸는 건 관리자만.
+    // 기사 조회수: 실제로 있는 기사에만, 누구나 1씩만 올릴 수 있어요. 지우는 건 관리자만.
     match /articleViews/{id} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == 1;
-      allow update: if request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == resource.data.n + 1;
+      allow create: if exists(/databases/$(database)/documents/articles/$(id))
+        && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == 1;
+      allow update: if exists(/databases/$(database)/documents/articles/$(id))
+        && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == resource.data.n + 1;
       allow delete: if isAdmin();
     }
   }

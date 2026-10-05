@@ -804,7 +804,7 @@ function loadGame(id) {
   game.sb.cap = { ...CAP_DEFAULT, ...(game.sb.cap || {}) };
   cutStart = null;
   touch();
-  undoStack = []; redoStack = [];
+  undoStack = []; redoStack = []; undoFallback = true;
   selected = null; clearAst();
   renderAll();
 }
@@ -899,17 +899,19 @@ video.addEventListener('play', updatePlayBtn);
 video.addEventListener('pause', updatePlayBtn);
 
 function probe(url) {
-  return new Promise(res => {
+  return new Promise((res, rej) => {
     const v = document.createElement('video');
     v.preload = 'metadata';
-    const done = d => { res(d); v.removeAttribute('src'); v.load(); };
+    // 못 읽는 영상은 길이 0으로 넘기지 않고 실패로 알려요. 끝까지 소식이 없으면 30초 뒤에 포기해요.
+    const timer = setTimeout(() => done(null), 30000);
+    const done = d => { clearTimeout(timer); v.onloadedmetadata = v.ontimeupdate = v.onerror = null; v.removeAttribute('src'); v.load(); d > 0 ? res(d) : rej(new Error('영상을 읽지 못했어요')); };
     v.onloadedmetadata = () => {
       if (isFinite(v.duration)) return done(v.duration);
       // 길이 정보가 없는 녹화본(일부 WebM)은 끝으로 넘겨야 길이를 알려줘요.
-      v.ontimeupdate = () => { if (isFinite(v.duration)) { v.ontimeupdate = null; done(v.duration); } };
+      v.ontimeupdate = () => { if (isFinite(v.duration)) done(v.duration); };
       v.currentTime = 1e9;
     };
-    v.onerror = () => done(0);
+    v.onerror = () => done(null);
     v.src = url;
   });
 }
@@ -922,18 +924,29 @@ async function openFiles(files, append) {
   const saved = game.source?.type === 'file' ? game.source.names : null;
   if (!append && saved && files.length === saved.length && files.every(f => saved.includes(f.name)))
     files.sort((a, b) => saved.indexOf(a.name) - saved.indexOf(b.name));
-  if (!(append && mode === 'file' && clips.length)) attachSource({ type: 'file', names: files.map(f => f.name) });
-  const load = async list => Promise.all(list.map(async f => { const url = URL.createObjectURL(f); return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }));
+  // 읽지 못한 영상은 빼고 알려요 (길이 0으로 넣으면 기록 시간이 어긋나요).
+  const bad = [];
+  const load = async list => (await Promise.all(list.map(async f => {
+    const url = URL.createObjectURL(f);
+    try { return { file: f, name: f.name, key: clipKey(f), url, dur: await probe(url) }; }
+    catch { URL.revokeObjectURL(url); bad.push(f.name); return null; }
+  }))).filter(Boolean);
+  const warnBad = () => { if (bad.length) alert(`영상을 읽지 못했어요: ${bad.join(', ')}\n이 브라우저에서 열 수 있는 형식(MP4 등)인지 확인해 주세요.`); };
   if (append && mode === 'file' && clips.length) {
     // 뒤에 이어 붙이면 앞 영상들의 시간은 그대로라 기록을 옮길 필요가 없어요.
     clips.push(...await load(files.filter(f => !clips.some(c => c.key === clipKey(f)))));
+    warnBad();
     game.source = { type: 'file', names: clips.map(c => c.name) };
     save(); renderClips(); renderMarkers(); updateSrcLabel();
     return;
   }
+  const loaded = await load(files);
+  warnBad();
+  if (!loaded.length) return;
+  attachSource({ type: 'file', names: loaded.map(c => c.name) });
   teardownYt();
   clips.forEach(c => URL.revokeObjectURL(c.url));
-  clips = await load(files);
+  clips = loaded;
   mode = 'file'; cur = 0; pendingSeek = null;
   sortedCache = null; lastBoardKey = '';
   video.src = clips[0].url;
@@ -1016,7 +1029,11 @@ function updatePlayBtn() { $('#btnPlay').textContent = player.paused() ? '▶ �
 let selected = null;      // {team, name}
 let astPending = null;    // {team, scorer, t, timer}
 let undoStack = [], redoStack = [];   // redoStack: 되돌린 항목 {kind, obj} — 새 입력을 하면 비워요
-const pushUndo = id => { undoStack.push(id); redoStack = []; };
+// 경기를 막 연 뒤(이번에 아직 아무것도 안 넣고 안 지웠을 때)만, 되돌리기가 가장 나중에 넣은 항목을 지워요.
+let undoFallback = true;
+const pushUndo = id => { undoStack.push(id); redoStack = []; undoFallback = false; };
+// ✕나 길게 누르기로 직접 지운 항목은 되돌리기 목록에서도 빼요 (되돌리기가 엉뚱한 걸 지우지 않게).
+const forget = id => { undoStack = undoStack.filter(x => x !== id); redoStack = redoStack.filter(r => r.obj?.id !== id); undoFallback = false; };
 let nextId = () => ([...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music].reduce((m, e) => Math.max(m, e.id), 0) + 1);
 
 function record(k, who = selected) {
@@ -1053,8 +1070,8 @@ $('#astBar').addEventListener('click', ev => {
 });
 function undo() {
   const all = [...game.events, ...game.quarters, ...game.comments, ...game.inserts, ...game.music];
-  const id = undoStack.pop() ?? (all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
-  if (id == null) return;
+  const id = undoStack.pop() ?? (undoFallback && all.length ? all.reduce((a, b) => (b.id > a.id ? b : a)).id : null);
+  if (id == null) { toast('되돌릴 게 없어요.'); return; }
   const keep = (kind, obj) => redoStack.push({ kind, obj: JSON.parse(JSON.stringify(obj)) });
   const mu = game.music.find(x => x.id === id);
   if (mu) { keep('music', mu); removeMusic(id); toast('되돌림: 배경음악'); return; }
@@ -1162,23 +1179,23 @@ function gridDecrement(b) {
   const ti = +b.dataset.g, name = b.dataset.name, k = b.dataset.k;
   const e = game.events.filter(x => x.team === ti && x.player === name && x.k === k).sort((a, b) => b.id - a.id)[0];
   if (!e) return;
-  removeEvent(e.id);
+  forget(e.id); removeEvent(e.id);
   toast(`지움: ${name} · ${STAT[k].short}`);
 }
-let pressTimer = null, pressed = false;
+let pressTimer = null, pressed = false, touching = false;
 $('#gridEntry').addEventListener('contextmenu', ev => {
   const b = ev.target.closest('[data-g]'); if (!b) return;
   ev.preventDefault();
   clearTimeout(pressTimer);   // 안드로이드는 길게 누르면 contextmenu가 먼저 와요. 타이머까지 돌면 두 번 지워지니 여기서 끝내요.
   if (!pressed) gridDecrement(b);   // 길게 누르기로 이미 지웠으면 한 번 더 지우지 않아요
-  pressed = true;
+  if (touching) pressed = true;   // 마우스 오른쪽 클릭은 click이 따라오지 않으니 표시를 남기지 않아요 (다음 클릭·오른쪽 클릭이 막히지 않게)
 });
 $('#gridEntry').addEventListener('touchstart', ev => {
   const b = ev.target.closest('[data-g]'); if (!b) return;
-  pressed = false; clearTimeout(pressTimer);
+  pressed = false; touching = true; clearTimeout(pressTimer);
   pressTimer = setTimeout(() => { pressed = true; gridDecrement(b); }, 550);
 }, { passive: true });
-['touchend', 'touchmove', 'touchcancel'].forEach(t => $('#gridEntry').addEventListener(t, () => clearTimeout(pressTimer), { passive: true }));
+['touchend', 'touchmove', 'touchcancel'].forEach(t => $('#gridEntry').addEventListener(t, () => { clearTimeout(pressTimer); if (t !== 'touchmove') touching = false; }, { passive: true }));
 // 길게 눌러서 지운 뒤 손을 떼면 click이 따라오는데, 그때 +1이 되지 않게 막아요.
 $('#gridEntry').addEventListener('click', ev => { if (pressed) { pressed = false; ev.stopImmediatePropagation(); } }, true);
 function setMode(m) {
@@ -1269,7 +1286,7 @@ $('#rosterEdit').addEventListener('click', ev => {
   }
 });
 $('#rosterEdit').addEventListener('keydown', ev => {
-  if (ev.key !== 'Enter') return;
+  if (ev.key !== 'Enter' || ev.isComposing || ev.keyCode === 229) return;   // 한글 조합을 끝내는 Enter는 넘겨요 (이름이 두 번 들어가지 않게)
   const m = ev.target.id.match(/^(add|guest)(\d)$/); if (!m) return;
   ev.preventDefault();
   document.querySelector(m[1] === 'add' ? `[data-radd="${m[2]}"]` : `[data-rguest="${m[2]}"]`).click();
@@ -1305,17 +1322,17 @@ function renderLog() {
   const list = [...game.events.filter(e => !f || f === e.team + ':' + e.player), ...(f ? [] : game.quarters.map(q => ({ ...q, q: true })))]
     .sort((a, b) => a.t - b.t || a.id - b.id);
   $('#log').innerHTML = list.length ? list.map(e => e.q
-    ? `<div class="ev qrow" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span>다음 쿼터 → ${quarterLabel(stateAt(e.t).q)}</span><button class="x" data-delq="${e.id}" title="지우기">✕</button></div>`
-    : `<div class="ev" data-id="${e.id}" data-t="${e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${e.id}" title="지우기">✕</button></div>`).join('')
+    ? `<div class="ev qrow" data-t="${+e.t}"><span class="t">${fmt(e.t)}</span><span>다음 쿼터 → ${quarterLabel(stateAt(e.t).q)}</span><button class="x" data-delq="${+e.id}" title="지우기">✕</button></div>`
+    : `<div class="ev" data-id="${+e.id}" data-t="${+e.t}"><span class="t">${fmt(e.t)}</span><span><span class="${e.team ? 'b' : 'a'}">${esc(e.player)}</span> ${STAT[e.k].short}</span><button class="x" data-del="${+e.id}" title="지우기">✕</button></div>`).join('')
     : '<section class="hint">아직 기록이 없어요.</section>';
   lastNow = null;
 }
 $('#logFilter').addEventListener('change', renderLog);
 $('#log').addEventListener('click', ev => {
   const del = ev.target.closest('[data-del]');
-  if (del) { removeEvent(+del.dataset.del); return; }
+  if (del) { forget(+del.dataset.del); removeEvent(+del.dataset.del); return; }
   const delq = ev.target.closest('[data-delq]');
-  if (delq) { removeQuarter(+delq.dataset.delq); return; }
+  if (delq) { forget(+delq.dataset.delq); removeQuarter(+delq.dataset.delq); return; }
   const row = ev.target.closest('.ev');
   if (row) player.seek(+row.dataset.t - 3);
 });
@@ -1462,7 +1479,7 @@ $('#btnSwap').addEventListener('click', () => {
   game.events.forEach(e => e.team = 1 - e.team);
   game.played = Object.fromEntries(Object.entries(game.played).map(([k, v]) => [(1 - +k[0]) + k.slice(1), v]));
   game.inserts.forEach(i => { if (i.kind === 'box') i.team = 1 - i.team; if (i.kind === 'intro' && Array.isArray(i.en)) i.en.reverse(); });   // 선수별 카드·매치업 영문 이름도 따라감
-  redoStack.forEach(r => { if (r.obj && typeof r.obj.team === 'number' && (r.kind === 'event' || r.kind === 'insert')) r.obj.team = 1 - r.obj.team; });
+  redoStack.forEach(r => { if (r.obj && typeof r.obj.team === 'number' && (r.kind === 'event' || r.kind === 'insert')) r.obj.team = 1 - r.obj.team; if (r.kind === 'insert' && r.obj?.kind === 'intro' && Array.isArray(r.obj.en)) r.obj.en.reverse(); });
   if (selected) selected = { ...selected, team: 1 - selected.team };
   clearAst(); save(); renderAll();
 });
@@ -1630,7 +1647,12 @@ $('#jsonInput').addEventListener('change', async ev => {
   if (!f) return;
   try {
     const g = JSON.parse(await f.text());
-    if (!g || !Array.isArray(g.events) || !Array.isArray(g.teams)) throw new Error();
+    if (!g || !Array.isArray(g.events) || !Array.isArray(g.teams) || g.teams.length !== 2) throw new Error();
+    // 파일에서 온 값은 화면 HTML에 들어가니, 알 수 없는 기록은 빼고 번호·시간은 숫자로 맞춰요.
+    const num = v => Number.isFinite(+v) ? +v : 0;
+    g.teams = g.teams.map((t, i) => ({ ...t, name: String(t?.name ?? (i ? '오른쪽 팀' : '왼쪽 팀')), roster: Array.isArray(t?.roster) ? t.roster.map(String) : [] }));
+    g.events = g.events.filter(e => e && STAT[e.k] && (e.team === 0 || e.team === 1)).map(e => ({ ...e, id: num(e.id), t: num(e.t), player: String(e.player ?? '') }));
+    ['quarters', 'comments', 'inserts', 'music'].forEach(k => { g[k] = Array.isArray(g[k]) ? g[k].filter(x => x && typeof x === 'object').map(x => ({ ...x, id: num(x.id), t: num(x.t), ...('dur' in x ? { dur: num(x.dur) } : {}) })) : []; });
     flushSave();
     // 새 경기로 저장해서 불러와요 (같은 id의 기존 경기를 덮어쓰지 않게). loadGame이 빠진 설정을 채워요.
     const id = Date.now().toString(36);
@@ -1643,7 +1665,7 @@ function clearRecords() {
   const n = game.events.length + game.quarters.length;
   if (!n) { toast('지울 기록이 없어요.'); return; }
   if (!confirm(`'${gameTitle()}' 경기의 기록 ${game.events.length}개${game.quarters.length ? `와 쿼터 표시 ${game.quarters.length}개` : ''}를 모두 지울까요? 되돌릴 수 없어요.\n(팀·로스터·영상 설정은 그대로 남아요)`)) return;
-  game.events = []; game.quarters = []; game.played = {}; undoStack = []; redoStack = []; selected = null; clearAst();
+  game.events = []; game.quarters = []; game.played = {}; undoStack = []; redoStack = []; undoFallback = false; selected = null; clearAst();
   save(); renderAll(); toast('기록을 모두 지웠어요.');
 }
 $('#btnClear').addEventListener('click', clearRecords);
@@ -1725,8 +1747,8 @@ document.addEventListener('drop', ev => {
 $('#btnUndo').addEventListener('click', ev => { undo(); ev.currentTarget.blur(); });
 $('#btnRedo').addEventListener('click', ev => { redo(); ev.currentTarget.blur(); });
 $('#ytNoticeClose').addEventListener('click', () => { $('#ytNotice').classList.add('hidden'); fitStage(); });
-$('#btnPlay').addEventListener('click', () => player.toggle());
-$('#shield').addEventListener('click', () => player.toggle());
+$('#btnPlay').addEventListener('click', () => { wakeAudio(); player.toggle(); });
+$('#shield').addEventListener('click', () => { wakeAudio(); player.toggle(); });
 $('#btnBack').addEventListener('click', () => player.seek(player.time() - opts.skip));
 $('#btnFwd').addEventListener('click', () => player.seek(player.time() + opts.skip));
 // 프레임 단위 이동: 30fps 기준 1/30초. 멈춘 상태에서 정확한 순간을 잡을 때 써요.
@@ -1745,15 +1767,19 @@ function showTab(tab) {
 }
 $('#tabs').addEventListener('click', ev => { const b = ev.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
 
-document.addEventListener('change', ev => { if (ev.target.matches('select, input[type=checkbox]') && !ev.target.closest('#capText')) ev.target.blur(); });   // 고른 뒤 포커스가 남아 단축키를 먹는 일이 없게
+document.addEventListener('change', ev => { if (ev.target.matches('select, input[type=checkbox], input[type=number]')) ev.target.blur(); });   // 고른 뒤 포커스가 남아 단축키를 먹는 일이 없게
 document.addEventListener('keydown', ev => {
-  // 글자를 치는 칸에서만 단축키를 끄고, 체크박스·슬라이더에 포커스가 남아 있어도 단축키는 그대로 돼요.
-  if (ev.target.closest('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea, select')) { if (ev.key === 'Escape') ev.target.blur(); return; }
+  // 글자를 치는 칸(숫자 칸 포함)에서만 단축키를 끄고, 체크박스·슬라이더·고르는 칸에 포커스가 남아 있어도 단축키는 그대로 돼요.
+  const typing = ev.target.closest('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea');
+  if (ev.isComposing || (typing && ev.keyCode === 229)) return;   // 한글 조합 중인 키는 건드리지 않아요
+  if (typing) { if (ev.key === 'Escape' || (ev.key === 'Enter' && ev.target.type === 'number')) ev.target.blur(); return; }
+  // 고르는 칸(경기·주차 등)에 포커스가 있으면 글자 키로 항목이 바뀌지 않게 막고, 포커스를 빼서 단축키로 써요.
+  if (ev.target.matches('select') && (ev.key.length === 1 || ev.key === 'Escape') && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); ev.target.blur(); }
   if (ev.repeat && !['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;   // 키를 누르고 있어도 기록이 여러 번 들어가지 않게
   if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement?.tagName === 'BUTTON') document.activeElement.blur(); player.toggle(); return; }
+  if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); player.toggle(); return; }   // 버튼·체크박스가 스페이스로 눌리지 않게
   if (ev.key === 'ArrowLeft') { ev.preventDefault(); player.seek(player.time() - (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.code === 'Comma') { ev.preventDefault(); stepFrame(-1); return; }
@@ -2356,9 +2382,10 @@ function teamTotals(events, ti, upto) {
   return t;
 }
 function cardData(ins, src = { events: game.events, teams: cfg.teams, match: cfg.match }) {
-  const upto = ins.kind === 'half' ? ins.t : null;
+  // 전반 카드, 그리고 영상 중간에 넣은 선수별 카드는 그 시각까지의 기록만 보여줘요. 끝에 둔 선수별 카드는 경기 전체.
+  const upto = ins.kind === 'half' || (ins.kind === 'box' && !nearEnd(ins.t)) ? ins.t : null;
   const d = { teams: src.teams, stats: [0, 1].map(ti => teamTotals(src.events, ti, upto)), logos: src.teams.map(t => logoOf(t.name)), title: insLabel(ins), match: src.match };
-  if (ins.kind === 'box') d.lines = playerLines(src.events, ins.team);
+  if (ins.kind === 'box') d.lines = playerLines(upto == null ? src.events : src.events.filter(e => e.t <= upto), ins.team);
   return d;
 }
 // 선수별 합계 (출전 체크된 선수만, 득점 많은 순). 기록이 없어도 출전으로 체크한 선수는 0으로 들어가요.
@@ -2544,13 +2571,13 @@ $('#insImageFile').addEventListener('change', async ev => {
 function renderInserts() {
   const list = game.inserts;
   $('#insCount').textContent = list.length ? `(${list.length})` : '';
-  $('#insList').innerHTML = list.length ? list.map(i => `<div class="ins" data-id="${i.id}">
+  $('#insList').innerHTML = list.length ? list.map(i => `<div class="ins" data-id="${+i.id}">
     <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(i.t, true)}</button>
     <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : i.kind === 'intro' ? '매치업' : '최종 기록'}</span>
     ${i.kind === 'intro'
       ? `<span class="ens"><input type="text" class="en0" value="${esc(i.en?.[0] || '')}" placeholder="${esc(game.teams[0].name)} 영문" maxlength="24" title="왼쪽 세로 글씨 (비우면 팀 이름)"><input type="text" class="en1" value="${esc(i.en?.[1] || '')}" placeholder="${esc(game.teams[1].name)} 영문" maxlength="24" title="오른쪽 세로 글씨 (비우면 팀 이름)"></span>`
       : `<input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">`}
-    <input type="number" class="dur" value="${i.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
+    <input type="number" class="dur" value="${+i.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
   </div>`).join('') : '<div class="hint">아직 넣은 카드가 없어요.</div>';
   $('#insDur').value = game.sb.insDur || 6;
@@ -2590,7 +2617,7 @@ $('#insList').addEventListener('click', ev => {
   const act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'seek') { player.pause(); player.seek(i.kind === 'intro' ? i.t + 0.8 : i.t); if (i.kind !== 'intro') hold = { ins: i, until: performance.now() + 2500 }; lastBoardKey = ''; }
   else if (act === 'here') { if (!mode) return; i.t = insTime(player.time()); game.inserts.sort(insOrder); save(); renderInserts(); renderMarkers(); }
-  else if (act === 'rm') removeInsert(i.id);
+  else if (act === 'rm') { forget(i.id); removeInsert(i.id); }
 });
 $('#insList').addEventListener('change', ev => {
   const row = ev.target.closest('.ins'); if (!row) return;
@@ -2644,6 +2671,7 @@ let bgmTry = null;
 $('#bgmList').addEventListener('click', async ev => {
   const row = ev.target.closest('.bgm-row'); if (!row) return; const id = +row.dataset.id, act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'play') {
+    wakeAudio();
     if (bgmTry) { const same = bgmTry.__id === id; bgmTry.stop(); bgmTry = null; renderBgmList(); if (same) return; }
     const buf = bgmBuf(id); if (!buf) { toast('아직 읽는 중이에요.', true); return; }
     const c = audioCtx(); if (c.state === 'suspended') c.resume();
@@ -2675,16 +2703,16 @@ $('#btnMusAdd').addEventListener('click', addMusic);
 function renderMusic() {
   const list = game.music;
   $('#musCount').textContent = list.length ? `(${list.length})` : '';
-  const opts = m => ['<option value="">음악 없음</option>', ...bgmLib.map(b => `<option value="${b.id}" ${m.bgm === b.id ? 'selected' : ''}>${esc(b.name)}</option>`), m.bgm && !bgmLib.some(b => b.id === m.bgm) ? `<option value="${m.bgm}" selected>(없는 음악)</option>` : ''].join('');
-  $('#musList').innerHTML = list.length ? list.map(m => `<div class="mus" data-id="${m.id}">
+  const opts = m => ['<option value="">음악 없음</option>', ...bgmLib.map(b => `<option value="${b.id}" ${m.bgm === b.id ? 'selected' : ''}>${esc(b.name)}</option>`), m.bgm && !bgmLib.some(b => b.id === m.bgm) ? `<option value="${+m.bgm}" selected>(없는 음악)</option>` : ''].join('');
+  $('#musList').innerHTML = list.length ? list.map(m => `<div class="mus" data-id="${+m.id}">
     <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(m.t, true)}</button>
     <select class="pick" title="보관함에서 고르기">${opts(m)}</select>
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
     <span class="opts">
       <select class="mode" title="영상 소리와 어떻게 섞을지"><option value="mix" ${m.mode !== 'solo' ? 'selected' : ''}>영상 소리 위에 섞기</option><option value="solo" ${m.mode === 'solo' ? 'selected' : ''}>영상 소리 끄고 음악만</option></select>
-      <label>길이 <input type="number" class="dur" value="${m.dur}" min="1" max="600" step="0.5">초</label>
-      <label>볼륨 <input type="number" class="gain" value="${m.gain}" min="0" max="100" step="5">%</label>
-      <label>페이드 <input type="number" class="fade" value="${m.fade}" min="0" max="60" step="0.5">초 전부터</label>
+      <label>길이 <input type="number" class="dur" value="${+m.dur}" min="1" max="600" step="0.5">초</label>
+      <label>볼륨 <input type="number" class="gain" value="${+m.gain}" min="0" max="100" step="5">%</label>
+      <label>페이드 <input type="number" class="fade" value="${+m.fade}" min="0" max="60" step="0.5">초 전부터</label>
     </span>
   </div>`).join('') : '<div class="hint">아직 넣은 음악이 없어요.</div>';
 }
@@ -2694,7 +2722,7 @@ $('#musList').addEventListener('click', ev => {
   const act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'seek') { player.seek(m.t); }
   else if (act === 'here') { if (!mode) return; m.t = Math.round(player.time() * 100) / 100; game.music.sort((a, b) => a.t - b.t); save(); renderMusic(); renderMarkers(); }
-  else if (act === 'rm') removeMusic(m.id);
+  else if (act === 'rm') { forget(m.id); removeMusic(m.id); }
 });
 $('#musList').addEventListener('change', ev => {
   const row = ev.target.closest('.mus'); if (!row) return;
@@ -2845,6 +2873,8 @@ function activeCaptions(t) {
 // 기본은 같은 폴더의 caption.wav (WAV는 모든 브라우저가 읽어요). 바꾼 파일은 브라우저에 저장돼요.
 let sfx = { buf: null, name: '기본 소리', error: '' }, actx = null;
 function audioCtx() { return actx || (actx = new (window.AudioContext || window.webkitAudioContext)()); }
+// iOS는 사용자가 누른 순간에 깨워야 소리가 나요. 재생·미리보기 버튼에서 불러요.
+function wakeAudio() { try { const c = audioCtx(); if (c.state !== 'running') c.resume().catch(() => {}); } catch {} }
 async function loadSfx() {
   const custom = lsGet('mm-box:capsfx');
   sfx = { buf: null, name: custom?.name || '기본 소리', error: '' };
@@ -2872,7 +2902,7 @@ function playSfx(force) {
   src.connect(g).connect(c.destination); src.start();
   return true;
 }
-$('#sfxPlay').addEventListener('click', () => { if (!playSfx(true)) toast(sfx.error || '소리를 아직 불러오지 못했어요.', true); });
+$('#sfxPlay').addEventListener('click', () => { wakeAudio(); if (!playSfx(true)) toast(sfx.error || '소리를 아직 불러오지 못했어요.', true); });
 $('#sfxPick').addEventListener('click', () => $('#sfxFile').click());
 $('#sfxFile').addEventListener('change', ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -3081,8 +3111,9 @@ function addCaption() {
 }
 function removeComment(id) { game.comments = game.comments.filter(c => c.id !== id); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; }
 $('#btnCapAdd').addEventListener('click', addCaption);
-$('#capText').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); addCaption(); } });
+$('#capText').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); addCaption(); } });   // 한글 조합을 끝내는 Enter로는 넣지 않아요
 $('#btnCapPreview').addEventListener('click', () => {
+  wakeAudio();
   if (!mode) { toast('영상을 열면 미리보기가 보여요.', true); return; }
   capPreview = { start: performance.now(), text: $('#capText').value.trim() || '코멘트 자막 미리보기' };
   lastBoardKey = '';
@@ -3096,10 +3127,10 @@ function highlightCap(t) {
 function renderCaps() {
   const list = game.comments;
   $('#capCount').textContent = list.length ? `(${list.length})` : '';
-  $('#capList').innerHTML = list.length ? list.map(c => `<div class="cap" data-id="${c.id}">
+  $('#capList').innerHTML = list.length ? list.map(c => `<div class="cap" data-id="${+c.id}">
     <button class="t" data-act="seek" title="이 장면으로 이동">${fmt(c.t, true)}</button>
     <input type="text" class="txt" value="${esc(c.text)}" maxlength="120" title="내용 고치기">
-    <input type="number" class="dur" value="${c.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
+    <input type="number" class="dur" value="${+c.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
   </div>`).join('') : '<div class="hint">아직 코멘트가 없어요.</div>';
 }
@@ -3109,14 +3140,14 @@ $('#capList').addEventListener('click', ev => {
   const act = ev.target.closest('[data-act]')?.dataset.act;
   if (act === 'seek') player.seek(Math.max(0, c.t - 0.5));
   else if (act === 'here') { if (!mode) return; c.t = Math.round(player.time() * 10) / 10; game.comments.sort((a, b) => a.t - b.t); save(); renderCaps(); renderMarkers(); lastBoardKey = ''; }
-  else if (act === 'rm') removeComment(c.id);
+  else if (act === 'rm') { forget(c.id); removeComment(c.id); }
 });
 $('#capList').addEventListener('change', ev => {
   const row = ev.target.closest('.cap'); if (!row) return;
   const c = game.comments.find(x => x.id === +row.dataset.id); if (!c) return;
   if (ev.target.classList.contains('txt')) c.text = ev.target.value.trim();
   if (ev.target.classList.contains('dur')) c.dur = Math.max(1, +ev.target.value || 4);
-  if (!c.text) { removeComment(c.id); return; }
+  if (!c.text) { forget(c.id); removeComment(c.id); return; }
   save(); renderMarkers(); lastBoardKey = '';
 });
 $$('#pane-video input, #pane-video select').forEach(el => {
@@ -3252,6 +3283,13 @@ $('#btnExport').onclick = async () => {
       : cfg.quality === 'source'
       ? await sourceBitrate(opened, codec, W * H)
       : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
+    // 저장 위치를 고를 수 없는 브라우저는 영상 전체를 메모리에 모았다가 내려받아요. 너무 크면 탭이 멈출 수 있어 미리 물어봐요.
+    if (!writable) {
+      const secs = parts.reduce((n, p) => n + p.to - p.from, 0) + pending.reduce((n, i) => n + (+i.dur || 6), 0);
+      const vbps = typeof quality === 'number' ? quality : W * H * (FPS || 30) * 0.1;   // 화질 단계(높음 등)는 대략 픽셀당 0.1비트로 어림
+      const gb = secs * (vbps + (Number(cfg.abr) || 192) * 1000) / 8 / 1024 ** 3;
+      if (gb > 1.5 && !confirm(`내보낼 영상이 약 ${gb.toFixed(1)}GB예요. 이 브라우저는 파일을 메모리에 모았다가 저장해서, 이만큼 크면 탭이 멈추거나 실패할 수 있어요.\n\n[확인] 그래도 내보내요.\n[취소] 그만두고 형식을 '가볍게 720p 30fps'로 바꾸거나 내보낼 구간을 줄여요.`)) { job.canceled = true; throw new Error('canceled'); }
+    }
 
     const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
     output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
@@ -3279,6 +3317,9 @@ $('#btnExport').onclick = async () => {
         audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: (Number(cfg.abr) || 192) * 1000 });
         audioFormat = { sampleRate, numberOfChannels };
         output.addAudioTrack(audioSource);
+      } else {
+        notes.push('이 브라우저에 오디오 인코더가 없어 소리 없이 저장');
+        toast('이 브라우저에서는 소리를 인코딩할 수 없어서, 내보낸 영상에 소리가 없어요.', true);
       }
     }
     // 효과음 PCM과 섞는 함수. data는 평면(planar) Float32Array(n×ch), gameStart는 그 조각의 첫 샘플의 경기 시각.
@@ -3589,6 +3630,14 @@ function tick() {
 setInterval(() => { if (mode === 'yt') updatePlayBtn(); }, 500);
 
 window.addEventListener('pagehide', flushSave);
+// 같은 경기를 다른 탭에서도 열어 두면 서로 덮어써요. 다른 탭에서 바뀌면 알려요 (30초에 한 번).
+let otherTabWarnedAt = -Infinity;
+window.addEventListener('storage', ev => {
+  if (!game || ev.key !== 'mm-box:g:' + game.id || ev.newValue == null) return;
+  if (performance.now() - otherTabWarnedAt < 30000) return;
+  otherTabWarnedAt = performance.now();
+  toast('다른 탭에서 이 경기 기록이 바뀌었어요. 여기서 계속 기록하면 그 내용을 덮어써요. 한 탭에서만 기록하세요.', true);
+});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 // 설정 패널 섹션 접기(제목 클릭)와 설명 버튼(ⓘ). 접힌 상태는 브라우저에 기억해요.
 {
