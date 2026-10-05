@@ -410,10 +410,27 @@ const octx = overlay.getContext('2d');
 
 // ---------- persistence ----------
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
-function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+// Saving can fail when browser storage is full; tell the user (at most once a minute) instead of losing records silently.
+let quotaWarnedAt = -Infinity;
+function lsSet(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+  catch {
+    if (performance.now() - quotaWarnedAt > 60000) { quotaWarnedAt = performance.now(); alert('브라우저 저장 공간이 부족해서 기록을 저장하지 못했어요. [기록 파일 저장]으로 백업해 두세요.'); }
+    return false;
+  }
+}
+const keyOf = list => 'mm-sb:' + list.map(c => c.key).sort().join('|');
+// The saved record is keyed by the set of clips; after adding/removing clips, move it to the new key.
+function rekey() {
+  const k = clips.length ? keyOf(clips) : null;
+  if (k === storeKey) return;
+  const old = storeKey;
+  storeKey = k;
+  if (save() && old) try { localStorage.removeItem(old); } catch {}   // drop the old key only once the new one is written
+}
 function save() {
   lsSet('mm-sb:last-cfg', { teams: cfg.teams, match: cfg.match, foulSlots: cfg.foulSlots, lag: cfg.lag, style: cfg.style, flash: cfg.flash, pos: cfg.pos, size: cfg.size, quality: cfg.quality, format: cfg.format, res: cfg.res, fps: cfg.fps, vcodec: cfg.vcodec, mbps: cfg.mbps, abr: cfg.abr, ach: cfg.ach, qv: 2 });
-  if (storeKey) lsSet(storeKey, { cfg, events, order: clips.map(c => c.key) });
+  return storeKey ? lsSet(storeKey, { cfg, events, order: clips.map(c => c.key) }) : true;
 }
 const last = lsGet('mm-sb:last-cfg');
 if (last) { Object.assign(cfg, last); if (!last.qv) { cfg.quality = 'source'; cfg.qv = 2; } }
@@ -467,10 +484,10 @@ function normCuts(list) {
 function addCut(a, b) { cfg.cuts = normCuts([...cfg.cuts, { s: Math.min(a, b), e: Math.max(a, b) }]); cutStart = null; changed(); }
 function cutAt(T) { return cfg.cuts.find(c => T >= c.s && T < c.e); }
 // Export ranges: [S, E] minus the cuts.
-function keepRanges(S, E) {
+function keepRanges(S, E, cuts = cfg.cuts) {
   const out = [];
   let t = S;
-  for (const c of cfg.cuts) {
+  for (const c of cuts) {
     if (c.e <= t || c.s >= E) continue;
     if (c.s > t) out.push([t, c.s]);
     t = Math.max(t, c.e);
@@ -511,9 +528,9 @@ function markCutOut() {
 // Cached because the preview loop reads it every frame; changed() clears it.
 let sortedCache = null;
 function sorted() { return sortedCache ??= [...events, ...autoEvents()].sort((a, b) => a.t - b.t || a.id - b.id); }
-function stateAt(t) {
+function stateAt(t, list = sorted()) {
   const st = { t, q: cfg.startQ, score: [0, 0], fouls: [0, 0], last: [null, null] };
-  for (const e of sorted()) {
+  for (const e of list) {
     if (e.t > t) break;
     applyEvent(st, e);
   }
@@ -927,6 +944,8 @@ function parseTime(str) {
 }
 
 // ---------- event list ----------
+const HEX = /^#[0-9a-f]{6}$/i;
+const safeColor = c => HEX.test(c) ? c : '#888888';
 const KIND_LABEL = { pts: v => (v > 0 ? `+${v}점` : `${v}점`), foul: v => (v > 0 ? '파울' : '파울 취소'), q: () => '다음 쿼터' };
 function renderEvents() {
   const list = sorted();
@@ -935,9 +954,9 @@ function renderEvents() {
   const st = { q: cfg.startQ, score: [0, 0], fouls: [0, 0] };
   const rows = list.map(e => {
     applyEvent(st, e);
-    if (e.auto) return `<tr class="auto" data-id="${e.id}"><td>${fmt(e.t, true)}</td><td>${quarterLabel(st.q)}</td><td colspan="2">영상 ${e.clip} 시작</td><td style="color:var(--accent)">${st.score[0]} : ${st.score[1]}</td><td></td></tr>`;
-    const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${cfg.teams[e.team].color};color:${teamInk(e.team)}">${esc(cfg.teams[e.team].name)}</span>`;
-    return `<tr data-id="${e.id}">
+    if (e.auto) return `<tr class="auto" data-id="${Number(e.id)}"><td>${fmt(e.t, true)}</td><td>${quarterLabel(st.q)}</td><td colspan="2">영상 ${e.clip} 시작</td><td style="color:var(--accent)">${st.score[0]} : ${st.score[1]}</td><td></td></tr>`;
+    const team = e.kind === 'q' ? '' : `<span class="tag" style="background:${safeColor(cfg.teams[e.team].color)};color:${safeColor(teamInk(e.team))}">${esc(cfg.teams[e.team].name)}</span>`;
+    return `<tr data-id="${Number(e.id)}">
       <td><input type="text" class="t" value="${fmt(e.t, true)}"></td>
       <td>${quarterLabel(st.q)}</td>
       <td>${team}</td>
@@ -1010,13 +1029,16 @@ function probeDuration(url) {
   return new Promise((res, rej) => {
     const v = document.createElement('video');
     v.preload = 'metadata';
+    // Give up after 30 s if the file never reports a duration, and always release the probe element.
+    const timer = setTimeout(() => done(null), 30000);
+    const done = d => { clearTimeout(timer); v.onloadedmetadata = v.ontimeupdate = v.onerror = null; v.removeAttribute('src'); v.load(); d > 0 ? res(d) : rej(new Error('영상을 읽지 못했어요')); };
     v.onloadedmetadata = () => {
-      if (isFinite(v.duration)) return res(v.duration);
+      if (isFinite(v.duration)) return done(v.duration);
       // Some recordings (e.g. WebM without a duration header) only reveal it after seeking to the end.
-      v.ontimeupdate = () => { if (isFinite(v.duration)) { v.ontimeupdate = null; res(v.duration); } };
+      v.ontimeupdate = () => { if (isFinite(v.duration)) done(v.duration); };
       v.currentTime = 1e9;
     };
-    v.onerror = () => rej(new Error('영상을 읽지 못했어요'));
+    v.onerror = () => done(null);
     v.src = url;
   });
 }
@@ -1037,11 +1059,11 @@ async function openFiles(list, append) {
     const old = toLocal();
     clips.push(...added);
     fromLocal(old);
-    save();
+    rekey();
   } else {
     clips.forEach(c => URL.revokeObjectURL(c.url));
     clips = added;
-    storeKey = 'mm-sb:' + clips.map(c => c.key).sort().join('|');
+    storeKey = keyOf(clips);
     const saved = lsGet(storeKey) || (clips.length === 1 ? lsGet(`mm-sb:${clips[0].key}`) : null);
     if (saved?.order) clips.sort((x, y) => saved.order.indexOf(x.key) - saved.order.indexOf(y.key));
     events = saved?.events || [];
@@ -1080,6 +1102,7 @@ function editClips(fn) {
   const oldCuts = cfg.cuts.map(c => ({ s: loc(c.s), e: loc(c.e - 0.001) }));
   fn();
   fromLocal(old);
+  rekey();   // changed() below saves under the new key
   const idx = x => clips.findIndex(c => c.key === x.key);
   cfg.cuts = normCuts(oldCuts.filter(c => {
     const ks = idx(c.s), ke = idx(c.e);
@@ -1178,18 +1201,27 @@ const KEYMAP = {
   Numpad1: ['pts', 0, 1], Numpad2: ['pts', 0, 2], Numpad3: ['pts', 0, 3], Numpad4: ['foul', 0, 1],
   Numpad7: ['pts', 1, 1], Numpad8: ['pts', 1, 2], Numpad9: ['pts', 1, 3], Numpad0: ['foul', 1, 1],
 };
+// Blur pickers/checkboxes/number fields once a value is chosen so the next key press is a hotkey again.
+document.addEventListener('change', e => { if (e.target.matches('select, input[type=checkbox], input[type=number]')) e.target.blur(); });
 document.addEventListener('keydown', e => {
   if (!clips.length) return;
-  if (e.target.matches('input, select, textarea')) return;
+  // Only text-entry fields (number fields included: they need digits) swallow hotkeys.
+  const typing = e.target.closest('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea');
+  if (e.isComposing || (typing && e.keyCode === 229)) return;   // Korean IME composition in progress
+  if (typing) { if (e.key === 'Escape' || (e.key === 'Enter' && e.target.type === 'number')) e.target.blur(); return; }
+  // A focused <select> would otherwise jump to the option matching the typed digit/letter.
+  if (e.target.matches('select') && (e.key.length === 1 || e.key === 'Escape') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); e.target.blur(); }
+  if (e.repeat && e.code !== 'ArrowLeft' && e.code !== 'ArrowRight') return;   // holding a key must not record repeatedly
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code === 'Space') { e.preventDefault(); togglePlay(); return; }
+  if (e.code === 'Space') { e.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); togglePlay(); return; }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
     e.preventDefault();
     const step = (e.shiftKey ? 1 : 5) * (e.code === 'ArrowLeft' ? -1 : 1);
     seekG(gTime() + step);
     return;
   }
+  if (exporting && (e.code === 'KeyN' || e.code === 'BracketLeft' || e.code === 'BracketRight' || KEYMAP[e.code])) return;   // no recording while exporting
   if (e.code === 'KeyN') { addEvent('q', 0, 1); return; }
   if (e.code === 'BracketLeft') { markCutIn(); return; }
   if (e.code === 'BracketRight') { markCutOut(); return; }
@@ -1286,10 +1318,22 @@ $('#jsonInput').onchange = async e => {
   if (!f) return;
   try {
     const data = JSON.parse(await f.text());
-    if (!Array.isArray(data.events)) throw new Error();
-    events = data.events;
-    if (data.cfg) Object.assign(cfg, data.cfg);
-    nextId = events.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+    if (!Array.isArray(data?.events)) throw new Error();
+    // Imported values end up in HTML/canvas: keep only well-formed events and colours.
+    const num = v => Number.isFinite(Number(v)) ? Number(v) : NaN;
+    events = data.events.filter(x => x && KIND_LABEL[x.kind] && (x.team === 0 || x.team === 1) && Number.isFinite(num(x.t)) && Number.isFinite(num(x.v)))
+      .map(x => ({ id: num(x.id), t: Math.max(0, num(x.t)), kind: x.kind, team: x.team, v: num(x.v) }));
+    let id = events.reduce((m, x) => Number.isFinite(x.id) ? Math.max(m, x.id) : m, 0);
+    events.forEach(x => { if (!Number.isFinite(x.id)) x.id = ++id; });
+    if (data.cfg && typeof data.cfg === 'object') {
+      const c = data.cfg, teams = cfg.teams.map((t, i) => {
+        const n = Array.isArray(c.teams) ? c.teams[i] : null;
+        return { name: n?.name != null ? String(n.name) : t.name, color: HEX.test(n?.color) ? n.color : t.color, text: HEX.test(n?.text) ? n.text : t.text };
+      });
+      const cuts = Array.isArray(c.cuts) ? normCuts(c.cuts.filter(x => Number.isFinite(num(x?.s)) && Number.isFinite(num(x?.e))).map(x => ({ s: num(x.s), e: num(x.e) }))) : cfg.cuts;
+      Object.assign(cfg, c, { teams, cuts });
+    }
+    nextId = id + 1;
     undoStack = [];
     syncForm(); changed();
   } catch { alert('기록 파일을 읽지 못했어요.'); }
@@ -1328,6 +1372,9 @@ $('#btnExport').onclick = async () => {
 
   video.pause();
   $('#btnExport').disabled = true;
+  // Freeze settings and events at export start, so edits made while exporting don't change the video halfway.
+  const snapCfg = structuredClone(cfg), snapEvents = structuredClone(sorted());
+  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { drawBoard(ctx, W, H, stateAt(t, snapEvents)); } finally { cfg = live; } };
   $('#exportBox').classList.remove('hidden');
   setProgress(0, '준비 중…');
   showMsg('');
@@ -1339,16 +1386,16 @@ $('#btnExport').onclick = async () => {
     await Promise.all([
       document.fonts.load(`900 40px ${FONT}`, 'A1'),
       document.fonts.load(`700 40px ${NUM}`, '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+'),
-      document.fonts.load(`700 40px ${FONT}`, cfg.teams.map(t => t.name).join('') || '가'),
-      document.fonts.load(`400 40px ${FONT}`, cfg.teams.map(t => t.name).join('') || '가'),
+      document.fonts.load(`700 40px ${FONT}`, snapCfg.teams.map(t => t.name).join('') || '가'),
+      document.fonts.load(`400 40px ${FONT}`, snapCfg.teams.map(t => t.name).join('') || '가'),
       document.fonts.load(`200 40px ${FONT}`, '0123456789'),
     ]);
 
     // Game-timeline range to export, and the clips it touches.
-    const S = Math.max(0, cfg.trimStart ?? 0), E = Math.min(total(), cfg.trimEnd ?? total());
+    const S = Math.max(0, snapCfg.trimStart ?? 0), E = Math.min(total(), snapCfg.trimEnd ?? total());
     if (E - S < 0.1) throw new Error('내보낼 구간이 너무 짧아요. 시작/끝을 확인해 주세요.');
     const parts = [];
-    for (const [a, z] of keepRanges(S, E)) {
+    for (const [a, z] of keepRanges(S, E, snapCfg.cuts)) {
       clips.forEach((c, k) => {
         const o = offset(k), from = Math.max(a, o) - o, to = Math.min(z, o + c.dur) - o;
         if (to - from > 0.01) parts.push({ c, k, o, from, to });
@@ -1378,22 +1425,29 @@ $('#btnExport').onclick = async () => {
     const first = opened[0].vt;
     const portrait = first.displayHeight > first.displayWidth;
     let W = first.displayWidth & ~1, H = first.displayHeight & ~1;
-    if (cfg.res !== 'orig') {
-      const short = Number(cfg.res), long = Math.round(short * 16 / 9 / 2) * 2;
+    if (snapCfg.res !== 'orig') {
+      const short = Number(snapCfg.res), long = Math.round(short * 16 / 9 / 2) * 2;
       [W, H] = portrait ? [short, long] : [long, short];
     }
-    const FPS = Number(cfg.fps) || 0;
+    const FPS = Number(snapCfg.fps) || 0;
     const notes = [];
     const CODEC_NAME = { avc: 'H.264', hevc: 'H.265', av1: 'AV1', vp9: 'VP9' };
-    const wanted = cfg.vcodec || 'avc';
+    const wanted = snapCfg.vcodec || 'avc';
     const codec = await MB.getFirstEncodableVideoCodec([wanted, ...['avc', 'hevc', 'vp9', 'av1'].filter(c => c !== wanted)], { width: W, height: H });
     if (!codec) throw new Error('이 브라우저에서는 영상 인코딩을 지원하지 않아요. 최신 크롬이나 엣지를 사용해 주세요.');
     if (codec !== wanted) notes.push(`${CODEC_NAME[wanted]} 인코더가 없어 ${CODEC_NAME[codec] || codec}로 저장`);
-    const quality = cfg.quality === 'custom'
-      ? Math.round(cfg.mbps * 1e6)
-      : cfg.quality === 'source'
+    const quality = snapCfg.quality === 'custom'
+      ? Math.round(snapCfg.mbps * 1e6)
+      : snapCfg.quality === 'source'
       ? await sourceBitrate(opened, codec, W * H)
-      : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[cfg.quality] || MB.QUALITY_HIGH;
+      : { medium: MB.QUALITY_MEDIUM, high: MB.QUALITY_HIGH, very_high: MB.QUALITY_VERY_HIGH }[snapCfg.quality] || MB.QUALITY_HIGH;
+    // Without a save picker the whole file is built in memory before download; warn before a huge one stalls the tab.
+    if (!writable) {
+      const secs = parts.reduce((n, p) => n + p.to - p.from, 0);
+      const vbps = typeof quality === 'number' ? quality : W * H * (FPS || 30) * 0.1;   // quality tiers: rough 0.1 bit per pixel
+      const gb = secs * (vbps + (Number(snapCfg.abr) || 192) * 1000) / 8 / 1024 ** 3;
+      if (gb > 1.5 && !confirm(`내보낼 영상이 약 ${gb.toFixed(1)}GB예요. 이 브라우저는 파일을 메모리에 모았다가 저장해서, 이만큼 크면 탭이 멈추거나 실패할 수 있어요.\n\n[확인] 그래도 내보내요.\n[취소] 그만두고 형식을 '가볍게 720p 30fps'로 바꾸거나 내보낼 구간을 줄여요.`)) { job.canceled = true; throw new Error('canceled'); }
+    }
 
     const target = writable ? new MB.StreamTarget(writable, { chunked: true }) : new MB.BufferTarget();
     output = new MB.Output({ format: new MB.Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' }), target });
@@ -1406,14 +1460,17 @@ $('#btnExport').onclick = async () => {
     let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
     if (firstAudio) {
-      const keep = !cfg.ach;
-      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : cfg.ach;
+      const keep = !snapCfg.ach;
+      const sampleRate = keep ? firstAudio.sampleRate : 48000, numberOfChannels = keep ? firstAudio.numberOfChannels : snapCfg.ach;
       const acodec = await MB.getFirstEncodableAudioCodec(['aac', 'opus'], { sampleRate, numberOfChannels });
       if (acodec && acodec !== 'aac') notes.push(`AAC 인코더가 없어 ${acodec.toUpperCase()} 오디오로 저장`);
       if (acodec) {
-        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: (Number(cfg.abr) || 192) * 1000 });
+        audioSource = new MB.AudioSampleSource({ codec: acodec, bitrate: (Number(snapCfg.abr) || 192) * 1000 });
         audioFormat = { sampleRate, numberOfChannels };
         output.addAudioTrack(audioSource);
+      } else {
+        notes.push('이 브라우저에 오디오 인코더가 없어 소리 없이 저장');
+        showMsg('이 브라우저에서는 소리를 인코딩할 수 없어서, 내보낸 영상에 소리가 없어요.', true);
       }
     }
     await output.start();
@@ -1443,7 +1500,7 @@ $('#btnExport').onclick = async () => {
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, W, H);
             sample.draw(ctx, (W - dw) / 2, (H - dh) / 2, dw, dh);
-            drawBoard(ctx, W, H, stateAt(gameT));
+            drawSnap(ctx, W, H, gameT);
           };
           const ts = Math.max(base + local - from, lastV + 0.001);
           try {
