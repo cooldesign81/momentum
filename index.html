@@ -1304,11 +1304,41 @@ function withAuth(kind, then) {
     onSave: async v => { await login(kind, v.pw); if (!FB) render(); },
     after: () => setTimeout(then, 50),
   });
+  if (kind === 'admin') $('#merr').insertAdjacentHTML('beforebegin', '<p style="margin:-4px 0 10px"><button type="button" class="link-btn" data-pw-reset>비밀번호를 잊었어요</button></p>');
 }
+// 관리자 비밀번호 찾기: 재설정 링크를 관리자 메일로 보내요 (메일은 항상 CONFIG.auth.adminEmail로만 가요)
+async function resetAdminPw() {
+  const to = CONFIG.auth.adminEmail;
+  if (!confirm(`${to} 로 비밀번호 재설정 메일을 보낼까요?`)) return;
+  if (!FB) { alert('데모 모드에서는 메일을 보내지 않아요. 데모 관리자 비밀번호는 admin이에요.'); return; }
+  try { fauth.languageCode = 'ko'; await fauth.sendPasswordResetEmail(to); alert(`${to} 로 재설정 메일을 보냈어요. 메일의 링크를 열어 새 비밀번호를 정해주세요. (안 보이면 스팸함도 확인해주세요)`); }
+  catch (e) { alert(errMsg(e)); }
+}
+// 관리자 비밀번호 바꾸기: 지금 비밀번호로 한 번 더 확인한 뒤 새 비밀번호로 바꿔요
+const changeAdminPw = () => withAuth('admin', () => openForm({
+  title: '관리자 비밀번호 바꾸기', saveLabel: '바꾸기',
+  note: '바꾸면 다른 기기에서 쓰던 관리자 로그인은 새 비밀번호로 다시 해야 해요.',
+  fields: [
+    { key: 'cur', label: '지금 비밀번호', type: 'password', required: true },
+    { key: 'next', label: '새 비밀번호', type: 'password', required: true, validate: v => v.length >= 8 ? '' : '새 비밀번호는 8자 이상으로 정해주세요.' },
+    { key: 'again', label: '새 비밀번호 한 번 더', type: 'password', required: true },
+  ],
+  onSave: async v => {
+    if (v.next !== v.again) throw { message: '새 비밀번호 두 칸이 서로 달라요.' };
+    if (v.next === v.cur) throw { message: '지금 비밀번호와 다른 비밀번호로 정해주세요.' };
+    if (!FB) throw { message: '데모 모드에서는 비밀번호를 바꿀 수 없어요.' };
+    const u = fauth.currentUser;
+    await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, v.cur));
+    await u.updatePassword(v.next);
+    setTimeout(() => alert('비밀번호를 바꿨어요.'), 50);
+  },
+}));
 function errMsg(e) {
   const c = (e && e.code) || '';
   if (c === 'wrong' || /credential|password|user-not-found|invalid-email/.test(c)) return '비밀번호가 맞지 않아요.';
   if (/too-many/.test(c)) return '시도가 너무 많아요. 잠시 후 다시 해주세요.';
+  if (/weak-password/.test(c)) return '새 비밀번호가 너무 쉬워요. 더 길게 정해주세요.';
+  if (/network/.test(c)) return '인터넷 연결을 확인하고 다시 해주세요.';
   if (/permission/.test(c)) return '권한이 없어요. 비밀번호를 다시 입력해주세요.';
   if (e && e.message && !c) return e.message;
   return '처리하지 못했어요: ' + ((e && e.message) || e);
@@ -2309,7 +2339,7 @@ function render() {
   // 영상 재생 중에 데이터가 새로 들어와도 플레이어를 다시 만들지 않아요 (재생이 끊기지 않게)
   const keep = vid && document.querySelector(`#wv-frame iframe[data-id="${CSS.escape(vid)}"]`);
   const src = state.seasons.map(s => `${s.name}: ${s.source === 'live' ? '구글 시트에서 실시간' : s.source === 'archive' ? '보관된 기록' : `저장된 데이터 (${SNAP_DATE} 기준)`}`).join(' / ');
-  const who = state.role ? `${state.role === 'admin' ? '관리자' : '일정 관리'}로 로그인됨 <button class="link-btn" data-logout>로그아웃</button>` : '';
+  const who = state.role ? `${state.role === 'admin' ? '관리자' : '일정 관리'}로 로그인됨 ${state.role === 'admin' ? '<button class="link-btn" data-pw-change>비밀번호 바꾸기</button> · ' : ''}<button class="link-btn" data-logout>로그아웃</button>` : '';
   const kept = {}; document.querySelectorAll('#view [data-keep]').forEach(el => kept[el.dataset.keep] = el.value);
   const focusKey = document.activeElement?.dataset?.keep, caret = document.activeElement?.selectionStart;
   const full = html + `<p class="status">${esc(src)}${FB ? '' : FB_EXPECTED ? ' / ⚠️ 저장 기능을 불러오지 못했어요. 새로고침해주세요' : ' / 데모 모드: 일정·영상·공지는 이 브라우저에만 저장돼요 (일정 비번 1234, 관리자 비번 admin)'}${who ? '<br>' + who : ''}</p>`;
@@ -2420,6 +2450,8 @@ document.addEventListener('click', e => {
   if (d.editNews) return editNews(d.editNews);
   if (d.del) { const [c, id] = d.del.split(':'); if (confirm('정말 삭제할까요?')) store.remove(c, id).catch(err => alert(errMsg(err))); return; }
   if ('logout' in d) return logout();
+  if ('pwChange' in d) return changeAdminPw();
+  if ('pwReset' in d) return resetAdminPw();
   if ('editAbout' in d) return editAbout();
   if (d.article) return openArticle(d.article);
   if (d.articlePdf) return openPdf(d.articlePdf);
