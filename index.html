@@ -832,13 +832,18 @@ function parseCSV(text) {
   if (cur || row.length) { row.push(cur); rows.push(row); }
   return rows.map(r => r.map(v => v === '' ? null : v));
 }
+// 시트 응답을 이 브라우저에 기억해 둬요. 다음 방문 때 기억해 둔 걸로 바로 화면을 그리고, 새 기록은 뒤에서 받아와 바꿔요.
+const SHEET_CACHE = 'momentum-sheets-v1';
+let sheetMemo = null, sheetFresh = {};
 async function fetchSheet(id, sheet, range) {
+  const key = `${id}|${sheet}|${range}`;
+  if (sheetMemo) { if (key in sheetMemo) return sheetMemo[key]; throw new Error('기억해 둔 시트 없음'); }
   const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}&range=${range}`;
   const res = await fetch(url, { cache: 'no-store' });   // 시트를 고친 뒤 새로고침하면 바로 새 기록이 보이게 (브라우저 캐시 안 씀)
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const t = await res.text();
   if (/^\s*</.test(t)) throw new Error('공유 안 됨');
-  return parseCSV(t);
+  return (sheetFresh[key] = parseCSV(t));
 }
 function planOf(g) {
   const cell = (r, c) => (g[r] || [])[c];
@@ -864,9 +869,9 @@ async function loadSeason(cfg) {
   if (cfg.frozen && fromSnap()) { /* 끝난 시즌: 저장된 기록 사용 */ }
   else {
     try {
-      const lists = await fetchSheet(cfg.sheetId, 'LISTS', 'A1:F44');
-      const weeks = await Promise.all(Array.from({ length: cfg.weeks || 12 }, (_, i) =>
-        fetchSheet(cfg.sheetId, 'Week ' + pad(i + 1), 'A1:AM64').catch(() => null)));
+      // 팀 목록과 주차별 시트를 한꺼번에 받아요 (차례로 받으면 그만큼 느려져요)
+      const [lists, ...weeks] = await Promise.all([fetchSheet(cfg.sheetId, 'LISTS', 'A1:F44'), ...Array.from({ length: cfg.weeks || 12 }, (_, i) =>
+        fetchSheet(cfg.sheetId, 'Week ' + pad(i + 1), 'A1:AM64').catch(() => null))]);
       // 없는 탭(예: Week 09)을 부르면 구글이 첫 번째 탭을 대신 돌려줘요. 앞 주와 똑같은 내용이면 버려요.
       const grids = {}, seen = new Set(); weeks.forEach((g, i) => { const k = g && JSON.stringify(g); if (!g || seen.has(k)) return; seen.add(k); grids[i + 1] = g; });
       buildSeason(s, lists, grids);
@@ -1000,7 +1005,7 @@ function weeklyMVP(s) {
 }
 
 /* ===================== 상태 ===================== */
-const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', sortDir: 'desc', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [], statHidden: [] };
+const state = { seasons: [], seasonId: null, statCat: 'mvp', statScope: null, sortKey: 'mvp', sortDir: 'desc', showAll: false, calMonth: null, events: [], videos: [], news: [], role: null, leagueWeek: {}, newsAll: false, views: {}, videoCat: 'all', feed: [], members: [], cheers: [], cheerAll: {}, articles: [], teamLogos: [], statHidden: [], photos: {} };
 const season = () => state.seasons.find(s => s.id === state.seasonId) || state.seasons[0];
 const current = () => state.seasons[0];
 function memberMap() {
@@ -1009,7 +1014,68 @@ function memberMap() {
 }
 // 관리자가 등록한 명단이 있으면 그걸 쓰고, 없으면 파일에 들어있는 기본 명단(엑셀)을 써요
 const usingSeed = () => !state.members.length;
-const prof = n => usingSeed() ? (CONFIG.players[n] || {}) : (memberMap()[n] || {});
+// 선수 사진은 용량이 커서(선수당 약 30KB) memberPhotos/{선수 id}에 따로 두고, 사진이 나오는 페이지에서만 받아요.
+// 예전처럼 members 문서 안에 사진이 남아 있으면 그것도 그대로 보여요.
+const photoOf = m => (m && (m.photo || state.photos[m.id])) || '';
+const prof = n => { if (usingSeed()) return CONFIG.players[n] || {}; const m = memberMap()[n] || {}; return m.photo || !state.photos[m.id] ? m : { ...m, photo: state.photos[m.id] }; };
+let photosOn = false, photosLoaded = false, logosOn = false;
+// 팀 로고(로고당 약 80KB)도 리그·기록·선수 페이지와 박스스코어에서만 받아요
+function needLogos() {
+  if (logosOn) return; logosOn = true;
+  if (FB) fdb.collection('teamLogos').onSnapshot(s => { state.teamLogos = s.docs.map(x => ({ id: x.id, ...x.data() })); render(); }, err => console.warn('팀 로고', err));
+  else state.teamLogos = (demo.teamLogos || []).map(x => ({ ...x }));
+}
+function needPhotos() {
+  if (photosOn) return; photosOn = true;
+  if (FB) fdb.collection('memberPhotos').onSnapshot(s => { state.photos = Object.fromEntries(s.docs.map(x => [x.id, x.data().photo || ''])); photosLoaded = true; render(); }, err => console.warn('선수 사진', err));
+  else { state.photos = { ...(demo.memberPhotos || {}) }; photosLoaded = true; }
+}
+async function setPhoto(id, photo) {
+  if (FB) return photo ? fdb.collection('memberPhotos').doc(id).set({ photo }) : fdb.collection('memberPhotos').doc(id).delete();
+  demo.memberPhotos = demo.memberPhotos || {};
+  if (photo) demo.memberPhotos[id] = photo; else delete demo.memberPhotos[id];
+  state.photos = { ...demo.memberPhotos }; demoSave(); demoSync();
+}
+// 선수 정보 저장: 사진은 memberPhotos로, 나머지는 members로 (id가 없으면 새 선수)
+async function writeMember(id, v) {
+  const { photo, ...info } = v, inline = id && (state.members.find(x => x.id === id) || {}).photo;
+  if (FB) {
+    const ref = id ? fdb.collection('members').doc(id) : fdb.collection('members').doc();
+    await ref.set(id ? { ...info, photo: firebase.firestore.FieldValue.delete() } : info, { merge: true });
+    id = ref.id;
+  } else {
+    if (id) { const i = demo.members.findIndex(d => d.id === id); if (i >= 0) { demo.members[i] = { ...demo.members[i], ...info }; delete demo.members[i].photo; } }
+    else { id = newId(); demo.members.push({ id, ...info }); }
+    demoSave(); demoSync();
+  }
+  // 사진: 예전처럼 members 안에 있던 사진도 memberPhotos로 옮겨요. 사진 목록을 아직 못 받았으면 지우지는 않아요.
+  if (photo === undefined) return;
+  if (photo) { if (photo !== state.photos[id] || inline) await setPhoto(id, photo); }
+  else if (photosLoaded && (state.photos[id] || inline)) await setPhoto(id, '');
+}
+// 관리자로 들어오면, members 문서 안에 남아 있는 예전 사진을 memberPhotos로 옮겨요 (한 번만, 뒤에서 조용히)
+let photoMoveStarted = false;
+async function movePhotos() {
+  if (!FB || photoMoveStarted || !can('admin')) return;
+  const left = state.members.filter(m => m.photo); if (!left.length) return;
+  photoMoveStarted = true;
+  for (const m of left) {
+    try {
+      const small = await shrinkPhoto(m.photo);
+      await fdb.collection('memberPhotos').doc(m.id).set({ photo: small });
+      await fdb.collection('members').doc(m.id).update({ photo: firebase.firestore.FieldValue.delete() });
+    } catch (e) { console.warn('사진 옮기기를 멈췄어요 (Firestore 규칙에 memberPhotos가 있는지 확인하세요)', e); return; }
+  }
+}
+// 이미 저장된 사진을 WebP로 다시 저장해서 더 가볍게 (크기는 그대로, 더 작아지지 않으면 원래 그대로)
+async function shrinkPhoto(src) {
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+    const out = c.toDataURL('image/webp', .8);
+    return out.startsWith('data:image/webp') && out.length < src.length ? out : src;
+  } catch (e) { return src; }
+}
 const memberNames = () => usingSeed() ? Object.keys(CONFIG.players) : state.members.map(m => m.name);
 const f1 = v => v === null || v === undefined ? '–' : (Math.round(v * 10) / 10).toFixed(1);
 const pct = v => v === null || v === undefined ? '–' : (Math.round(v * 10) / 10).toFixed(1) + '%';
@@ -1196,6 +1262,7 @@ function videoForGame(g) {
   return best;
 }
 function openBox(id) {
+  needLogos();
   const g = state.seasons.flatMap(s => s.games).find(x => x.id === id);
   if (!g) return;
   const tbl = (team, rows) => {
@@ -1245,7 +1312,7 @@ document.addEventListener('keydown', e => {
 /* ===================== 저장소와 비밀번호 (Firebase) ===================== */
 const FB_EXPECTED = !!FIREBASE.apiKey;
 const FB = FB_EXPECTED && typeof firebase !== 'undefined';
-const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles', 'teamLogos', 'statHidden'];
+const DYN = ['events', 'videos', 'news', 'members', 'cheers', 'articles', 'statHidden']; // teamLogos는 로고가 나오는 페이지에서만 받아요 (needLogos)
 let fdb, fauth;
 const DEMO_KEY = 'momentum-league-demo-v1';
 let demo = null;
@@ -1504,7 +1571,8 @@ async function resizeImage(file) {
   const sw = W / r, sh = H / r;
   c.getContext('2d').drawImage(img, (img.width - sw) / 2, (img.height - sh) / 3, sw, sh, 0, 0, W, H);
   URL.revokeObjectURL(url);
-  return c.toDataURL('image/jpeg', .82);
+  const webp = c.toDataURL('image/webp', .8);
+  return webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', .82);
 }
 const POS_OPTS = [['PG', 'PG (포인트 가드)'], ['SG', 'SG (슈팅 가드)'], ['SF', 'SF (스몰 포워드)'], ['PF', 'PF (파워 포워드)'], ['C', 'C (센터)']];
 const MEMBER_FIELDS = [
@@ -1518,18 +1586,18 @@ const MEMBER_FIELDS = [
   { key: 'photo', label: '사진', type: 'photo' },
 ];
 const dupCheck = (name, id) => state.members.some(m => m.name === name && m.id !== id) ? `이미 '${name}' 선수가 있어요. 동명이인이면 이름 뒤에 구분 글자를 붙여주세요.` : '';
-const addMember = () => withAuth('admin', () => openForm({ title: '선수 등록', fields: MEMBER_FIELDS, onSave: async v => { const d = dupCheck(v.name); if (d) throw { message: d }; if (usingSeed()) await importMembers(true); return store.add('members', v); } }));
+const addMember = () => withAuth('admin', () => openForm({ title: '선수 등록', fields: MEMBER_FIELDS, onSave: async v => { const d = dupCheck(v.name); if (d) throw { message: d }; if (usingSeed()) await importMembers(true); return writeMember(null, v); } }));
 async function memberIdByName(name) {
   if (usingSeed()) await importMembers(true);
   for (let i = 0; i < 30; i++) { const m = state.members.find(x => x.name === name); if (m) return m.id; await new Promise(r => setTimeout(r, 100)); }
   throw { message: '선수 정보를 찾지 못했어요. 새로고침 후 다시 해주세요.' };
 }
 const withMember = (name, fn) => withAuth('admin', async () => { try { fn(await memberIdByName(name)); } catch (err) { alert(errMsg(err)); } });
-const photoMember = id => { const m = state.members.find(x => x.id === id); if (!m) return;
+const photoMember = id => { needPhotos(); const m = state.members.find(x => x.id === id); if (!m) return;
   openForm({ title: `${m.name} 사진 올리기`, note: '사진을 복사해서 붙여넣거나 파일을 고르면 돼요. 다른 정보는 바뀌지 않아요.', saveLabel: '사진 저장',
-    fields: [{ key: 'photo', label: '사진', type: 'photo' }], data: { photo: m.photo || '' },
-    onSave: v => { if (!v.photo) throw { message: '사진을 먼저 넣어주세요.' }; return store.set('members', id, { photo: v.photo }); } }); };
-const editMember = id => withAuth('admin', () => { const m = state.members.find(x => x.id === id); if (!m) return; openForm({ title: '선수 수정', fields: MEMBER_FIELDS, data: m, onSave: v => { const d = dupCheck(v.name, id); if (d) throw { message: d }; return store.set('members', id, v); }, onDelete: () => store.remove('members', id) }); });
+    fields: [{ key: 'photo', label: '사진', type: 'photo' }], data: { photo: photoOf(m) },
+    onSave: v => { if (!v.photo) throw { message: '사진을 먼저 넣어주세요.' }; return setPhoto(id, v.photo); } }); };
+const editMember = id => withAuth('admin', () => { needPhotos(); const m = state.members.find(x => x.id === id); if (!m) return; openForm({ title: '선수 수정', fields: MEMBER_FIELDS, data: { ...m, photo: photoOf(m) }, onSave: v => { const d = dupCheck(v.name, id); if (d) throw { message: d }; return writeMember(id, v); }, onDelete: async () => { await store.remove('members', id); await setPhoto(id, '').catch(() => {}); } }); });
 async function importMembers(silent) {
   if (!usingSeed()) return;
   if (!silent && !confirm(`엑셀 기본 명단 ${Object.keys(CONFIG.players).length}명을 관리자 명단으로 불러올까요?`)) return;
@@ -1854,7 +1922,7 @@ async function saveLogo(sid, team, v) {
   if (FB) return v ? fdb.collection('teamLogos').doc(id).set({ season: sid, team, img: v.img, color: v.color || '' }) : fdb.collection('teamLogos').doc(id).delete();
   demo.teamLogos = (demo.teamLogos || []).filter(x => x.id !== id);
   if (v) demo.teamLogos.push({ id, season: sid, team, img: v.img, color: v.color || '' });
-  demoSave(); demoSync();
+  state.teamLogos = demo.teamLogos.map(x => ({ ...x })); demoSave(); demoSync();
 }
 const openTeamLogos = () => withAuth('admin', () => {
   const s = season(), teams = s.standings.map(t => t.team);
@@ -2331,6 +2399,9 @@ function render() {
   if (!state.seasons.length) return;
   const parts = location.hash.split('/'), page = parts[1] || 'home', arg = parts[2];
   const dec = v => { try { return decodeURIComponent(v); } catch (e) { return v; } };
+  if (['players', 'player', 'league'].includes(page)) needPhotos();
+  if (['league', 'stats', 'player'].includes(page)) needLogos();
+  if (state.role === 'admin') movePhotos();
   const pages = { home: pageHome, schedule: pageSchedule, league: pageLeague, players: pagePlayers, stats: pageStats, watch: pageWatch };
   const vid = page === 'watch' && arg === 'v' && parts[3] ? parts[3] : '';
   const html = vid ? pageWatchVideo(vid) : page === 'news' && arg ? pageArticle(arg) : page === 'player' && arg ? pagePlayer(dec(arg)) : (pages[page] || pageHome)();
@@ -2522,11 +2593,25 @@ async function loadFeed() {
     fdb.collection('articleViews').onSnapshot(s => { state.views = Object.fromEntries(s.docs.map(x => [x.id, x.data().n || 0])); render(); }, err => console.warn('조회수', err));
     fauth.onAuthStateChanged(u => { state.role = roleOf(u); render(); });
   } else { demo = demoLoad(); DYN.forEach(c => { demo[c] = demo[c] || []; state[c] = clean(c, demo[c]); }); state.articlesLoaded = true; state.views = { ...(demo.views || {}) }; }
-  state.seasons = await loadAllSeasons();
-  state.seasonId = state.seasons[0]?.id;
-  if (!state.seasons.length) { $('#view').innerHTML = '<p class="empty sec">기록 시트를 불러오지 못했어요. CONFIG의 sheetId와 시트 공유 설정을 확인하세요.</p>'; return; }
-  render(); requestAnimationFrame(scrollToContent);
   loadFeed();
+  // ① 지난번에 기억해 둔 시트로 바로 그리고 ② 구글 시트에서 새로 받아 바꿔요
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(SHEET_CACHE)); } catch (e) {}
+  if (cached) {
+    sheetMemo = cached;
+    try { const list = await loadAllSeasons(); if (list.length) { state.seasons = list; state.seasonId = list[0].id; render(); requestAnimationFrame(scrollToContent); } } catch (e) {}
+    sheetMemo = null; state.archiveFailed = false;
+  }
+  const shown = state.seasons.length;
+  sheetFresh = {};
+  const fresh = await loadAllSeasons();
+  // 시트를 못 받아서 내장 저장본으로 돌아간 경우엔, 이미 그린 (더 최신일) 기억본을 그대로 둬요
+  if (fresh.length && (!shown || fresh.some(x => x.source === 'live'))) {
+    const keep = state.seasonId && fresh.some(x => x.id === state.seasonId) ? state.seasonId : fresh[0].id;
+    state.seasons = fresh; state.seasonId = keep;
+    if (fresh.some(x => x.source === 'live') && !state.archiveFailed) try { localStorage.setItem(SHEET_CACHE, JSON.stringify(sheetFresh)); } catch (e) {}
+    render(); if (!shown) requestAnimationFrame(scrollToContent);
+  } else if (!shown) $('#view').innerHTML = '<p class="empty sec">기록 시트를 불러오지 못했어요. CONFIG의 sheetId와 시트 공유 설정을 확인하세요.</p>';
 })();
 </script>
 </body>
