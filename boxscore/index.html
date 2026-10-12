@@ -110,6 +110,15 @@
   .timeline.zoomed { cursor: grab; } .timeline.dragging { cursor: grabbing; }
   .timeline .tk { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.08); pointer-events: none; }
   .timeline .tk span { position: absolute; left: 3px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
+  /* 타임바 아래 클립 줄: 카드·음악·자막이 길이만큼의 막대로 보이고, 끌어서 옮기고 오른쪽 끝을 끌어 길이를 바꿔요 */
+  .cliplane { flex: none; position: relative; margin: 3px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; }
+  .cl-b { position: absolute; height: 17px; box-sizing: border-box; border-radius: 4px; border: 1px solid rgba(0,0,0,.4); font-size: 10px; line-height: 15px; padding: 0 9px 0 5px; color: #10131a; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: grab; }
+  .cl-b.card { background: #ffb86b; } .cl-b.hold { background: repeating-linear-gradient(135deg, #ffb86b 0 6px, #f19a3e 6px 12px); }
+  .cl-b.ov { background: #ff8f5a; } .cl-b.mus { background: #7be3a0; } .cl-b.cap { background: #c9a7ff; }
+  .cl-b.sel { outline: 2px solid #fff; outline-offset: -1px; z-index: 3; }
+  .cl-b.drag { cursor: grabbing; opacity: .9; }
+  .cl-b .rz { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; background: rgba(0,0,0,.28); }
+  .cltip { position: fixed; z-index: 50; pointer-events: none; background: #000d; color: #fff; font: 600 11px/1.4 ui-monospace, monospace; padding: 3px 7px; border-radius: 5px; white-space: nowrap; }
   .tlmini { flex: none; position: relative; height: 8px; margin: 0 0 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; overflow: hidden; touch-action: none; }
   .tlmini .win { position: absolute; top: 0; bottom: 0; background: rgba(143,240,224,.25); border: 1px solid var(--accent); border-radius: 3px; min-width: 4px; pointer-events: none; }
   .tlmini .ph { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--danger); pointer-events: none; }
@@ -294,11 +303,13 @@
   .styles button.on { border-color: var(--accent); color: var(--accent); }
   .styles canvas { width: 100%; aspect-ratio: 16 / 7; border-radius: 5px; display: block; }
   .clips { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow: auto; }
-  .clip { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .clip { display: grid; grid-template-columns: 22px 1fr auto auto auto; gap: 6px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
   .clip.cur { border-color: var(--accent); }
   .clip .n { color: var(--muted); font-weight: 700; }
   .clip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .clip .d { color: var(--muted); font-family: ui-monospace, monospace; }
+  .clip .cq { display: flex; align-items: center; gap: 4px; } .clip .ql { font-size: 11px; color: var(--accent); min-width: 30px; text-align: right; }
+  .clip select.cqsel { padding: 1px 3px; font-size: 11px; }
   .clip button { padding: 1px 6px; font-size: 11px; }
   .team-in { display: flex; gap: 6px; }
   .cuts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
@@ -389,6 +400,7 @@
       <div class="head" id="playhead"></div>
       <span class="tlzoom hidden" id="tlzoom"></span>
     </div>
+    <div class="cliplane hidden" id="cliplane"></div><div class="cltip hidden" id="cltip"></div>
 
 
     <div class="entry" id="pickEntry">
@@ -541,7 +553,7 @@
     <div class="pane hidden" id="pane-video">
       <section data-sec="clips">
         <h2>영상 <span id="clipCount"></span> <button id="btnAddClip" class="mini">+ 영상 추가</button></h2>
-        <div class="info">영상 파일을 여러 개 열면 순서대로 이어 붙어요 (쿼터별 영상). ▲▼로 순서를 바꾸면 기록·카드·자막이 자기 영상을 따라가요. 유튜브 영상은 미리보기만 되고 내보내기는 안 돼요.</div>
+        <div class="info">영상 파일을 여러 개 열면 순서대로 이어 붙어요 (쿼터별 영상). 영상마다 쿼터를 고를 수 있어요: 자동은 넘어가면 다음 쿼터, 이어서는 쿼터를 그대로, 1Q~OT3은 그 쿼터로 지정해요 (전반·후반 영상이나 연장 영상에 써요). ▲▼로 순서를 바꾸면 기록·카드·자막이 자기 영상을 따라가요. 유튜브 영상은 미리보기만 되고 내보내기는 안 돼요.</div>
         <div class="clips" id="clips"></div>
         <div class="hint" id="clipHint">영상 파일을 열면 여기에 나와요.</div>
         <label class="check" style="margin-top:6px"><input type="checkbox" id="autoQ"> 다음 영상으로 넘어가면 자동으로 다음 쿼터</label>
@@ -554,7 +566,7 @@
         <div class="team-row"><span id="sbName1" style="color:var(--tb)"></span><span class="swatches" data-team="1"></span><input type="color" id="sbColor1" title="바탕색 직접 고르기"><input type="color" id="sbText1" title="팀 이름 글씨색"></div>
         <div class="grid3" style="margin-bottom:8px">
           <div class="field"><label>매치 표시</label><input type="text" id="sbMatch" placeholder="A vs B"></div>
-          <div class="field"><label>시작 쿼터</label><select id="sbStartQ"><option value="1">1Q</option><option value="2">2Q</option><option value="3">3Q</option><option value="4">4Q</option></select></div>
+          <div class="field"><label>시작 쿼터</label><select id="sbStartQ"><option value="1">1Q</option><option value="2">2Q</option><option value="3">3Q</option><option value="4">4Q</option><option value="5">OT</option><option value="6">OT2</option><option value="7">OT3</option></select></div>
           <div class="field"><label>팀파울 칸</label><input type="number" id="sbFoulSlots" min="1" max="10"></div>
         </div>
         <div class="styles" id="styles"></div>
@@ -576,8 +588,8 @@
       </section>
       <section data-sec="cards" class="cl">
         <h2>기록 카드 · 이미지 <span id="insCount"></span></h2>
-        <div class="info"><b>매치업</b>: 영상을 멈추지 않고 그 위에 양 팀 로고 패널이 펼쳐졌다 접혀요 (영문 이름은 목록에서). <b>전반 기록</b>: 2쿼터 끝 표시가 있으면 그 자리에. <b>최종 기록·선수별·이미지</b>: 현재 위치에. 선수별 카드는 1팀 → 2팀 두 장이 이어서 들어가요. 멈춤 카드는 미리보기에서 그 자리에 잠깐 멈춰 보여주고, 내보낸 영상에는 그 길이만큼 실제로 들어가요. 시간·길이는 목록에서 고쳐요.</div>
-        <div class="btns" style="margin-bottom:6px"><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
+        <div class="info"><b>매치업</b>: 영상을 멈추지 않고 그 위에 양 팀 로고 패널이 펼쳐졌다 접혀요 (영문 이름은 목록에서). <b>전반 기록</b>: 2쿼터 끝 표시가 있으면 그 자리에. <b>정규시간 종료·연장 시작</b>: 연장(5번째 영상 또는 쿼터 표시)이 시작되는 자리에, 정규시간 종료는 그 시점까지의 기록이고 연장 시작은 영상 위에 겹쳐서 OVERTIME과 동점 점수를 보여줘요. <b>최종 기록·선수별·이미지</b>: 현재 위치에. 선수별 카드는 1팀 → 2팀 두 장이 이어서 들어가요. 멈춤 카드는 미리보기에서 그 자리에 잠깐 멈춰 보여주고, 내보낸 영상에는 그 길이만큼 실제로 들어가요. 시간·길이는 목록에서 고치거나, 타임바 아래 클립 줄에서 막대를 끌어 옮기고 오른쪽 끝을 끌어 길이를 바꿔요 (가까운 영상 경계·쿼터 표시에 붙고 Alt를 누르면 안 붙어요, 클릭해서 고른 뒤 Delete로 삭제, 휠로 확대하면 더 정밀해요).</div>
+        <div class="btns" style="margin-bottom:6px"><button id="btnInsIntro">매치업 카드 (경기 전)</button><button id="btnInsHalf">전반 기록 카드</button><button id="btnInsReg">정규시간 종료 카드</button><button id="btnInsOT">연장 시작 카드</button><button id="btnInsFinal">최종 기록 카드</button><button id="btnInsBox">선수별 기록 카드 (두 팀)</button><button id="btnInsImage">이미지 넣기</button><input type="file" id="insImageFile" accept="image/*" class="hidden"></div>
         <div class="caps" id="insList"></div>
         <div class="grid3" style="margin-top:10px">
           <div class="field"><label>카드 표시 시간(초)</label><input type="number" id="insDur" min="2" max="30" step="0.5"></div>
@@ -756,7 +768,7 @@ function defaultSb() {
   return Object.assign({
     colors: [{ color: '#292929', text: '#ffffff' }, { color: '#c11010', text: '#ffffff' }],
     match: '', startQ: 1, foulSlots: 5, style: 'bar', pos: 'tr', size: 30, flash: true, show: true,
-    trimStart: null, trimEnd: null, cuts: [], skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: 'back', logoScale: 100, logoAlpha: 35,
+    trimStart: null, trimEnd: null, cuts: [], clipQ: {}, skipCuts: true, autoQ: true, cap: { ...CAP_DEFAULT }, insDur: 6, introColor: INTRO_COLOR, music: { ...MUSIC_DEFAULT }, logo: 'back', logoScale: 100, logoAlpha: 35,
     quality: 'source', format: 'youtube', res: '1080', fps: 30, vcodec: 'avc', mbps: 12, abr: 192, ach: 2,
   }, lsGet(SB_LAST) || {});
 }
@@ -1388,6 +1400,7 @@ function renderMarkers() {
   h += game.music.filter(m => vis(m.t, m.dur)).map(m => `<div class="mk m" style="left:${pc(m.t)};width:${pc(Math.max(0.3 / tlZoom, m.dur))}" title="♪ ${esc(bgmLib.find(b => b.id === m.bgm)?.name || '음악')}"></div>`).join('');
   if (mode === 'file') h += clips.slice(1).map((c, i) => `<div class="cb" style="left:${pc(offset(i + 1))}"></div>`).join('');
   $('#markers').innerHTML = h;
+  renderLane();
   const sb = game.sb, box = $('#trimBox');
   box.style.display = sb.trimStart != null || sb.trimEnd != null ? '' : 'none';
   const a = sb.trimStart ?? 0, z = sb.trimEnd ?? D;
@@ -1399,6 +1412,97 @@ function renderMarkers() {
   $('#tlmini').classList.toggle('off', !zoomed); $('#tlmini').classList.toggle('hidden', $('#timeline').classList.contains('hidden'));
   if (zoomed) { $('#tlwin').style.left = (tlStart / D * 100) + '%'; $('#tlwin').style.width = (span / D * 100) + '%'; }
   lastPlayheadX = null;
+}
+// ---------- 클립 줄 (카드·음악·자막) ----------
+let clSel = null, clDrag = null;   // clSel: {arr, id}
+const LANE_ARR = { inserts: 'inserts', music: 'music', comments: 'comments' };
+function laneItems() {
+  return [
+    ...game.inserts.map(o => ({ arr: 'inserts', o, cls: isOverlay(o) ? 'ov' : (o.kind === 'image' ? 'card' : 'hold'), label: insLabel(o), tip: isOverlay(o) ? '영상 위에 겹쳐 보여줘요' : '이 자리에서 영상이 멈춰요 (길이만큼)' })),
+    ...game.music.map(o => ({ arr: 'music', o, cls: 'mus', label: '♪ ' + (bgmLib.find(b => b.id === o.bgm)?.name || '음악'), tip: '배경음악' })),
+    ...game.comments.filter(c => c.text).map(o => ({ arr: 'comments', o, cls: 'cap', label: o.text, tip: '자막' })),
+  ];
+}
+function renderLane() {
+  const lane = $('#cliplane'); if (!lane) return;
+  const items = laneItems();
+  lane.classList.toggle('hidden', !items.length || $('#timeline').classList.contains('hidden'));
+  if (!items.length) { lane.innerHTML = ''; return; }
+  const span = tlSpan(), w = lane.clientWidth || $('#timeline').clientWidth || 800, minDur = 10 * span / w;
+  const vis = items.filter(it => it.o.t + Math.max(+it.o.dur || 0, minDur) >= tlStart - span * 0.02 && it.o.t <= tlStart + span * 1.02).sort((a, b) => a.o.t - b.o.t);
+  const rows = [];   // 겹치면 다음 줄로
+  const place = it => { const end = it.o.t + Math.max(+it.o.dur || 0, minDur); let r = rows.findIndex(e => e <= it.o.t + 1e-6); if (r < 0) { r = rows.length; rows.push(0); } rows[r] = end; return r; };
+  const html = vis.map(it => { it.row = place(it); return it; }).map(it => {
+    const o = it.o, sel = clSel && clSel.arr === it.arr && clSel.id === o.id;
+    return `<div class="cl-b ${it.cls} ${sel ? 'sel' : ''}" data-arr="${it.arr}" data-id="${o.id}" style="left:${(tlX(o.t) * 100).toFixed(3)}%;width:max(10px,${((+o.dur || 0) / span * 100).toFixed(3)}%);top:${2 + it.row * 19}px" title="${esc(it.label)} · ${it.tip}">${esc(it.label)}<i class="rz" data-rz="1"></i></div>`;
+  }).join('');
+  lane.style.height = (Math.max(1, Math.min(6, rows.length)) * 19 + 3) + 'px';
+  lane.innerHTML = html;
+}
+const clFind = (arr, id) => (game[arr] || []).find(x => x.id === id);
+// 붙는 지점: 영상 경계, 쿼터 표시, 다른 항목의 시작·끝, 재생 위치, 길이 편집 시작·끝, 잘라낸 구간 가장자리
+function snapPoints(except) {
+  const pts = [0, tlDur(), player.time()];
+  if (mode === 'file') clips.forEach((c, i) => { if (i) pts.push(offset(i)); });
+  sorted().forEach(e => { if (e.kind === 'q' || e.kind === 'qset') pts.push(e.t); });
+  game.quarters.forEach(q => pts.push(q.t));
+  laneItems().forEach(it => { if (it.o !== except) { pts.push(it.o.t); pts.push(it.o.t + (+it.o.dur || 0)); } });
+  [game.sb.trimStart, game.sb.trimEnd].forEach(v => { if (v != null) pts.push(v); });
+  game.sb.cuts.forEach(c => pts.push(c.s, c.e));
+  return pts;
+}
+function snapTo(v, pts, thr) { let best = v, bd = thr; for (const p of pts) { const d = Math.abs(p - v); if (d < bd) { bd = d; best = p; } } return best; }
+{
+  const lane = $('#cliplane'), tip = $('#cltip');
+  const secPerPx = () => tlSpan() / (lane.clientWidth || 800);
+  lane.addEventListener('pointerdown', ev => {
+    const b = ev.target.closest('.cl-b');
+    if (!b) { if (clSel) { clSel = null; renderLane(); } return; }
+    if (ev.button !== 0) return;
+    const arr = b.dataset.arr, id = +b.dataset.id, o = clFind(arr, id); if (!o) return;
+    clSel = { arr, id };
+    clDrag = { arr, id, o, mode: ev.target.closest('[data-rz]') ? 'resize' : 'move', x0: ev.clientX, t0: o.t, d0: +o.dur || 0, moved: false, pts: snapPoints(o), el: b };
+    lane.setPointerCapture(ev.pointerId);
+    lane.querySelectorAll('.cl-b.sel').forEach(e => e.classList.remove('sel')); b.classList.add('sel');
+  });
+  lane.addEventListener('pointermove', ev => {
+    const d = clDrag; if (!d) return;
+    const dx = ev.clientX - d.x0;
+    if (!d.moved && Math.abs(dx) < 3) return;
+    if (!d.moved) { d.moved = true; d.el.classList.add('drag'); if (hold && hold.ins.id === d.id) cancelHold(false); }
+    const dt = dx * secPerPx(), thr = ev.altKey ? 0 : 8 * secPerPx(), D = tlDur();
+    if (d.mode === 'move') {
+      let t = Math.max(0, Math.min(D, d.t0 + dt));
+      const a = snapTo(t, d.pts, thr), e = snapTo(t + d.d0, d.pts, thr);
+      t = Math.abs(a - t) <= Math.abs(e - d.d0 - t) ? a : e - d.d0;   // 시작 또는 끝 중 가까운 쪽이 붙어요
+      d.o.t = Math.max(0, Math.round(t * 100) / 100);
+    } else {
+      let end = snapTo(d.t0 + d.d0 + dt, d.pts, thr);
+      d.o.dur = Math.max(0.5, Math.round((end - d.t0) * 10) / 10);
+    }
+    d.el.style.left = (tlX(d.o.t) * 100).toFixed(3) + '%'; d.el.style.width = `max(10px,${((+d.o.dur || 0) / tlSpan() * 100).toFixed(3)}%)`;
+    tip.textContent = `${fmt(d.o.t, 2)}  ·  ${(+d.o.dur || 0).toFixed(1)}초  ·  끝 ${fmt(d.o.t + (+d.o.dur || 0), 2)}`;
+    tip.style.left = Math.min(window.innerWidth - 220, ev.clientX + 12) + 'px'; tip.style.top = (ev.clientY - 30) + 'px'; tip.classList.remove('hidden');
+    lastBoardKey = '';
+  });
+  const finish = ev => {
+    const d = clDrag; if (!d) return; clDrag = null; tip.classList.add('hidden'); d.el.classList.remove('drag');
+    if (d.moved) {
+      game.inserts.sort(insOrder); game.music.sort((a, b) => a.t - b.t); game.comments.sort((a, b) => a.t - b.t);
+      save(); renderInserts(); renderMusic(); renderCaps(); renderMarkers(); lastBoardKey = '';
+    } else if (ev.type === 'pointerup') {
+      if (d.arr === 'inserts') gotoInsert(d.o); else player.seek(d.o.t);
+    }
+  };
+  lane.addEventListener('pointerup', finish); lane.addEventListener('pointercancel', finish);
+  lane.addEventListener('wheel', ev => { $('#timeline').dispatchEvent(new WheelEvent('wheel', ev)); ev.preventDefault(); }, { passive: false });   // 줄 위에서도 휠로 확대
+  window.addEventListener('resize', () => renderLane());
+}
+function removeSelectedClip() {
+  if (!clSel) return false;
+  const { arr, id } = clSel; clSel = null;
+  if (arr === 'inserts') removeInsert(id); else if (arr === 'music') removeMusic(id); else if (arr === 'comments') removeComment(id); else return false;
+  return true;
 }
 // 클릭: 이동 / 드래그: 좌우 이동 / 휠: 확대·축소(세로), 이동(가로) / 더블클릭: 전체 보기
 let lastPlayheadX = null;
@@ -1776,6 +1880,7 @@ document.addEventListener('keydown', ev => {
   // 고르는 칸(경기·주차 등)에 포커스가 있으면 글자 키로 항목이 바뀌지 않게 막고, 포커스를 빼서 단축키로 써요.
   if (ev.target.matches('select') && (ev.key.length === 1 || ev.key === 'Escape') && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); ev.target.blur(); }
   if (ev.repeat && !['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;   // 키를 누르고 있어도 기록이 여러 번 들어가지 않게
+  if ((ev.key === 'Delete' || ev.key === 'Backspace') && clSel && !ev.ctrlKey && !ev.metaKey) { ev.preventDefault(); removeSelectedClip(); return; }   // 클립 줄에서 고른 항목 지우기
   if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -1784,7 +1889,7 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.code === 'Comma') { ev.preventDefault(); stepFrame(-1); return; }
   if (ev.code === 'Period') { ev.preventDefault(); stepFrame(1); return; }
-  if (ev.key === 'Escape') { if (cutStart != null) { cutStart = null; renderCuts(); renderMarkers(); } else if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
+  if (ev.key === 'Escape') { if (cutStart != null) { cutStart = null; renderCuts(); renderMarkers(); } else if (clSel) { clSel = null; renderLane(); } else if (astPending) clearAst(); else { selected = null; renderEntry(); } return; }
   if (ev.code === 'KeyN') { ev.preventDefault(); addQuarter(); return; }
   if (ev.code === 'BracketLeft') { ev.preventDefault(); markCutIn(); return; }
   if (ev.code === 'BracketRight') { ev.preventDefault(); markCutOut(); return; }
@@ -1812,9 +1917,19 @@ function touch() {
   cfg.music = game.music;
 }
 function total() { return offset(clips.length); }
+// 영상마다 '이 영상은 몇 쿼터' 지정: 자동(넘어가면 다음 쿼터) / 이어서(그대로) / 1~7 (1Q~4Q, OT, OT2, OT3)
+const clipQMode = c => (game.sb.clipQ && game.sb.clipQ[c.key]) || 'auto';
 function autoEvents() {
-  if (!game.sb.autoQ || mode !== 'file') return [];
-  return clips.slice(1).map((c, i) => ({ id: -(i + 1), t: offset(i + 1), kind: 'q', team: 0, v: 1, auto: true }));
+  if (mode !== 'file') return [];
+  const out = [];
+  clips.forEach((c, i) => {
+    if (!i) return;
+    const m = clipQMode(c);
+    if (m === 'same') return;
+    if (m === 'auto') { if (game.sb.autoQ) out.push({ id: -(i + 1), t: offset(i), kind: 'q', team: 0, v: 1, auto: true }); return; }
+    out.push({ id: -(i + 1), t: offset(i), kind: 'qset', team: 0, v: +m, auto: true });
+  });
+  return out;
 }
 function sbEvents() {
   const out = [];
@@ -1841,8 +1956,11 @@ function applyEvent(st, e) {
     if (st.last) st.last[e.team] = e.v > 0 ? { t: e.t, v: e.v } : null;
   }
   else if (e.kind === 'foul') st.fouls[e.team] = Math.max(0, st.fouls[e.team] + e.v);
-  else if (e.kind === 'q') { st.q += 1; st.fouls = [0, 0]; }
+  else if (e.kind === 'q') setQuarter(st, st.q + 1);
+  else if (e.kind === 'qset') { if (st.q !== e.v) setQuarter(st, e.v); }
 }
+// 쿼터가 바뀔 때 팀파울: FIBA 규칙대로 4쿼터의 팀파울은 연장으로 이어지고, 그 밖의 쿼터는 새로 0부터 시작해요.
+function setQuarter(st, n) { if (!(st.q >= 4 && n > 4)) st.fouls = [0, 0]; st.q = n; }
 function quarterLabel(q) {
   if (q <= 4) return ['', '1ST', '2ND', '3RD', '4TH'][q];
   const n = q - 4;
@@ -1961,12 +2079,22 @@ function renderClips() {
   $('#clipCount').textContent = clips.length > 1 ? `(${clips.length}개 · ${fmt(total())})` : '';
   $('#clipHint').classList.toggle('hidden', clips.length > 0);
   $('#btnAddClip').disabled = mode !== 'file';
+  const QOPT = [['auto', '자동'], ['same', '이어서'], ['1', '1Q'], ['2', '2Q'], ['3', '3Q'], ['4', '4Q'], ['5', 'OT'], ['6', 'OT2'], ['7', 'OT3']];
   $('#clips').innerHTML = clips.map((c, i) => `<div class="clip ${i === cur ? 'cur' : ''}" data-i="${i}" title="${esc(c.name)}">
-    <span class="n">${i + 1}</span><span class="nm">${esc(c.name)}</span><span class="d">${fmt(c.dur)}</span>
+    <span class="n">${i + 1}</span><span class="nm">${esc(c.name)}</span>
+    <span class="cq">${i ? `<select class="cqsel" title="이 영상의 쿼터">${QOPT.map(([v, l]) => `<option value="${v}" ${clipQMode(c) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}<b class="ql">${quarterLabel(stateAt(offset(i) + 0.001).q)}</b></span><span class="d">${fmt(c.dur)}</span>
     <span><button data-act="up" title="위로" ${i ? '' : 'disabled'}>▲</button><button data-act="down" title="아래로" ${i < clips.length - 1 ? '' : 'disabled'}>▼</button><button data-act="rm" title="빼기" ${clips.length > 1 ? '' : 'disabled'}>✕</button></span>
   </div>`).join('');
 }
+$('#clips').addEventListener('change', ev => {
+  const sel = ev.target.closest('.cqsel'); if (!sel) return;
+  const i = +sel.closest('.clip').dataset.i, c = clips[i]; if (!c) return;
+  game.sb.clipQ = game.sb.clipQ || {};
+  if (sel.value === 'auto') delete game.sb.clipQ[c.key]; else game.sb.clipQ[c.key] = sel.value;
+  save(); renderClips(); renderMarkers(); lastBoardKey = '';
+});
 $('#clips').addEventListener('click', ev => {
+  if (ev.target.closest('select')) return;
   const row = ev.target.closest('.clip'); if (!row) return;
   const i = +row.dataset.i, act = ev.target.closest('button')?.dataset.act;
   if (act === 'up' && i > 0) editClips(() => clips.splice(i - 1, 0, clips.splice(i, 1)[0]));
@@ -2337,7 +2465,9 @@ function drawClassic(ctx, W, H, st, s) {
 // ---------- 미리보기 ----------
 // 화면 크기에 맞춘 캔버스에, 보이는 내용이 바뀔 때만 다시 그려요 (영상 재생을 방해하지 않게).
 // ---------- 기록 카드 · 이미지 삽입 ----------
-const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
+// 영상 위에 겹쳐 보여주는 카드(영상을 멈추지 않음): 매치업, 연장 시작
+const isOverlay = i => i.kind === 'intro' || i.kind === 'ot';
+const insLabel = i => i.kind === 'intro' ? '매치업' : i.kind === 'ot' ? (i.title || '연장 시작') : i.kind === 'reg' ? (i.title || '정규시간 종료 기록') : i.kind === 'image' ? `이미지 · ${i.title || ''}`.trim() : i.kind === 'box' ? (i.title || `${game.teams[i.team]?.name || ''} 선수 기록`) : (i.title || (i.kind === 'half' ? '전반 기록' : '최종 기록'));
 // 팀 로고는 팀 이름별로 브라우저에 기억해요 (다음 경기에서도 같은 팀이면 그대로).
 // 로고 저장소는 메모리에 캐시해요 (내보내기 중 매 프레임 localStorage를 파싱하지 않게). 쓸 때는 saveLogos()로.
 const logoCache = {};
@@ -2383,7 +2513,7 @@ function teamTotals(events, ti, upto) {
 }
 function cardData(ins, src = { events: game.events, teams: cfg.teams, match: cfg.match }) {
   // 전반 카드, 그리고 영상 중간에 넣은 선수별 카드는 그 시각까지의 기록만 보여줘요. 끝에 둔 선수별 카드는 경기 전체.
-  const upto = ins.kind === 'half' || (ins.kind === 'box' && !nearEnd(ins.t)) ? ins.t : null;
+  const upto = ins.kind === 'half' || ins.kind === 'reg' || (ins.kind === 'box' && !nearEnd(ins.t)) ? ins.t : null;
   const d = { teams: src.teams, stats: [0, 1].map(ti => teamTotals(src.events, ti, upto)), logos: src.teams.map(t => logoOf(t.name)), title: insLabel(ins), match: src.match };
   if (ins.kind === 'box') d.lines = playerLines(upto == null ? src.events : src.events.filter(e => e.t <= upto), ins.team);
   return d;
@@ -2531,28 +2661,40 @@ function shrinkImage(file, max, type = 'image/jpeg', q = 0.86) {
   });
 }
 // 전반 카드 자리: 두 번째 쿼터 넘김(3쿼터 시작) 시각, 없으면 현재 위치
-function halfTime() { const qs = sorted().filter(e => e.kind === 'q'); return qs.length >= 2 ? qs[1].t : null; }
+// n쿼터가 처음 시작되는 시각 (표시가 없으면 null)
+function quarterStartT(n) {
+  const st = { q: +cfg.startQ || 1, score: [0, 0], fouls: [0, 0] };
+  for (const e of sorted()) { const before = st.q; applyEvent(st, e); if (before < n && st.q >= n) return e.t; }
+  return null;
+}
+const halfTime = () => quarterStartT(3);   // 2쿼터 끝 = 3쿼터 시작
+const otTime = () => quarterStartT(5);     // 정규시간 끝 = 연장 시작
 // 같은 시간의 카드 순서: 기록 카드·이미지 → 선수별 카드(1팀 → 2팀) → 넣은 순서
-const insOrder = (a, b) => a.t - b.t || (a.kind !== 'intro') - (b.kind !== 'intro') || (a.kind === 'box') - (b.kind === 'box') || (a.team || 0) - (b.team || 0) || a.id - b.id;
+const insOrder = (a, b) => a.t - b.t || (!isOverlay(a)) - (!isOverlay(b)) || (a.kind === 'box') - (b.kind === 'box') || (a.team || 0) - (b.team || 0) || a.id - b.id;
 // 현재 위치를 카드 시간으로: 영상 끝 근처면 정확히 끝으로 맞춰요 (반올림 때문에 끝을 넘어가면 내보내기에서 빠져요)
 const nearEnd = t => { const D = player.duration(); return !!D && t >= D - 0.1; };
 function insTime(raw) { const t = Math.round(raw * 100) / 100; return nearEnd(t) ? Math.round(player.duration() * 1000) / 1000 : t; }
 function addInsert(kind, extra = {}, quiet = false) {
   if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
-  const at = kind === 'half' ? halfTime() : null;
+  const at = kind === 'half' ? halfTime() : (kind === 'reg' || kind === 'ot') ? otTime() : null;
   // 쿼터 경계는 영상 경계와 정확히 같아야 하니 반올림하지 않아요 (반올림하면 앞 영상 끝에 붙어버려요)
   const t = at != null ? at : insTime(player.time());
-  const ins = { id: nextId(), t, dur: kind === 'intro' ? 4 : +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : '', ...extra };
+  const ins = { id: nextId(), t, dur: kind === 'intro' ? 4 : kind === 'ot' ? 5 : +game.sb.insDur || 6, kind, title: kind === 'half' ? '전반 기록' : kind === 'final' ? '최종 기록' : kind === 'reg' ? '정규시간 종료 기록' : '', ...extra };
   game.inserts.push(ins); game.inserts.sort(insOrder);
   pushUndo(ins.id);
   save(); renderInserts(); renderMarkers(); lastBoardKey = '';
   if (quiet) return ins;
-  if (kind === 'intro') { toast(`매치업 카드를 ${fmt(t)}부터 ${ins.dur}초 동안 영상 위에 보여줘요. 재생해서 확인해 보세요.`); player.pause(); player.seek(t + 0.8); return ins; }
-  toast(`${insLabel(ins)} 카드를 ${fmt(t)}에 넣었어요.${kind === 'half' && at != null ? ' (2쿼터 끝 자리)' : ''}`);
+  if (isOverlay(ins)) { toast(`${insLabel(ins)} 카드를 ${fmt(t)}부터 ${ins.dur}초 동안 영상 위에 보여줘요.${kind === 'ot' && at != null ? ' (연장 시작 자리)' : ''} 재생해서 확인해 보세요.`); player.pause(); player.seek(t + 0.8); return ins; }
+  toast(`${insLabel(ins)} 카드를 ${fmt(t)}에 넣었어요.${at != null ? (kind === 'half' ? ' (2쿼터 끝 자리)' : ' (연장 시작 자리)') : (kind === 'reg' ? ' (연장 표시가 없어서 현재 위치에)' : '')}`);
   player.pause(); player.seek(t); hold = { ins, until: performance.now() + 2500, end: nearEnd(t) }; lastBoardKey = '';   // 바로 미리보기
   return ins;
 }
 $('#btnInsIntro').addEventListener('click', () => addInsert('intro', { en: ['', ''] }));
+$('#btnInsReg').addEventListener('click', () => addInsert('reg'));
+$('#btnInsOT').addEventListener('click', () => {
+  if (otTime() == null) toast('연장 시작 표시가 없어서 현재 위치에 넣어요. (5번째 영상이나 [다음 쿼터]로 연장을 표시하면 그 자리에 들어가요)');
+  addInsert('ot');
+});
 $('#btnInsBox').addEventListener('click', () => {
   if (!mode) { toast('영상을 먼저 열어주세요.', true); return; }
   addInsert('box', { team: 0 }, true);
@@ -2573,10 +2715,10 @@ function renderInserts() {
   $('#insCount').textContent = list.length ? `(${list.length})` : '';
   $('#insList').innerHTML = list.length ? list.map(i => `<div class="ins" data-id="${+i.id}">
     <button class="t" data-act="seek" title="이 지점으로 이동">${fmt(i.t, true)}</button>
-    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : i.kind === 'intro' ? '매치업' : '최종 기록'}</span>
+    <span class="k">${i.kind === 'image' ? '이미지' : i.kind === 'half' ? '전반 기록' : i.kind === 'box' ? `선수 기록 ${i.team + 1}팀` : i.kind === 'intro' ? '매치업' : i.kind === 'ot' ? '연장 시작' : i.kind === 'reg' ? '정규시간 종료' : '최종 기록'}</span>
     ${i.kind === 'intro'
       ? `<span class="ens"><input type="text" class="en0" value="${esc(i.en?.[0] || '')}" placeholder="${esc(game.teams[0].name)} 영문" maxlength="24" title="왼쪽 세로 글씨 (비우면 팀 이름)"><input type="text" class="en1" value="${esc(i.en?.[1] || '')}" placeholder="${esc(game.teams[1].name)} 영문" maxlength="24" title="오른쪽 세로 글씨 (비우면 팀 이름)"></span>`
-      : `<input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">`}
+      : `<input type="text" class="txt" value="${esc(i.title || '')}" placeholder="${i.kind === 'image' ? '메모' : i.kind === 'ot' ? 'OVERTIME' : i.kind === 'box' ? esc(`${game.teams[i.team]?.name || ''} 선수 기록`) : '카드 제목'}" maxlength="40">`}
     <input type="number" class="dur" value="${+i.dur}" min="1" max="60" step="0.5" title="표시 시간(초)">
     <button class="x" data-act="here" title="지금 영상 위치로 옮기기">⌖</button><button class="x" data-act="rm" title="지우기">✕</button>
   </div>`).join('') : '<div class="hint">아직 넣은 카드가 없어요.</div>';
@@ -2611,11 +2753,12 @@ $('#sbLogoFile').addEventListener('change', async ev => {
 });
 $('#insDur').addEventListener('change', () => { game.sb.insDur = Math.max(1, +$('#insDur').value || 6); save(); });
 $('#introColor').addEventListener('input', () => { game.sb.introColor = $('#introColor').value; save(); lastBoardKey = ''; });
+function gotoInsert(i) { player.pause(); player.seek(isOverlay(i) ? i.t + 0.8 : i.t); if (!isOverlay(i)) hold = { ins: i, until: performance.now() + 2500 }; lastBoardKey = ''; }
 $('#insList').addEventListener('click', ev => {
   const row = ev.target.closest('.ins'); if (!row) return;
   const i = game.inserts.find(x => x.id === +row.dataset.id); if (!i) return;
   const act = ev.target.closest('[data-act]')?.dataset.act;
-  if (act === 'seek') { player.pause(); player.seek(i.kind === 'intro' ? i.t + 0.8 : i.t); if (i.kind !== 'intro') hold = { ins: i, until: performance.now() + 2500 }; lastBoardKey = ''; }
+  if (act === 'seek') gotoInsert(i);
   else if (act === 'here') { if (!mode) return; i.t = insTime(player.time()); game.inserts.sort(insOrder); save(); renderInserts(); renderMarkers(); }
   else if (act === 'rm') { forget(i.id); removeInsert(i.id); }
 });
@@ -2800,7 +2943,7 @@ function renderOverlay(st) {
   octx.clearRect(0, 0, w, h);
   if (hold) { drawInsert(octx, w, h, hold.ins, cardData(hold.ins)); return; }
   if (cfg.show && !intro) drawBoard(octx, w, h, st);   // 매치업 카드가 떠 있는 동안은 점수판을 숨겨요
-  if (intro) drawIntro(octx, w, h, intro);
+  if (intro) drawOverlayCard(octx, w, h, intro, sorted());
   drawCaptions(octx, w, h, caps);
 }
 
@@ -2808,10 +2951,41 @@ function renderOverlay(st) {
 const INTRO_IN = 0.6, INTRO_OUT = 0.45;
 const easeOut = x => 1 - Math.pow(1 - x, 3);
 function activeIntro(t) {
-  const ins = (cfg.inserts || []).find(i => i.kind === 'intro' && t >= i.t && t <= i.t + (+i.dur || 4));
+  const ins = (cfg.inserts || []).find(i => isOverlay(i) && t >= i.t && t <= i.t + (+i.dur || 4));
   if (!ins) return null;
   const a = Math.min(easeOut(Math.min(1, (t - ins.t) / INTRO_IN)), easeOut(Math.min(1, (ins.t + (+ins.dur || 4) - t) / INTRO_OUT)));
   return { ins, a };
+}
+function drawOverlayCard(ctx, W, H, o, list) { if (o.ins.kind === 'ot') drawOvertime(ctx, W, H, o, list); else drawIntro(ctx, W, H, o); }
+// 연장 시작 카드: 가운데 'OVERTIME'과 양쪽 팀 칸에 연장 시작 때의 점수
+function drawOvertime(ctx, W, H, { ins, a }, list) {
+  if (a <= 0) return;
+  const st = stateAt(ins.t + 0.001, list), n = Math.max(1, st.q - 4);
+  const label = (ins.title || '').trim() || (n === 1 ? 'OVERTIME' : `${n}${['', '', 'ND', 'RD'][n] || 'TH'} OVERTIME`);
+  const u = W / 1000, Wp = W * 0.66, Hp = H * 0.3, cx = W / 2, cy = H * 0.5, r = 18 * u, bw = Wp * 0.32, mw = Wp - 2 * bw;
+  const x0 = cx - Wp / 2, y0 = cy - Hp / 2, vw = Wp * (0.06 + 0.94 * a), mid = cfg.introColor || INTRO_COLOR;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, a * 1.6);
+  rr(ctx, cx - vw / 2, y0, vw, Hp, r); ctx.clip();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 26 * u;
+  ctx.fillStyle = '#15171c'; ctx.fillRect(x0, y0, Wp, Hp);
+  ctx.shadowBlur = 0; ctx.textBaseline = 'middle';
+  for (const i of [0, 1]) {
+    const t = cfg.teams[i], bx = i ? x0 + Wp - bw : x0, g = ctx.createLinearGradient(0, y0, 0, y0 + Hp);
+    g.addColorStop(0, shade(t.color, 0.08)); g.addColorStop(1, shade(t.color, -0.25));
+    ctx.fillStyle = g; ctx.fillRect(bx, y0, bw, Hp);
+    boardLogoBack(ctx, i, bx, y0, bw, Hp, i ? 'r' : 'l');
+    ctx.fillStyle = t.text || ink(t.color); ctx.textAlign = 'center';
+    ctx.font = `700 ${Hp * 0.56}px ${NUM}`; ctx.fillText(String(st.score[i]), bx + bw / 2, y0 + Hp * 0.42);
+    fitText(ctx, t.name, 700, 22 * u, bw * 0.86); ctx.fillText(t.name, bx + bw / 2, y0 + Hp * 0.85);
+  }
+  const mx = x0 + bw;
+  ctx.fillStyle = mid; ctx.fillRect(mx, y0, mw, 6 * u);
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+  fitText(ctx, label, 800, Hp * 0.3, mw * 0.9, NUM); ctx.fillText(label, mx + mw / 2, y0 + Hp * 0.46);
+  ctx.fillStyle = '#8b93a1'; ctx.font = `600 ${Hp * 0.13}px ${NUM}`;
+  ctx.fillText(st.score[0] === st.score[1] ? 'TIED' : quarterLabel(st.q), mx + mw / 2, y0 + Hp * 0.72);
+  ctx.restore();
 }
 function drawIntro(ctx, W, H, { ins, a }) {
   if (a <= 0) return;
@@ -2990,7 +3164,7 @@ let endShown = false;
 function endInserts() {
   if (hold || endShown) return;
   endShown = true;
-  showHold(game.inserts.filter(i => i.kind !== 'intro' && nearEnd(i.t)).sort(insOrder), true);
+  showHold(game.inserts.filter(i => !isOverlay(i) && nearEnd(i.t)).sort(insOrder), true);
 }
 function checkInserts(t) {
   if (hold) {
@@ -3002,7 +3176,7 @@ function checkInserts(t) {
     return;
   }
   if (player.paused() || pendingSeek) { if (!pendingSeek) lastTickT = t; return; }   // 다음 영상을 읽는 동안은 시각을 건너뛰지 않아요 (경계에 둔 카드가 빠지지 않게)
-  const list = game.inserts.filter(i => i.kind !== 'intro' && lastTickT < i.t && t >= i.t && t - i.t < 1 && !nearEnd(i.t));   // 끝 카드는 영상이 끝난 뒤에
+  const list = game.inserts.filter(i => !isOverlay(i) && lastTickT < i.t && t >= i.t && t - i.t < 1 && !nearEnd(i.t));   // 끝 카드는 영상이 끝난 뒤에
   lastTickT = t;
   showHold(list, false);
 }
@@ -3208,7 +3382,7 @@ $('#btnExport').onclick = async () => {
   // 내보내는 동안 기록이나 설정이 바뀌어도 영상 전체가 한 상태로 그려지게, 시작할 때 모습을 붙잡아 둬요.
   const snapCfg = JSON.parse(JSON.stringify(cfg)), snapEvents = sorted().slice();
   const snapInserts = JSON.parse(JSON.stringify(game.inserts)), snapAllEvents = JSON.parse(JSON.stringify(game.events));
-  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { const intro = activeIntro(t); if (cfg.show && !intro) drawBoard(ctx, W, H, stateAt(t, snapEvents)); if (intro) drawIntro(ctx, W, H, intro); drawCaptions(ctx, W, H, activeCaptions(t)); } finally { cfg = live; } };
+  const drawSnap = (ctx, W, H, t) => { const live = cfg; cfg = snapCfg; try { const intro = activeIntro(t); if (cfg.show && !intro) drawBoard(ctx, W, H, stateAt(t, snapEvents)); if (intro) drawOverlayCard(ctx, W, H, intro, snapEvents); drawCaptions(ctx, W, H, activeCaptions(t)); } finally { cfg = live; } };
   $('#exportBox').classList.remove('hidden');
   setProgress(0, '준비 중…');
   showMsg('');
@@ -3237,7 +3411,7 @@ $('#btnExport').onclick = async () => {
     }
     if (!parts.length) throw new Error('잘라낸 구간을 빼고 나면 내보낼 부분이 없어요.');
     // 삽입 카드: 그 시각에서 영상을 둘로 나누고 사이에 카드를 끼워요. 잘라낸 구간 안의 카드는 빼요.
-    const pending = snapInserts.filter(i => i.kind !== 'intro' && i.t >= S - 1e-3 && i.t <= E + 0.05 && !cfg.cuts.some(c => i.t > c.s && i.t < c.e)).sort(insOrder)
+    const pending = snapInserts.filter(i => !isOverlay(i) && i.t >= S - 1e-3 && i.t <= E + 0.05 && !cfg.cuts.some(c => i.t > c.s && i.t < c.e)).sort(insOrder)
       .map(i => ({ ...i, data: cardData(i, { events: snapAllEvents, teams: snapCfg.teams, match: snapCfg.match }) }));
     for (const ins of pending) {
       const k = parts.findIndex(pt => pt.o + pt.from < ins.t - 0.02 && pt.o + pt.to > ins.t + 0.02);
@@ -3302,7 +3476,7 @@ $('#btnExport').onclick = async () => {
     let audioSource = null, audioFormat = null;
     const firstAudio = opened.find(o => o.at)?.at;
     // 자막 효과음: 켜져 있고 소리를 읽었고 자막이 있으면, 영상에 소리가 없어도 오디오 트랙을 만들어 넣어요.
-    const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? [...(snapCfg.captions || []).filter(c => c.text), ...snapInserts.filter(i => i.kind === 'intro')] : [];
+    const sfxCaps = snapCfg.cap?.sfx !== false && sfx.buf ? [...(snapCfg.captions || []).filter(c => c.text), ...snapInserts.filter(isOverlay)] : [];
     if (snapCfg.cap?.sfx !== false && !sfx.buf && (snapCfg.captions || []).some(c => c.text)) notes.push('효과음 파일을 읽지 못해 효과음 없이 저장');
     // 배경음악: 내보낼 범위 안에서 시작하는 것만. 출력 시각은 그 자리에 도착했을 때 정해요 (카드 시간이 앞에 끼면 그만큼 밀려요).
     const snapMusic = JSON.parse(JSON.stringify(game.music)).filter(m => m.t >= S - 1e-3 && m.t <= E + 0.05 && m.bgm && !cfg.cuts.some(c => m.t > c.s && m.t < c.e)).sort((a, b) => a.t - b.t);
