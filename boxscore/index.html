@@ -888,7 +888,7 @@ const player = {
   toggle() { if (hold) { cancelHold(true); return; } this.paused() ? this.play() : this.pause(); },
   seek(T) {
     if (typeof hold !== 'undefined' && hold) cancelHold(false);
-    lastTickT = T; capSeeked = true; capSeekedMus = true; lastMusT = T; endShown = false;
+    lastTickT = T; capSeeked = true; capSeekedMus = true; lastMusT = T - MUS_EPS; endShown = false;   // 음악은 옮긴 자리에서 막 시작하는 것도 틀어요 (MUS_EPS)
     T = Math.max(0, Math.min(Math.max(0, this.duration() - 0.05), T));
     if (mode === 'yt') { ytReady && yt.seekTo(T, true); return; }
     if (mode !== 'file' || !clips.length) return;
@@ -1886,7 +1886,7 @@ document.addEventListener('keydown', ev => {
   if ((ev.ctrlKey || ev.metaKey) && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); player.toggle(); return; }   // 버튼·체크박스가 스페이스로 눌리지 않게
+  if (ev.key === ' ') { ev.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); wakeAudio(); player.toggle(); return; }   // 버튼·체크박스가 스페이스로 눌리지 않게
   if (ev.key === 'ArrowLeft') { ev.preventDefault(); player.seek(player.time() - (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.key === 'ArrowRight') { ev.preventDefault(); player.seek(player.time() + (ev.shiftKey ? 1 : opts.skip)); return; }
   if (ev.code === 'Comma') { ev.preventDefault(); stepFrame(-1); return; }
@@ -2906,15 +2906,20 @@ function musStart(m, offset = 0) {
   src.onended = () => { if (musCur && musCur.src === src) { musCur = null; if (m.mode === 'solo') setVideoMuted(false); } };
 }
 function setVideoMuted(on) { if (mode === 'file') video.muted = on; else if (mode === 'yt' && ytReady) (on ? yt.mute() : yt.unMute()); }
+// 시작점을 '막 지나온' 것으로 치는 여유(초). 시작점 바로 그 자리로 옮겨 놓고(음악·카드 블록을 눌러 이동, 카드를 넣으며 그 자리로 이동,
+// 0.01초 단위 반올림) 재생해도 음악이 처음부터 나오게 해요. 멈춰 있는 동안엔 늘 이만큼 앞에서 출발한 것으로 봐요.
+const MUS_EPS = 0.05;
 function tickMusic(t) {
-  const running = hold ? true : (!player.paused() && !pendingSeek);
-  if (musCur && (!running || capSeekedMus)) musStop();
+  // 다음 영상을 읽는 동안(pendingSeek)에도 재생하려는 중이면 음악은 끊지 않아요 (영상 경계에 걸친 음악). 새로 시작하는 건 읽기가 끝난 뒤에.
+  const playing = hold ? true : (pendingSeek ? !!pendingSeek.play : !player.paused());
+  const running = playing && !pendingSeek;
+  if (musCur && (!playing || capSeekedMus)) musStop();
   capSeekedMus = false;
   if (running) {   // 카드로 멈춘 순간(t가 카드 시각에 머무름)에도 그 자리의 음악은 시작해요
     const m = game.music.find(m => lastMusT < m.t && t >= m.t && t - m.t < 1 && m.bgm && bgmBuf(m.bgm));
     if (m && !(musCur && musCur.id === m.id)) { musStop(0.05); musStart(m, 0); }
   }
-  if (!pendingSeek) lastMusT = t;
+  if (!pendingSeek) lastMusT = running ? t : t - MUS_EPS;
 }
 let capSeekedMus = false;
 // 내보내기용: 음악을 출력 형식에 맞춰 dur초만큼(볼륨·페이드 적용) PCM으로
